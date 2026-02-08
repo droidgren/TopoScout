@@ -2,24 +2,68 @@
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Topo Höjdsökare</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Topo Höjdsökare (Mobilanpassad)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         #map { height: 100vh; width: 100%; }
         
+        /* --- KONTROLLPANEL (Desktop Standard) --- */
         #controls {
             position: absolute; top: 20px; right: 20px;
             background: rgba(255, 255, 255, 0.95); padding: 20px;
-            z-index: 1000; border-radius: 12px;
+            z-index: 2000; /* Högre än Leaflet (ofta 1000) */
+            border-radius: 12px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             display: flex; flex-direction: column; gap: 10px;
             width: 300px;
             backdrop-filter: blur(5px);
-            margin-right: 50px;
+            transition: all 0.3s ease; /* Mjuk animering vid minimering */
+            max-height: 90vh; /* Så den inte blir högre än skärmen */
+            overflow-y: auto; /* Scroll om skärmen är liten */
         }
 
+        /* --- MOBILANPASSNING (Media Query) --- */
+        @media (max-width: 600px) {
+            #controls {
+                width: auto;        /* Flytande bredd */
+                left: 10px;         /* Marginal vänster */
+                right: 10px;        /* Marginal höger */
+                top: 10px;          /* Marginal topp */
+                padding: 15px;      /* Lite mindre padding */
+            }
+            
+            /* Flytta ner Leaflets lager-väljare så den inte ligger under vår panel */
+            .leaflet-control-layers {
+                margin-top: 80px !important; 
+            }
+        }
+
+        /* Klass för minimerat läge */
+        #controls.minimized #controls-content {
+            display: none;
+        }
+        #controls.minimized {
+            width: auto;
+            display: inline-block;
+            padding: 10px 15px;
+        }
+
+        /* HEADER & TOGGLE KNAPP */
+        .header-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 5px;
+        }
+        h3 { margin: 0; font-size: 18px; color: #333; }
+        
+        .toggle-btn {
+            background: none; border: none; font-size: 20px; cursor: pointer;
+            color: #555; padding: 0 5px; line-height: 1;
+        }
+        .toggle-btn:hover { color: #000; }
+
+        /* ÖVRIG DESIGN */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
             width: 20px; height: 20px;
@@ -30,14 +74,11 @@
         #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
         #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
 
-        h3 { margin: 0 0 5px 0; font-size: 18px; color: #333; }
-
         .live-height-box {
             background-color: #e3f2fd; border: 1px solid #90caf9;
             color: #1565c0; padding: 10px; border-radius: 8px;
             text-align: center; margin-bottom: 5px;
         }
-        
         .live-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; color: #555; }
         .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
@@ -49,7 +90,7 @@
             transition: all 0.3s ease;
         }
         .action-btn:hover { background-color: #c9302c; }
-        .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; transform: none; }
+        .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
         .clear-btn { background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; }
         .clear-btn:hover { background-color: #5a6268; }
@@ -71,12 +112,8 @@
         #status { font-size: 13px; font-weight: 500; color: #444; min-height: 1.2em; margin-top:5px; }
         #analysis-canvas, #single-point-canvas { display: none; }
 
-        .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
-        .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
-        .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
         .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
         .copy-btn { background: white; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 12px; }
-        .copy-btn:hover { background: #e9ecef; }
 
         .leaflet-control-layers {
             margin-top: 20px !important; margin-right: 20px !important;
@@ -84,6 +121,11 @@
             border-radius: 8px !important; border: none !important;
             font-size: 13px !important;
         }
+        
+        /* Popup justering */
+        .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
+        .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
+        .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -91,50 +133,55 @@
     <div id="crosshair"></div>
 
     <div id="controls">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>Höjdsökare</h3>
-            <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
+        <div class="header-row">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <h3>Höjdsökare</h3>
+                <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
+            </div>
+            <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
         </div>
 
-        <div class="live-height-box">
-            <span id="liveLabel" class="live-label">HÖJD ÖVER HAVET VID MITTPUNKT</span>
-            <span id="center-h" class="live-value">-- m</span>
-        </div>
+        <div id="controls-content">
+            <div class="live-height-box">
+                <span id="liveLabel" class="live-label">HÖJD ÖVER HAVET VID MITTPUNKT</span>
+                <span id="center-h" class="live-value">-- m</span>
+            </div>
 
-        <div class="search-group">
-            <input type="text" id="searchInput" placeholder="Sök plats eller lat,lon">
-            <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
-        </div>
-        <button class="gps-btn" onclick="locateUser()">📍 Gå till min position</button>
-        
-        <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
-        
-        <div class="control-row">
-            <span class="control-label">Sökradie (km):</span>
-            <input type="number" id="radiusInput" value="5" min="0.5" max="100" step="0.5">
-        </div>
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="Sök plats eller lat,lon">
+                <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
+            </div>
+            <button class="gps-btn" onclick="locateUser()">📍 Gå till min position</button>
+            
+            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
+            
+            <div class="control-row">
+                <span class="control-label">Sökradie (km):</span>
+                <input type="number" id="radiusInput" value="5" min="0.5" max="100" step="0.5">
+            </div>
 
-        <div class="control-row">
-            <span class="control-label">Antal punkter:</span>
-            <input type="number" id="numPoints" value="3" min="1" max="50">
-        </div>
-        
-        <div class="checkbox-group">
-            <div class="checkbox-row">
-                <input type="checkbox" id="show-circle" checked>
-                <label for="show-circle">Visa radie</label>
+            <div class="control-row">
+                <span class="control-label">Antal punkter:</span>
+                <input type="number" id="numPoints" value="3" min="1" max="50">
             </div>
             
-            <div class="checkbox-row">
-                <input type="checkbox" id="lock-circle">
-                <label for="lock-circle" title="Lås cirkeln vid nuvarande plats">🔒 Lås radie</label>
+            <div class="checkbox-group">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="show-circle" checked>
+                    <label for="show-circle">Visa radie</label>
+                </div>
+                
+                <div class="checkbox-row">
+                    <input type="checkbox" id="lock-circle">
+                    <label for="lock-circle" title="Lås cirkeln vid nuvarande plats">🔒 Lås radie</label>
+                </div>
             </div>
-        </div>
 
-        <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Sök punkter</button>
-        <button class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
-        
-        <div id="status">Redo.</div>
+            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Sök punkter</button>
+            <button class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
+            
+            <div id="status">Redo.</div>
+        </div>
     </div>
 
     <canvas id="analysis-canvas"></canvas>
@@ -143,39 +190,19 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // =================================================================
-        // HÄR STÄLLER DU IN DINA API-NYCKLAR
-        // =================================================================
-        
+        // API NYCKLAR
         const TF_API_KEY = "DIN_THUNDERFOREST_NYCKEL_HÄR"; 
         const LM_API_KEY = "DIN_LANTMATERIET_NYCKEL_HÄR"; 
 
-        // =================================================================
-
         // --- KARTKÄLLOR ---
-        
-        // 1. Tracetrack Topo (Standard)
         const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=ee0783bcbd92009d4c1b0b8e9a4d7e96";
-
-        // 2. OpenTopoMap
         const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-
-        // 3. OpenStreetMap (Ny)
         const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-        // 4. Thunderforest Outdoors
         const TF_OUTDOORS_URL = `https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${TF_API_KEY}`;
-
-        // 5. Lantmäteriet
         const LM_URL = `https://api.lantmateriet.se/open/topowebb-ccby/v1/wmts/token/${LM_API_KEY}/?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=topowebb&STYLE=default&TILEMATRIXSET=3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`;
-
-        // 6. Satellit
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-        
-        // 7. Data (Analys)
         const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
-        // Skapa lager-objekt
         const tracetrackLayer = L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 });
         const openTopoLayer = L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 });
         const osmLayer = L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 });
@@ -192,7 +219,6 @@
         
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        // Lager-menyn med specifik ordning
         const baseMaps = {
             "Tracetrack Topo": tracetrackLayer,
             "OpenTopo": openTopoLayer,
@@ -217,6 +243,7 @@
         let centerMarker = null;
         let isLocked = false;
         let lockedCenterCoords = null;
+        let isControlsMinimized = false;
         
         const canvas = document.getElementById('analysis-canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -224,6 +251,7 @@
         const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
 
         // DOM Elements
+        const controls = document.getElementById('controls');
         const crosshair = document.getElementById('crosshair');
         const liveLabel = document.getElementById('liveLabel');
         const statusDiv = document.getElementById('status');
@@ -235,6 +263,20 @@
         const lockCheckbox = document.getElementById('lock-circle');
         const searchInput = document.getElementById('searchInput');
 
+        // --- TOGGLE FUNKTION (Minimera) ---
+        window.toggleControls = function() {
+            const btn = document.querySelector('.toggle-btn');
+            isControlsMinimized = !isControlsMinimized;
+            
+            if (isControlsMinimized) {
+                controls.classList.add('minimized');
+                btn.textContent = '➕';
+            } else {
+                controls.classList.remove('minimized');
+                btn.textContent = '➖';
+            }
+        };
+
         // --- EVENT LISTENERS ---
         searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
         radiusInput.addEventListener('input', updateUI);
@@ -244,12 +286,10 @@
             isLocked = e.target.checked;
             
             if (isLocked) {
-                // Lås aktiverat
                 lockedCenterCoords = map.getCenter();
                 crosshair.style.display = 'block';
                 liveLabel.textContent = "HÖJD ÖVER HAVET VID KRYSSET";
             } else {
-                // Lås avaktiverat
                 lockedCenterCoords = null;
                 crosshair.style.display = 'none';
                 liveLabel.textContent = "HÖJD ÖVER HAVET VID MITTPUNKT";
@@ -328,15 +368,13 @@
             }
         }
 
-        // --- HÖJD-LOGIK (Live & Safe Check) ---
+        // --- HÖJD-LOGIK ---
         async function updateCenterElevation() {
             const center = map.getCenter();
-            
             scanBtn.disabled = true;
             centerHeightDisplay.textContent = "..."; 
             
             const zoom = Math.min(Math.floor(map.getZoom()), 14); 
-            
             const point = map.project(center, zoom);
             const tileX = Math.floor(point.x / 256);
             const tileY = Math.floor(point.y / 256);
@@ -355,20 +393,11 @@
                     spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
                     const pData = spCtx.getImageData(0, 0, 1, 1).data;
                     const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
-                    
                     centerHeightDisplay.textContent = Math.round(h) + " m";
                     scanBtn.disabled = false;
                 };
-                
-                img.onerror = () => { 
-                    centerHeightDisplay.textContent = "N/A"; 
-                    scanBtn.disabled = true;
-                };
-
-            } catch (err) { 
-                centerHeightDisplay.textContent = "N/A"; 
-                scanBtn.disabled = true;
-            }
+                img.onerror = () => { centerHeightDisplay.textContent = "N/A"; scanBtn.disabled = true; };
+            } catch (err) { centerHeightDisplay.textContent = "N/A"; scanBtn.disabled = true; }
         }
 
         map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
@@ -478,31 +507,4 @@
                     const dy = p.y - existing.y;
                     if ((dx*dx + dy*dy) < (minPixelDist * minPixelDist)) { tooClose = true; break; }
                 }
-                if (!tooClose) finalPoints.push(p);
-            }
-
-            if (finalPoints.length === 0) { statusDiv.textContent = "Inga toppar."; return; }
-
-            finalPoints.forEach((p, idx) => {
-                const distKm = (p.dist / 1000).toFixed(2);
-                const isHighest = (idx === 0);
-                const markerOptions = isHighest ? { icon: goldIcon, zIndexOffset: 1000 } : {};
-
-                const popupContent = `
-                    <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${isHighest ? '🏆 ' : ''}Plats #${idx+1}</span>
-                    <span class="popup-height">${Math.round(p.h)} m ö.h</span>
-                    <span class="popup-meta">Avstånd: ${distKm} km</span>
-                    <div class="coord-box">
-                        <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                        <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
-                    </div>`;
-
-                const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
-                if (isHighest) marker.openPopup();
-                markers.push(marker);
-            });
-            statusDiv.textContent = `Hittade ${finalPoints.length} punkter.`;
-        }
-    </script>
-</body>
-</html>
+                if (!too
