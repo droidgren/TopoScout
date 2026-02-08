@@ -507,4 +507,31 @@
                     const dy = p.y - existing.y;
                     if ((dx*dx + dy*dy) < (minPixelDist * minPixelDist)) { tooClose = true; break; }
                 }
-                if (!too
+                if (!tooClose) finalPoints.push(p);
+            }
+
+            if (finalPoints.length === 0) { statusDiv.textContent = "Inga toppar."; return; }
+
+            finalPoints.forEach((p, idx) => {
+                const distKm = (p.dist / 1000).toFixed(2);
+                const isHighest = (idx === 0);
+                const markerOptions = isHighest ? { icon: goldIcon, zIndexOffset: 1000 } : {};
+
+                const popupContent = `
+                    <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${isHighest ? '🏆 ' : ''}Plats #${idx+1}</span>
+                    <span class="popup-height">${Math.round(p.h)} m ö.h</span>
+                    <span class="popup-meta">Avstånd: ${distKm} km</span>
+                    <div class="coord-box">
+                        <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
+                        <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
+                    </div>`;
+
+                const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
+                if (isHighest) marker.openPopup();
+                markers.push(marker);
+            });
+            statusDiv.textContent = `Hittade ${finalPoints.length} punkter.`;
+        }
+    </script>
+</body>
+</html>
