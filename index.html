@@ -3,66 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (Mobilanpassad)</title>
+    <title>Topo Höjdsökare (Layout Fix)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         #map { height: 100vh; width: 100%; }
         
-        /* --- KONTROLLPANEL (Desktop Standard) --- */
+        /* --- KONTROLLPANEL --- */
         #controls {
             position: absolute; top: 20px; right: 20px;
             background: rgba(255, 255, 255, 0.95); padding: 20px;
-            z-index: 2000; /* Högre än Leaflet (ofta 1000) */
+            z-index: 2000; /* Ligger över kartan */
             border-radius: 12px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             display: flex; flex-direction: column; gap: 10px;
             width: 300px;
             backdrop-filter: blur(5px);
-            transition: all 0.3s ease; /* Mjuk animering vid minimering */
-            max-height: 90vh; /* Så den inte blir högre än skärmen */
-            overflow-y: auto; /* Scroll om skärmen är liten */
+            transition: all 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
-        /* --- MOBILANPASSNING (Media Query) --- */
+        /* --- MOBILANPASSNING --- */
         @media (max-width: 600px) {
             #controls {
-                width: auto;        /* Flytande bredd */
-                left: 10px;         /* Marginal vänster */
-                right: 10px;        /* Marginal höger */
-                top: 10px;          /* Marginal topp */
-                padding: 15px;      /* Lite mindre padding */
-            }
-            
-            /* Flytta ner Leaflets lager-väljare så den inte ligger under vår panel */
-            .leaflet-control-layers {
-                margin-top: 80px !important; 
+                width: auto;
+                left: 10px; right: 10px; top: 10px;
+                padding: 15px;
             }
         }
 
         /* Klass för minimerat läge */
-        #controls.minimized #controls-content {
-            display: none;
-        }
-        #controls.minimized {
-            width: auto;
-            display: inline-block;
-            padding: 10px 15px;
-        }
+        #controls.minimized #controls-content { display: none; }
+        #controls.minimized { width: auto; display: inline-block; padding: 10px 15px; }
 
-        /* HEADER & TOGGLE KNAPP */
-        .header-row {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 5px;
-        }
+        /* HEADER & TOGGLE */
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
         h3 { margin: 0; font-size: 18px; color: #333; }
+        .toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #555; padding: 0 5px; line-height: 1; }
         
-        .toggle-btn {
-            background: none; border: none; font-size: 20px; cursor: pointer;
-            color: #555; padding: 0 5px; line-height: 1;
-        }
-        .toggle-btn:hover { color: #000; }
-
         /* ÖVRIG DESIGN */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
@@ -84,18 +63,12 @@
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
 
         button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
-        
-        .action-btn { 
-            background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; 
-            transition: all 0.3s ease;
-        }
+        .action-btn { background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
         .action-btn:hover { background-color: #c9302c; }
         .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
         .clear-btn { background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; }
-        .clear-btn:hover { background-color: #5a6268; }
         .gps-btn { background-color: #007bff; color: white; padding: 8px; font-size: 13px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .gps-btn:hover { background-color: #0056b3; }
         .icon-btn { background: #f8f9fa; border: 1px solid #ced4da; padding: 0 10px; font-size: 16px; }
         
         .search-group { display: flex; gap: 5px; margin-bottom: 5px; }
@@ -112,20 +85,19 @@
         #status { font-size: 13px; font-weight: 500; color: #444; min-height: 1.2em; margin-top:5px; }
         #analysis-canvas, #single-point-canvas { display: none; }
 
-        .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
-        .copy-btn { background: white; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 12px; }
-
-        .leaflet-control-layers {
-            margin-top: 20px !important; margin-right: 20px !important;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-            border-radius: 8px !important; border: none !important;
-            font-size: 13px !important;
-        }
-        
-        /* Popup justering */
         .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
         .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
         .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
+        .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
+        .copy-btn { background: white; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 12px; }
+
+        /* Stil för Lager-väljaren (Leaflet standard) */
+        .leaflet-control-layers {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+            border-radius: 8px !important; border: none !important;
+            font-size: 13px !important;
+            padding: 4px !important;
+        }
     </style>
 </head>
 <body>
@@ -190,7 +162,7 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // API NYCKLAR
+        // API NYCKLAR (Fyll i dina egna vid behov)
         const TF_API_KEY = "DIN_THUNDERFOREST_NYCKEL_HÄR"; 
         const LM_API_KEY = "DIN_LANTMATERIET_NYCKEL_HÄR"; 
 
@@ -211,7 +183,7 @@
         const satelliteLayer = L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 });
         const debugLayer = L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 });
         
-        // Initiera kartan med Tracetrack som standard
+        // Initiera karta
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [tracetrackLayer] 
@@ -219,6 +191,7 @@
         
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
+        // LAGER-MENY (Flyttad till 'bottomleft' för att inte krocka med panelen)
         const baseMaps = {
             "Tracetrack Topo": tracetrackLayer,
             "OpenTopo": openTopoLayer,
@@ -228,7 +201,8 @@
             "Satellit (Esri)": satelliteLayer,
             "Rådata (Debug)": debugLayer
         };
-        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+        // Här är ändringen: position 'bottomleft'
+        L.control.layers(baseMaps, null, { position: 'bottomleft' }).addTo(map);
 
         const goldIcon = new L.Icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -250,7 +224,6 @@
         const spCanvas = document.getElementById('single-point-canvas');
         const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
 
-        // DOM Elements
         const controls = document.getElementById('controls');
         const crosshair = document.getElementById('crosshair');
         const liveLabel = document.getElementById('liveLabel');
@@ -263,11 +236,10 @@
         const lockCheckbox = document.getElementById('lock-circle');
         const searchInput = document.getElementById('searchInput');
 
-        // --- TOGGLE FUNKTION (Minimera) ---
+        // --- TOGGLE FUNKTION ---
         window.toggleControls = function() {
             const btn = document.querySelector('.toggle-btn');
             isControlsMinimized = !isControlsMinimized;
-            
             if (isControlsMinimized) {
                 controls.classList.add('minimized');
                 btn.textContent = '➕';
@@ -284,7 +256,6 @@
         
         lockCheckbox.addEventListener('change', (e) => {
             isLocked = e.target.checked;
-            
             if (isLocked) {
                 lockedCenterCoords = map.getCenter();
                 crosshair.style.display = 'block';
@@ -297,7 +268,7 @@
             updateUI();
         });
 
-        // --- SÖK & GPS ---
+        // --- FUNKTIONER (Samma som förut) ---
         async function searchLocation() {
             const query = searchInput.value.trim();
             if (!query) return;
@@ -340,7 +311,6 @@
             });
         };
 
-        // --- UI FUNKTIONER ---
         function getSearchCenter() {
             return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter();
         }
@@ -368,7 +338,6 @@
             }
         }
 
-        // --- HÖJD-LOGIK ---
         async function updateCenterElevation() {
             const center = map.getCenter();
             scanBtn.disabled = true;
@@ -380,14 +349,12 @@
             const tileY = Math.floor(point.y / 256);
             const pixelX = Math.floor(point.x % 256);
             const pixelY = Math.floor(point.y % 256);
-
             const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
 
             try {
                 const img = new Image();
                 img.crossOrigin = "Anonymous";
                 img.src = url;
-                
                 img.onload = () => {
                     spCtx.clearRect(0,0,1,1);
                     spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
@@ -403,40 +370,32 @@
         map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
         map.on('move', updateUI); 
         map.on('moveend', updateCenterElevation);
-        
         updateUI();
         updateCenterElevation();
 
-        // --- ANALYSLOGIK ---
         async function analyzeTerrain() {
             clearResults();
             scanBtn.disabled = true;
             statusDiv.textContent = "Laddar data...";
-
             try {
                 const size = map.getSize();
                 canvas.width = size.x;
                 canvas.height = size.y;
                 ctx.imageSmoothingEnabled = false; 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-
                 const bounds = map.getBounds();
                 const zoom = Math.min(Math.floor(map.getZoom()), 14); 
-                
                 const nw = map.project(bounds.getNorthWest(), zoom);
                 const se = map.project(bounds.getSouthEast(), zoom);
                 const tileMin = nw.divideBy(256).floor();
                 const tileMax = se.divideBy(256).floor();
-
                 const tilesToLoad = [];
                 for (let x = tileMin.x; x <= tileMax.x; x++) {
                     for (let y = tileMin.y; y <= tileMax.y; y++) {
                         tilesToLoad.push({ x, y, z: zoom });
                     }
                 }
-
                 await loadAndDrawDataTiles(tilesToLoad, zoom, nw);
-
                 statusDiv.textContent = "Beräknar...";
                 requestAnimationFrame(() => {
                     findPeaks();
@@ -472,10 +431,8 @@
             const h = canvas.height;
             const imgData = ctx.getImageData(0, 0, w, h).data;
             const searchCenterLatLng = getSearchCenter();
-            
             const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
             let candidates = [];
-
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
                     const i = (y * w + x) * 4;
@@ -484,7 +441,6 @@
                     if (height > -50) candidates.push({ x, y, h: height });
                 }
             }
-
             const validPeaks = [];
             for (let p of candidates) {
                 const latlng = map.containerPointToLatLng([p.x, p.y]);
@@ -495,7 +451,6 @@
                 }
             }
             validPeaks.sort((a, b) => b.h - a.h);
-
             const finalPoints = [];
             const limit = parseInt(document.getElementById('numPoints').value) || 5;
             const minPixelDist = 40; 
@@ -509,14 +464,11 @@
                 }
                 if (!tooClose) finalPoints.push(p);
             }
-
             if (finalPoints.length === 0) { statusDiv.textContent = "Inga toppar."; return; }
-
             finalPoints.forEach((p, idx) => {
                 const distKm = (p.dist / 1000).toFixed(2);
                 const isHighest = (idx === 0);
                 const markerOptions = isHighest ? { icon: goldIcon, zIndexOffset: 1000 } : {};
-
                 const popupContent = `
                     <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${isHighest ? '🏆 ' : ''}Plats #${idx+1}</span>
                     <span class="popup-height">${Math.round(p.h)} m ö.h</span>
@@ -525,7 +477,6 @@
                         <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
                         <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
                     </div>`;
-
                 const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
                 if (isHighest) marker.openPopup();
                 markers.push(marker);
