@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Topo Höjdsökare (Multi-Layer)</title>
+    <title>Topo Höjdsökare</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -116,7 +116,7 @@
 
         <div class="control-row">
             <span class="control-label">Antal punkter:</span>
-            <input type="number" id="numPoints" value="5" min="1" max="50">
+            <input type="number" id="numPoints" value="3" min="1" max="50">
         </div>
         
         <div class="checkbox-group">
@@ -147,64 +147,58 @@
         // HÄR STÄLLER DU IN DINA API-NYCKLAR
         // =================================================================
         
-        // Thunderforest (Krävs för Outdoors): Skapa gratis konto på thunderforest.com
         const TF_API_KEY = "DIN_THUNDERFOREST_NYCKEL_HÄR"; 
-
-        // Lantmäteriet (Krävs för Topowebb): Skapa gratis konto på lantmateriet.se
         const LM_API_KEY = "DIN_LANTMATERIET_NYCKEL_HÄR"; 
 
         // =================================================================
 
         // --- KARTKÄLLOR ---
         
-        // 1. OpenTopoMap (Standard)
+        // 1. Tracetrack Topo (Standard)
+        const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=ee0783bcbd92009d4c1b0b8e9a4d7e96";
+
+        // 2. OpenTopoMap
         const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 
-        // 2. Tracetrack (Backup, bra detaljer)
-        const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=ee0783bcbd92009d4c1b0b8e9a4d7e96";
-        
-        // 3. Thunderforest Outdoors
+        // 3. OpenStreetMap (Ny)
+        const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+        // 4. Thunderforest Outdoors
         const TF_OUTDOORS_URL = `https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${TF_API_KEY}`;
 
-        // 4. Lantmäteriet (Topowebb CC-BY)
+        // 5. Lantmäteriet
         const LM_URL = `https://api.lantmateriet.se/open/topowebb-ccby/v1/wmts/token/${LM_API_KEY}/?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=topowebb&STYLE=default&TILEMATRIXSET=3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`;
 
-        // 5. Satellit (Esri)
+        // 6. Satellit
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
         
-        // 6. Data (Osynlig, används för analys)
+        // 7. Data (Analys)
         const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
         // Skapa lager-objekt
-        const openTopoLayer = L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 });
         const tracetrackLayer = L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 });
+        const openTopoLayer = L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 });
+        const osmLayer = L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 });
+        const thunderforestLayer = L.tileLayer(TF_OUTDOORS_URL, { attribution: 'Thunderforest', maxZoom: 22 });
+        const lantmaterietLayer = L.tileLayer(LM_URL, { attribution: 'Lantmäteriet', maxZoom: 17 });
         const satelliteLayer = L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 });
         const debugLayer = L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 });
         
-        const thunderforestLayer = L.tileLayer(TF_OUTDOORS_URL, { 
-            attribution: 'Thunderforest | OpenStreetMap', 
-            maxZoom: 22 
-        });
-
-        const lantmaterietLayer = L.tileLayer(LM_URL, {
-            attribution: 'Lantmäteriet',
-            maxZoom: 17
-        });
-
-        // Initiera kartan med OpenTopoMap som standard
+        // Initiera kartan med Tracetrack som standard
         const map = L.map('map', { 
             zoomControl: false, 
-            layers: [openTopoLayer] // STANDARDVAL HÄR
+            layers: [tracetrackLayer] 
         }).setView([67.89, 18.52], 11);
         
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        // Lager-menyn
+        // Lager-menyn med specifik ordning
         const baseMaps = {
-            "Höjdfärger (OpenTopo)": openTopoLayer,
-            "Thunderforest Outdoors": thunderforestLayer, // Kräver nyckel
-            "Lantmäteriet (Sverige)": lantmaterietLayer,  // Kräver nyckel
-            "Standard (Tracetrack)": tracetrackLayer,
+            "Tracetrack Topo": tracetrackLayer,
+            "OpenTopo": openTopoLayer,
+            "OpenStreetMap": osmLayer,
+            "Thunderforest Outdoors": thunderforestLayer,
+            "Lantmäteriet (Sverige)": lantmaterietLayer,
             "Satellit (Esri)": satelliteLayer,
             "Rådata (Debug)": debugLayer
         };
