@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (Layout Fix)</title>
+    <title>Topo Höjdsökare (Integrerad)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -13,7 +13,7 @@
         #controls {
             position: absolute; top: 20px; right: 20px;
             background: rgba(255, 255, 255, 0.95); padding: 20px;
-            z-index: 2000; /* Ligger över kartan */
+            z-index: 2000; 
             border-radius: 12px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             display: flex; flex-direction: column; gap: 10px;
@@ -24,16 +24,12 @@
             overflow-y: auto;
         }
 
-        /* --- MOBILANPASSNING --- */
         @media (max-width: 600px) {
             #controls {
-                width: auto;
-                left: 10px; right: 10px; top: 10px;
-                padding: 15px;
+                width: auto; left: 10px; right: 10px; top: 10px; padding: 15px;
             }
         }
 
-        /* Klass för minimerat läge */
         #controls.minimized #controls-content { display: none; }
         #controls.minimized { width: auto; display: inline-block; padding: 10px 15px; }
 
@@ -62,6 +58,7 @@
         .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
 
+        /* FORM ELEMENTS */
         button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         .action-btn { background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
         .action-btn:hover { background-color: #c9302c; }
@@ -73,10 +70,19 @@
         
         .search-group { display: flex; gap: 5px; margin-bottom: 5px; }
         #searchInput { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
+        
         .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
         .control-label { font-size: 14px; font-weight: 600; color: #444; }
         input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: right; }
         
+        /* NY STIL FÖR DROPDOWN */
+        select { 
+            width: 100%; padding: 8px; 
+            border: 1px solid #ccc; border-radius: 6px; 
+            font-size: 13px; background-color: #fff;
+            margin-top: 2px;
+        }
+
         .checkbox-group { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
         .checkbox-row { display: flex; gap: 6px; align-items: center; }
         .checkbox-row label { font-size: 13px; cursor: pointer; user-select: none; }
@@ -85,19 +91,12 @@
         #status { font-size: 13px; font-weight: 500; color: #444; min-height: 1.2em; margin-top:5px; }
         #analysis-canvas, #single-point-canvas { display: none; }
 
-        .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
-        .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
-        .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
         .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
         .copy-btn { background: white; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 12px; }
 
-        /* Stil för Lager-väljaren (Leaflet standard) */
-        .leaflet-control-layers {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-            border-radius: 8px !important; border: none !important;
-            font-size: 13px !important;
-            padding: 4px !important;
-        }
+        .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
+        .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
+        .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -119,6 +118,19 @@
                 <span id="center-h" class="live-value">-- m</span>
             </div>
 
+            <div style="margin-bottom: 10px;">
+                <span class="control-label" style="display:block; margin-bottom:3px;">Kartlager:</span>
+                <select id="layerSelect" onchange="changeLayer(this.value)">
+                    <option value="tracetrack">Tracetrack Topo (Standard)</option>
+                    <option value="opentopo">OpenTopo</option>
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="thunderforest">Thunderforest Outdoors</option>
+                    <option value="lantmateriet">Lantmäteriet (Sverige)</option>
+                    <option value="satellite">Satellit (Esri)</option>
+                    <option value="debug">Rådata (Debug)</option>
+                </select>
+            </div>
+
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="Sök plats eller lat,lon">
                 <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
@@ -129,7 +141,7 @@
             
             <div class="control-row">
                 <span class="control-label">Sökradie (km):</span>
-                <input type="number" id="radiusInput" value="5" min="0.5" max="100" step="0.5">
+                <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
             </div>
 
             <div class="control-row">
@@ -162,7 +174,7 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // API NYCKLAR (Fyll i dina egna vid behov)
+        // API NYCKLAR
         const TF_API_KEY = "DIN_THUNDERFOREST_NYCKEL_HÄR"; 
         const LM_API_KEY = "DIN_LANTMATERIET_NYCKEL_HÄR"; 
 
@@ -175,34 +187,34 @@
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
         const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
-        const tracetrackLayer = L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 });
-        const openTopoLayer = L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 });
-        const osmLayer = L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 });
-        const thunderforestLayer = L.tileLayer(TF_OUTDOORS_URL, { attribution: 'Thunderforest', maxZoom: 22 });
-        const lantmaterietLayer = L.tileLayer(LM_URL, { attribution: 'Lantmäteriet', maxZoom: 17 });
-        const satelliteLayer = L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 });
-        const debugLayer = L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 });
+        // Skapa lager
+        const layers = {
+            "tracetrack": L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 }),
+            "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
+            "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
+            "thunderforest": L.tileLayer(TF_OUTDOORS_URL, { attribution: 'Thunderforest', maxZoom: 22 }),
+            "lantmateriet": L.tileLayer(LM_URL, { attribution: 'Lantmäteriet', maxZoom: 17 }),
+            "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
+            "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
+        };
         
-        // Initiera karta
+        // Initiera kartan med standardlager
         const map = L.map('map', { 
             zoomControl: false, 
-            layers: [tracetrackLayer] 
+            layers: [layers["tracetrack"]] 
         }).setView([67.89, 18.52], 11);
         
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        // LAGER-MENY (Flyttad till 'bottomleft' för att inte krocka med panelen)
-        const baseMaps = {
-            "Tracetrack Topo": tracetrackLayer,
-            "OpenTopo": openTopoLayer,
-            "OpenStreetMap": osmLayer,
-            "Thunderforest Outdoors": thunderforestLayer,
-            "Lantmäteriet (Sverige)": lantmaterietLayer,
-            "Satellit (Esri)": satelliteLayer,
-            "Rådata (Debug)": debugLayer
+        // Håll koll på nuvarande lager
+        let currentLayer = layers["tracetrack"];
+
+        // --- FUNKTION FÖR ATT BYTA LAGER VIA DROPDOWN ---
+        window.changeLayer = function(layerKey) {
+            if (currentLayer) map.removeLayer(currentLayer);
+            currentLayer = layers[layerKey];
+            map.addLayer(currentLayer);
         };
-        // Här är ändringen: position 'bottomleft'
-        L.control.layers(baseMaps, null, { position: 'bottomleft' }).addTo(map);
 
         const goldIcon = new L.Icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -268,7 +280,7 @@
             updateUI();
         });
 
-        // --- FUNKTIONER (Samma som förut) ---
+        // --- SÖK & GPS ---
         async function searchLocation() {
             const query = searchInput.value.trim();
             if (!query) return;
