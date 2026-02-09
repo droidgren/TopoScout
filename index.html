@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (Design Fix)</title>
+    <title>Topo Höjdsökare (v1.5)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -68,7 +68,6 @@
         /* KNAPPAR & INPUTS */
         button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         
-        /* Huvudknapp (Sök punkter) */
         .action-btn { 
             background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; 
             transition: all 0.3s ease;
@@ -76,10 +75,9 @@
         .action-btn:hover { background-color: #c9302c; }
         .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
-        /* Rensa-knapp (med extra marginal uppåt) */
         .clear-btn { 
             background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; 
-            margin-top: 10px; /* HÄR ÄR MELLANRUMMET */
+            margin-top: 10px; 
         }
         .clear-btn:hover { background-color: #5a6268; }
 
@@ -123,7 +121,7 @@
 
     <div id="controls">
         <div class="header-row">
-            <h3>Höjdsökare</h3>
+            <h3>Topo Höjdsökare (v1.5)</h3>
             <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
         </div>
 
@@ -145,8 +143,8 @@
             </div>
 
             <div class="search-group">
-                <button class="icon-btn" onclick="locateUser()" title="Min position">📍</button>
                 <input type="text" id="searchInput" placeholder="Sök plats">
+                <button class="icon-btn" onclick="locateUser()" title="Min position">📍</button>
                 <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
             </div>
             
@@ -191,7 +189,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // --- KARTKÄLLOR ---
+        // UPPDATERAD API NYCKEL
         const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=410a6776f2da396996efc8adcb54a648";
+        
         const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
         const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -338,18 +338,17 @@
             const searchCenter = getSearchCenter(); 
             const radiusKm = parseFloat(radiusInput.value) || 5;
             
-            // Rensa gamla lager
             if (searchCircle) map.removeLayer(searchCircle);
             if (centerMarker) map.removeLayer(centerMarker);
             
-            // 1. Skapa ALLTID mittpunkten
+            // Alltid visa mittpunkt
             centerMarker = L.circleMarker(searchCenter, { 
                 radius: 4, 
                 color: isLocked ? '#e67e22' : '#007bff', 
                 fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false 
             }).addTo(map);
 
-            // 2. Skapa cirkeln BARA om rutan är ikryssad
+            // Visa cirkel om vald
             if (circleCheckbox.checked) {
                 searchCircle = L.circle(searchCenter, { 
                     color: isLocked ? '#e67e22' : '#007bff', 
