@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (v1.7)</title>
+    <title>Topo Höjdsökare (v1.8)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -12,40 +12,40 @@
         /* --- KONTROLLPANEL --- */
         #controls {
             position: absolute; top: 20px; right: 20px;
-            background: rgba(255, 255, 255, 0.95); padding: 20px;
+            
+            /* Samma bakgrund och padding oavsett läge för att undvika "hopp" */
+            background: rgba(255, 255, 255, 0.5); 
+            padding: 15px;
+            
             z-index: 2000; 
             border-radius: 12px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             display: flex; flex-direction: column; gap: 10px;
             
-            /* FAST BREDD FÖR ATT FÖRHINDRA "HOPP" */
             width: 300px; 
             
             backdrop-filter: blur(5px);
-            transition: all 0.3s ease;
+            transition: max-height 0.3s ease; /* Endast höjden animeras mjukt */
             max-height: 90vh;
             overflow-y: auto;
         }
 
         @media (max-width: 600px) {
             #controls {
-                width: auto; /* På mobil: Flytande bredd */
-                left: 10px; right: 10px; top: 10px; 
-                padding: 15px;
+                width: auto; left: 10px; right: 10px; top: 10px; 
             }
         }
 
         /* --- MINIMERAT LÄGE --- */
         #controls.minimized #controls-content { display: none; }
         
-        /* När den är minimerad: Behåll bredden men minska genomskinlighet/padding något */
+        /* Vi ändrar INTE padding eller background här längre */
         #controls.minimized { 
-            background: rgba(255, 255, 255, 0.85); 
-            /* Vi ändrar INTE width här, så den ligger stilla */
+            overflow: hidden; /* Dölj scrollbar i minimerat läge */
         }
 
         /* HEADER & TOGGLE */
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
         h3 { margin: 0; font-size: 18px; color: #333; white-space: nowrap; }
         .toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #555; padding: 0 5px; line-height: 1; }
         
@@ -72,18 +72,9 @@
             background-color: #e3f2fd; border: 1px solid #90caf9;
             color: #1565c0; padding: 10px; border-radius: 8px;
             text-align: center; margin-bottom: 5px;
-            transition: background-color 0.3s ease, border 0.3s ease;
+            /* Ingen transition på storlek behövs här */
         }
         
-        /* SPECIALSTIL FÖR LIVE-BOX VID MINIMERING */
-        #controls.minimized .live-height-box {
-            background-color: rgba(227, 242, 253, 0.6); 
-            border: 1px solid rgba(144, 202, 249, 0.4);
-            backdrop-filter: blur(2px);
-            margin-top: 5px;
-            margin-bottom: 0; /* Ta bort marginal neråt när minimerad */
-        }
-
         .live-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; color: #555; }
         .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
