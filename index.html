@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (Integrerad)</title>
+    <title>Topo Höjdsökare (Design Fix)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -38,6 +38,13 @@
         h3 { margin: 0; font-size: 18px; color: #333; }
         .toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #555; padding: 0 5px; line-height: 1; }
         
+        /* FOOTER (Status & Zoom) */
+        .footer-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 5px; padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+
         /* ÖVRIG DESIGN */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
@@ -58,16 +65,28 @@
         .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
 
-        /* FORM ELEMENTS */
+        /* KNAPPAR & INPUTS */
         button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
-        .action-btn { background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
+        
+        /* Huvudknapp (Sök punkter) */
+        .action-btn { 
+            background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; 
+            transition: all 0.3s ease;
+        }
         .action-btn:hover { background-color: #c9302c; }
         .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
-        .clear-btn { background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; }
-        .gps-btn { background-color: #007bff; color: white; padding: 8px; font-size: 13px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .icon-btn { background: #f8f9fa; border: 1px solid #ced4da; padding: 0 10px; font-size: 16px; }
+        /* Rensa-knapp (med extra marginal uppåt) */
+        .clear-btn { 
+            background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; 
+            margin-top: 10px; /* HÄR ÄR MELLANRUMMET */
+        }
+        .clear-btn:hover { background-color: #5a6268; }
+
+        .icon-btn { background: #f8f9fa; border: 1px solid #ced4da; padding: 0 10px; font-size: 16px; min-width: 40px; }
+        .icon-btn:hover { background: #e2e6ea; }
         
+        /* Sökgrupp layout */
         .search-group { display: flex; gap: 5px; margin-bottom: 5px; }
         #searchInput { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
         
@@ -75,7 +94,6 @@
         .control-label { font-size: 14px; font-weight: 600; color: #444; }
         input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: right; }
         
-        /* NY STIL FÖR DROPDOWN */
         select { 
             width: 100%; padding: 8px; 
             border: 1px solid #ccc; border-radius: 6px; 
@@ -87,8 +105,8 @@
         .checkbox-row { display: flex; gap: 6px; align-items: center; }
         .checkbox-row label { font-size: 13px; cursor: pointer; user-select: none; }
         
-        .zoom-badge { background: #e9ecef; color: #495057; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; font-family: monospace; }
-        #status { font-size: 13px; font-weight: 500; color: #444; min-height: 1.2em; margin-top:5px; }
+        .zoom-badge { background: #e9ecef; color: #495057; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; font-family: monospace; }
+        #status { font-size: 13px; font-weight: 500; color: #444; }
         #analysis-canvas, #single-point-canvas { display: none; }
 
         .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
@@ -105,10 +123,7 @@
 
     <div id="controls">
         <div class="header-row">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <h3>Höjdsökare</h3>
-                <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
-            </div>
+            <h3>Höjdsökare</h3>
             <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
         </div>
 
@@ -124,18 +139,16 @@
                     <option value="tracetrack">Tracetrack Topo (Standard)</option>
                     <option value="opentopo">OpenTopo</option>
                     <option value="osm">OpenStreetMap</option>
-                    <option value="thunderforest">Thunderforest Outdoors</option>
-                    <option value="lantmateriet">Lantmäteriet (Sverige)</option>
                     <option value="satellite">Satellit (Esri)</option>
                     <option value="debug">Rådata (Debug)</option>
                 </select>
             </div>
 
             <div class="search-group">
-                <input type="text" id="searchInput" placeholder="Sök plats eller lat,lon">
+                <button class="icon-btn" onclick="locateUser()" title="Min position">📍</button>
+                <input type="text" id="searchInput" placeholder="Sök plats">
                 <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
             </div>
-            <button class="gps-btn" onclick="locateUser()">📍 Gå till min position</button>
             
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
             
@@ -164,7 +177,10 @@
             <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Sök punkter</button>
             <button class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
             
-            <div id="status">Redo.</div>
+            <div class="footer-row">
+                <div id="status">Redo.</div>
+                <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
+            </div>
         </div>
     </div>
 
@@ -174,16 +190,10 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // API NYCKLAR
-        const TF_API_KEY = "DIN_THUNDERFOREST_NYCKEL_HÄR"; 
-        const LM_API_KEY = "DIN_LANTMATERIET_NYCKEL_HÄR"; 
-
         // --- KARTKÄLLOR ---
-        const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=410a6776f2da396996efc8adcb54a648";
+        const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=ee0783bcbd92009d4c1b0b8e9a4d7e96";
         const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
         const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-        const TF_OUTDOORS_URL = `https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${TF_API_KEY}`;
-        const LM_URL = `https://api.lantmateriet.se/open/topowebb-ccby/v1/wmts/token/${LM_API_KEY}/?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=topowebb&STYLE=default&TILEMATRIXSET=3857&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`;
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
         const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
@@ -192,13 +202,11 @@
             "tracetrack": L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 }),
             "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
             "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
-            "thunderforest": L.tileLayer(TF_OUTDOORS_URL, { attribution: 'Thunderforest', maxZoom: 22 }),
-            "lantmateriet": L.tileLayer(LM_URL, { attribution: 'Lantmäteriet', maxZoom: 17 }),
             "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
             "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
         };
         
-        // Initiera kartan med standardlager
+        // Initiera kartan
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [layers["tracetrack"]] 
@@ -206,10 +214,8 @@
         
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        // Håll koll på nuvarande lager
         let currentLayer = layers["tracetrack"];
 
-        // --- FUNKTION FÖR ATT BYTA LAGER VIA DROPDOWN ---
         window.changeLayer = function(layerKey) {
             if (currentLayer) map.removeLayer(currentLayer);
             currentLayer = layers[layerKey];
@@ -332,20 +338,23 @@
             const searchCenter = getSearchCenter(); 
             const radiusKm = parseFloat(radiusInput.value) || 5;
             
+            // Rensa gamla lager
             if (searchCircle) map.removeLayer(searchCircle);
             if (centerMarker) map.removeLayer(centerMarker);
             
+            // 1. Skapa ALLTID mittpunkten
+            centerMarker = L.circleMarker(searchCenter, { 
+                radius: 4, 
+                color: isLocked ? '#e67e22' : '#007bff', 
+                fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false 
+            }).addTo(map);
+
+            // 2. Skapa cirkeln BARA om rutan är ikryssad
             if (circleCheckbox.checked) {
                 searchCircle = L.circle(searchCenter, { 
                     color: isLocked ? '#e67e22' : '#007bff', 
                     fillColor: isLocked ? '#e67e22' : '#007bff', 
                     fillOpacity: 0.1, weight: 1, radius: radiusKm * 1000, interactive: false 
-                }).addTo(map);
-
-                centerMarker = L.circleMarker(searchCenter, { 
-                    radius: 4, 
-                    color: isLocked ? '#e67e22' : '#007bff', 
-                    fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false 
                 }).addTo(map);
             }
         }
