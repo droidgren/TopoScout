@@ -22,7 +22,7 @@ const translations = {
         status_done: "Klar.",
         status_no_match: "Ingen träff.",
         status_gps_missing: "GPS saknas.",
-        status_gps_fetch: "Hämtar position...",
+        status_gps_fetch: "Hämtar pos...",
         status_gps_error: "GPS fel.",
         status_cleared: "Rensat.",
         status_loading: "Laddar data...",
@@ -120,42 +120,46 @@ function updateLanguage() {
 
     // Update Flag Image (Src)
     const flagImg = document.getElementById('flag-icon');
-    flagImg.src = isEn ? FLAG_GB : FLAG_SE;
+    if(flagImg) flagImg.src = isEn ? FLAG_GB : FLAG_SE;
 
     // Static UI Elements
-    document.getElementById('app-title').textContent = t.title;
-    document.title = t.title;
-    document.getElementById('liveLabel').textContent = t.live_label;
-    document.getElementById('lbl-layers').textContent = t.lbl_layers;
-    document.getElementById('lbl-radius').textContent = t.lbl_radius;
-    document.getElementById('lbl-points').textContent = t.lbl_points;
-    document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
-    document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
-    document.getElementById('scan-btn').textContent = t.btn_scan;
-    document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
-    document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
-    document.getElementById('climb-btn').textContent = t.btn_climb;
-    document.getElementById('clear-btn').textContent = t.btn_clear;
-    
-    document.getElementById('searchInput').placeholder = t.input_search_ph;
-    document.getElementById('status').textContent = t.status_ready;
+    if(document.getElementById('app-title')) {
+        document.getElementById('app-title').textContent = t.title;
+        document.title = t.title;
+        document.getElementById('liveLabel').textContent = t.live_label;
+        document.getElementById('lbl-layers').textContent = t.lbl_layers;
+        document.getElementById('lbl-radius').textContent = t.lbl_radius;
+        document.getElementById('lbl-points').textContent = t.lbl_points;
+        document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
+        document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
+        document.getElementById('scan-btn').textContent = t.btn_scan;
+        document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
+        document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
+        document.getElementById('climb-btn').textContent = t.btn_climb;
+        document.getElementById('clear-btn').textContent = t.btn_clear;
+        
+        document.getElementById('searchInput').placeholder = t.input_search_ph;
+        document.getElementById('status').textContent = t.status_ready;
 
-    // Info Modal
-    document.getElementById('info-title').textContent = t.info_title;
-    document.getElementById('info-desc').textContent = t.info_desc;
-    document.getElementById('info-creator').textContent = t.info_creator;
-    document.getElementById('info-privacy').textContent = t.info_privacy;
-    document.getElementById('info-close').textContent = t.btn_close;
+        // Info Modal
+        document.getElementById('info-title').textContent = t.info_title;
+        document.getElementById('info-desc').textContent = t.info_desc;
+        document.getElementById('info-creator').textContent = t.info_creator;
+        document.getElementById('info-privacy').textContent = t.info_privacy;
+        document.getElementById('info-close').textContent = t.btn_close;
 
-    // API Modal buttons
-    document.getElementById('modal-save').textContent = t.btn_save;
-    document.getElementById('modal-cancel').textContent = t.btn_cancel;
-    document.getElementById('api-key-input').placeholder = t.input_api_ph;
+        // API Modal buttons
+        document.getElementById('modal-save').textContent = t.btn_save;
+        document.getElementById('modal-cancel').textContent = t.btn_cancel;
+        document.getElementById('api-key-input').placeholder = t.input_api_ph;
 
-    // Update Select Options (Only text, not values)
-    const sel = document.getElementById('layerSelect');
-    sel.options[4].text = t.layer_satellite + " (ESRI)";
-    sel.options[5].text = t.layer_debug;
+        // Update Select Options (Only text, not values)
+        const sel = document.getElementById('layerSelect');
+        if(sel) {
+            sel.options[4].text = t.layer_satellite + " (ESRI)";
+            sel.options[5].text = t.layer_debug;
+        }
+    }
 }
 
 function toggleLanguage() {
@@ -195,27 +199,56 @@ const layers = {
     "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
 };
 
-const map = L.map('map', { zoomControl: false, layers: [layers["opentopo"]] }).setView([67.89, 18.52], 11);
+// --- INITIERA KARTA MED SPARAD POSITION ---
+const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
+const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
+const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
+const savedLayer = localStorage.getItem('topo_layer') || "opentopo";
+
+// Skapa kartan men vänta med att lägga till lager tills vi kollat savedLayer
+const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
 L.control.zoom({position: 'bottomright'}).addTo(map);
 
-let currentLayer = layers["opentopo"];
-let previousLayerValue = "opentopo"; 
+let currentLayer = null; 
+let previousLayerValue = savedLayer; 
 let pendingServiceKey = null;
 
-// Init language on load
+// Initiera språk
 updateLanguage();
+
+// Sätt dropdown till sparat värde och ladda lagret
+const layerSelect = document.getElementById('layerSelect');
+if(layerSelect) {
+    layerSelect.value = savedLayer;
+    handleLayerChange(savedLayer); // Detta laddar lagret och kollar ev. nycklar
+}
+
+// --- SPARA POSITION VID RÖRELSE ---
+map.on('moveend', () => {
+    const center = map.getCenter();
+    localStorage.setItem('topo_lat', center.lat);
+    localStorage.setItem('topo_lng', center.lng);
+    localStorage.setItem('topo_zoom', map.getZoom());
+    updateCenterElevation();
+});
 
 function handleLayerChange(layerKey) {
     const editBtn = document.getElementById('edit-key-btn');
     
+    // Spara valet
+    localStorage.setItem('topo_layer', layerKey);
+
     if (lockedServices[layerKey]) {
         const service = lockedServices[layerKey];
         const savedKey = localStorage.getItem(service.storageKey);
+        
         if (savedKey) {
             loadLockedLayer(layerKey, savedKey);
             switchLayerTo(layerKey);
             editBtn.style.display = 'block'; 
         } else {
+            // Om vi laddar sidan och har ett sparat lager men ingen nyckel (t.ex. rensat cache)
+            // så visar vi modalen.
             showKeyModal(layerKey);
         }
     } else {
@@ -286,7 +319,15 @@ function saveApiKey() {
 function cancelApiKey() {
     document.getElementById('key-modal').style.display = 'none';
     pendingServiceKey = null;
-    document.getElementById('layerSelect').value = previousLayerValue;
+    
+    // Om vi avbryter och det inte fanns ett tidigare lager (t.ex. vid sidladdning),
+    // fall tillbaka till opentopo.
+    if(currentLayer === null) {
+        document.getElementById('layerSelect').value = "opentopo";
+        handleLayerChange("opentopo");
+    } else {
+        document.getElementById('layerSelect').value = previousLayerValue;
+    }
 }
 
 function showInfo() { document.getElementById('info-modal').style.display = 'flex'; }
@@ -464,8 +505,11 @@ async function updateCenterElevation() {
 }
 
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
-map.on('move', updateUI); 
-map.on('moveend', updateCenterElevation);
+// map.on('move', updateUI); // Denna är redundant om vi har moveend för sparning, men bra för cirkel-UI
+map.on('move', () => { updateUI(); }); // Behåller UI uppdatering vid drag
+// Vi använder moveend för att spara position och hämta höjddata för att spara prestanda
+// updateCenterElevation anropas redan i moveend i min nya kod ovan
+
 updateUI();
 updateCenterElevation();
 
