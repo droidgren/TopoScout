@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (v2.4)</title>
+    <title>Topo Höjdsökare (v2.9)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
@@ -12,18 +12,13 @@
         /* --- KONTROLLPANEL --- */
         #controls {
             position: absolute; top: 20px; right: 20px;
-            
-            /* 0.5 Transparens */
             background: rgba(255, 255, 255, 0.5); 
             padding: 15px;
-            
             z-index: 2000; 
             border-radius: 12px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             display: flex; flex-direction: column; gap: 10px;
-            
             width: 300px; 
-            
             backdrop-filter: blur(5px);
             transition: max-height 0.3s ease; 
             max-height: 90vh;
@@ -31,26 +26,38 @@
         }
 
         @media (max-width: 600px) {
-            #controls {
-                width: auto; left: 10px; right: 10px; top: 10px; 
-            }
+            #controls { width: auto; left: 10px; right: 10px; top: 10px; }
         }
 
-        /* --- MINIMERAT LÄGE --- */
         #controls.minimized #controls-content { display: none; }
         #controls.minimized { overflow: hidden; }
 
-        /* HEADER & TOGGLE */
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
         h3 { margin: 0; font-size: 18px; color: #333; white-space: nowrap; }
         .toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #555; padding: 0 5px; line-height: 1; }
         
-        /* FOOTER */
-        .footer-row {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-top: 5px; padding-top: 10px;
-            border-top: 1px solid #eee;
+        .footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding-top: 10px; border-top: 1px solid #eee; }
+
+        /* MODAL (API NYCKEL RUTA) */
+        #key-modal {
+            display: none; 
+            position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); backdrop-filter: blur(3px);
+            align-items: center; justify-content: center;
         }
+        .modal-content {
+            background-color: #fff; padding: 20px; border-radius: 12px;
+            width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .modal-content h4 { margin-top: 0; color: #333; margin-bottom: 10px;}
+        .modal-content p { font-size: 14px; color: #555; line-height: 1.5; margin-bottom: 15px; }
+        .modal-content a { color: #007bff; text-decoration: none; font-weight: bold; }
+        .modal-content input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+        .save-btn { background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .cancel-btn { background-color: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
+        .save-btn:hover { background-color: #218838; }
 
         /* ÖVRIG DESIGN */
         #crosshair {
@@ -63,7 +70,6 @@
         #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
         #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
 
-        /* LIVE HEIGHT BOX */
         .live-height-box {
             background-color: #e3f2fd; border: 1px solid #90caf9;
             color: #1565c0; padding: 10px; border-radius: 8px;
@@ -80,34 +86,22 @@
         .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
         .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
 
-        /* KNAPPAR & INPUTS */
         button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         
-        .action-btn { 
-            background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; 
-            transition: all 0.3s ease;
-        }
+        .action-btn { background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
         .action-btn:hover { background-color: #c9302c; }
         .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
-        /* Knapp för stigning (Orange) */
-        .climb-btn { 
-            background-color: #e67e22; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; 
-            transition: all 0.3s ease; 
-        }
+        .climb-btn { background-color: #e67e22; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
         .climb-btn:hover { background-color: #d35400; }
         .climb-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
 
-        .clear-btn { 
-            background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; 
-            margin-top: 10px; 
-        }
+        .clear-btn { background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; margin-top: 10px; }
         .clear-btn:hover { background-color: #5a6268; }
 
         .icon-btn { background: #f8f9fa; border: 1px solid #ced4da; padding: 0 10px; font-size: 16px; min-width: 40px; }
         .icon-btn:hover { background: #e2e6ea; }
         
-        /* Sökgrupp layout */
         .search-group { display: flex; gap: 5px; margin-bottom: 5px; }
         #searchInput { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
         
@@ -115,12 +109,9 @@
         .control-label { font-size: 14px; font-weight: 600; color: #444; }
         input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: right; }
         
-        select { 
-            width: 100%; padding: 8px; 
-            border: 1px solid #ccc; border-radius: 6px; 
-            font-size: 13px; background-color: #fff;
-            margin-top: 2px;
-        }
+        .select-container { display:flex; gap: 5px; width: 100%; }
+        select { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; background-color: #fff; margin-top: 2px; }
+        #edit-key-btn { display: none; padding: 0 8px; font-size: 14px; margin-top:2px;}
 
         .checkbox-group { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
         .checkbox-row { display: flex; gap: 6px; align-items: center; }
@@ -142,6 +133,19 @@
 
     <div id="crosshair"></div>
 
+    <div id="key-modal">
+        <div class="modal-content">
+            <h4 id="modal-title">Ange API-nyckel</h4>
+            <p id="modal-text">...</p>
+            <p><a id="modal-link" href="#" target="_blank">Registrera dig här</a></p>
+            <input type="text" id="api-key-input" placeholder="Klistra in din nyckel här...">
+            <div class="modal-btns">
+                <button class="save-btn" onclick="saveApiKey()">Spara</button>
+                <button class="cancel-btn" onclick="cancelApiKey()">Avbryt</button>
+            </div>
+        </div>
+    </div>
+
     <div id="controls">
         <div class="header-row">
             <h3>Topo Höjdsökare</h3>
@@ -157,13 +161,17 @@
             
             <div style="margin-bottom: 10px;">
                 <span class="control-label" style="display:block; margin-bottom:3px;">Kartlager:</span>
-                <select id="layerSelect" onchange="changeLayer(this.value)">
-                    <option value="tracetrack">Tracetrack Topo</option>
-                    <option value="opentopo">OpenTopo (OSM)</option>
-                    <option value="osm">OpenStreetMap (OSM)</option>
-                    <option value="satellite">Satellit (Esri)</option>
-                    <option value="debug">Rådata (Debug)</option>
-                </select>
+                <div class="select-container">
+                    <select id="layerSelect" onchange="handleLayerChange(this.value)">
+                        <option value="opentopo" selected>OpenTopo</option>
+                        <option value="osm">OpenStreetMap</option>
+                        <option value="tracetrack">Tracetrack Topo</option>
+                        <option value="thunderforest">ThunderForest Outdoors</option>
+                        <option value="satellite">Satellit (ESRI)</option>
+                        <option value="debug">Höjddata (Debug)</option>
+                    </select>
+                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="Ändra API-nyckel">🔑</button>
+                </div>
             </div>
 
             <div class="search-group">
@@ -196,14 +204,21 @@
                 </div>
             </div>
 
-            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Sök punkter</button>
+            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Hitta högsta punkter</button>
 
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
+            
             <div class="control-row">
                 <span class="control-label">Mätsträcka (m):</span>
                 <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
             </div>
-            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Hitta brantaste stigning</button>
+
+            <div class="control-row">
+                <span class="control-label">Antal stigningar:</span>
+                <input type="number" id="numClimbsInput" value="1" min="1" max="10">
+            </div>
+
+            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Hitta stigningar</button>
 
             <button class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
             
@@ -220,35 +235,139 @@
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // --- KARTKÄLLOR (DIREKT) ---
-        // Här ligger din nyckel öppet igen.
-        const TRACETRACK_URL = "https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key=";
-        
+        // --- INSTÄLLNINGAR FÖR LÅSTA TJÄNSTER ---
+        const lockedServices = {
+            'tracetrack': {
+                name: 'Tracetrack Topo',
+                storageKey: 'tracetrack_key',
+                link: 'https://www.tracestrack.com/',
+                urlTemplate: 'https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key={key}'
+            },
+            'thunderforest': {
+                name: 'ThunderForest Outdoors',
+                storageKey: 'thunderforest_key',
+                link: 'https://www.thunderforest.com/',
+                urlTemplate: 'https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}'
+            }
+        };
+
+        // --- URL:ER ---
         const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
         const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
         const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
         const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
-        // Skapa lager
+        // Skapa lager 
         const layers = {
-            "tracetrack": L.tileLayer(TRACETRACK_URL, { attribution: 'Tracetrack', maxZoom: 19 }),
             "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
             "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
+            "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
+            "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
             "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
             "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
         };
         
-        const map = L.map('map', { zoomControl: false, layers: [layers["tracetrack"]] }).setView([67.89, 18.52], 11);
+        // STANDARD: OpenTopo
+        const map = L.map('map', { zoomControl: false, layers: [layers["opentopo"]] }).setView([67.89, 18.52], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        let currentLayer = layers["tracetrack"];
+        let currentLayer = layers["opentopo"];
+        let previousLayerValue = "opentopo"; 
+        let pendingServiceKey = null;
 
-        window.changeLayer = function(layerKey) {
+        // --- HANTERING AV NYCKEL & LAGER ---
+        function handleLayerChange(layerKey) {
+            const editBtn = document.getElementById('edit-key-btn');
+            
+            // Kolla om lagret är låst (kräver nyckel)
+            if (lockedServices[layerKey]) {
+                const service = lockedServices[layerKey];
+                const savedKey = localStorage.getItem(service.storageKey);
+                
+                if (savedKey) {
+                    loadLockedLayer(layerKey, savedKey);
+                    switchLayerTo(layerKey);
+                    editBtn.style.display = 'block'; 
+                } else {
+                    showKeyModal(layerKey);
+                }
+            } else {
+                editBtn.style.display = 'none';
+                switchLayerTo(layerKey);
+            }
+        }
+
+        function switchLayerTo(layerKey) {
             if (currentLayer) map.removeLayer(currentLayer);
             currentLayer = layers[layerKey];
             map.addLayer(currentLayer);
-        };
+            previousLayerValue = layerKey;
+        }
 
+        function loadLockedLayer(layerKey, key) {
+            const service = lockedServices[layerKey];
+            if (service) {
+                const url = service.urlTemplate.replace('{key}', key);
+                layers[layerKey].setUrl(url);
+            }
+        }
+
+        function showKeyModal(layerKey) {
+            const service = lockedServices[layerKey];
+            if (!service) return;
+
+            pendingServiceKey = layerKey;
+            
+            document.getElementById('modal-title').textContent = `Ange API-nyckel för ${service.name}`;
+            
+            // Uppdaterad text enligt önskemål
+            document.getElementById('modal-text').innerHTML = `För att använda ${service.name} behöver du en API-nyckel.<br><br>Detta kan du skaffa kostnadsfritt genom att registrera dig på länken nedan.`;
+            
+            const linkEl = document.getElementById('modal-link');
+            linkEl.href = service.link;
+            linkEl.textContent = service.link;
+
+            const existingKey = localStorage.getItem(service.storageKey) || '';
+            document.getElementById('api-key-input').value = existingKey;
+
+            document.getElementById('key-modal').style.display = 'flex';
+        }
+
+        function openCurrentKeyModal() {
+            const currentVal = document.getElementById('layerSelect').value;
+            if (lockedServices[currentVal]) {
+                showKeyModal(currentVal);
+            }
+        }
+
+        function saveApiKey() {
+            if (!pendingServiceKey || !lockedServices[pendingServiceKey]) return;
+
+            const input = document.getElementById('api-key-input');
+            const key = input.value.trim();
+            const service = lockedServices[pendingServiceKey];
+
+            if (key) {
+                localStorage.setItem(service.storageKey, key);
+                loadLockedLayer(pendingServiceKey, key);
+                switchLayerTo(pendingServiceKey);
+                
+                document.getElementById('edit-key-btn').style.display = 'block';
+                document.getElementById('layerSelect').value = pendingServiceKey;
+                document.getElementById('key-modal').style.display = 'none';
+                pendingServiceKey = null;
+            } else {
+                alert("Du måste ange en nyckel.");
+            }
+        }
+
+        function cancelApiKey() {
+            document.getElementById('key-modal').style.display = 'none';
+            pendingServiceKey = null;
+            document.getElementById('layerSelect').value = previousLayerValue;
+        }
+
+        // --- ÖVRIGT ---
         const goldIcon = new L.Icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
             shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -267,7 +386,6 @@
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
         });
 
-        // --- Variabler ---
         let markers = [];
         let polylines = [];
         let searchCircle = null;
@@ -283,19 +401,18 @@
 
         const controls = document.getElementById('controls');
         const crosshair = document.getElementById('crosshair');
-        const liveLabel = document.getElementById('liveLabel');
-        const statusDiv = document.getElementById('status');
         const centerHeightDisplay = document.getElementById('center-h');
         const scanBtn = document.getElementById('scan-btn');
         const climbBtn = document.getElementById('climb-btn');
         const zoomLabel = document.getElementById('zoom-level');
         const radiusInput = document.getElementById('radiusInput');
         const climbDistInput = document.getElementById('climbDistInput');
+        const numClimbsInput = document.getElementById('numClimbsInput');
         const circleCheckbox = document.getElementById('show-circle');
         const lockCheckbox = document.getElementById('lock-circle');
         const searchInput = document.getElementById('searchInput');
+        const statusDiv = document.getElementById('status');
 
-        // --- TOGGLE FUNKTION ---
         window.toggleControls = function() {
             const btn = document.querySelector('.toggle-btn');
             isControlsMinimized = !isControlsMinimized;
@@ -308,7 +425,6 @@
             }
         };
 
-        // --- EVENT LISTENERS ---
         searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
         radiusInput.addEventListener('input', updateUI);
         circleCheckbox.addEventListener('change', updateUI);
@@ -325,7 +441,6 @@
             updateUI();
         });
 
-        // --- SÖK & GPS ---
         async function searchLocation() {
             const query = searchInput.value.trim();
             if (!query) return;
@@ -428,9 +543,6 @@
         updateUI();
         updateCenterElevation();
 
-        // ----------------------------------------------------
-        // DATA-HÄMTNING OCH ANALYS
-        // ----------------------------------------------------
         async function fetchTerrainData() {
             const size = map.getSize();
             canvas.width = size.x;
@@ -571,6 +683,7 @@
             const searchCenterLatLng = getSearchCenter();
             const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
             const climbDistMeters = parseFloat(climbDistInput.value) || 200;
+            const maxResults = parseInt(numClimbsInput.value) || 1; 
 
             const p1 = map.latLngToContainerPoint(searchCenterLatLng);
             const p2 = map.latLngToContainerPoint(moveLatLng(searchCenterLatLng, climbDistMeters, 0));
@@ -581,9 +694,7 @@
                 return;
             }
 
-            let maxDiff = -Infinity;
-            let bestStart = null;
-            let bestEnd = null;
+            let candidates = [];
 
             const step = 4;
             for (let y = step; y < h - step; y += step) {
@@ -608,34 +719,65 @@
                             const h2 = (imgData[i2] * 256 + imgData[i2+1] + imgData[i2+2] / 256) - 32768;
 
                             const diff = h2 - h1;
-                            if (diff > maxDiff) {
-                                maxDiff = diff;
-                                bestStart = { x: x, y: y, h: h1, latlng: startLatLng };
-                                bestEnd = { x: x2, y: y2, h: h2, latlng: map.containerPointToLatLng([x2, y2]) };
+                            if (diff > 1) { 
+                                candidates.push({
+                                    diff: diff,
+                                    start: { x: x, y: y, h: h1, latlng: startLatLng },
+                                    end: { x: x2, y: y2, h: h2, latlng: map.containerPointToLatLng([x2, y2]) }
+                                });
                             }
                         }
                     }
                 }
             }
 
-            if (bestStart && bestEnd) {
-                const polyline = L.polyline([bestStart.latlng, bestEnd.latlng], {
-                    color: 'red',
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(map);
-                polylines.push(polyline);
+            candidates.sort((a, b) => b.diff - a.diff);
 
-                const startMarker = L.marker(bestStart.latlng, { icon: greenIcon }).addTo(map)
-                    .bindPopup(`<b>Start (Lägsta)</b><br>Höjd: ${Math.round(bestStart.h)} m`);
-                markers.push(startMarker);
+            const finalResults = [];
+            const minPixelSeparation = 40; 
 
-                const endMarker = L.marker(bestEnd.latlng, { icon: redIcon }).addTo(map)
-                    .bindPopup(`<b>Slut (Högsta)</b><br>Höjd: ${Math.round(bestEnd.h)} m<br>Stigning: +${Math.round(maxDiff)} m`);
-                markers.push(endMarker);
-                endMarker.openPopup();
+            for (let cand of candidates) {
+                if (finalResults.length >= maxResults) break;
+                
+                let tooClose = false;
+                for (let existing of finalResults) {
+                    const dx = cand.start.x - existing.start.x;
+                    const dy = cand.start.y - existing.start.y;
+                    if ((dx*dx + dy*dy) < (minPixelSeparation * minPixelSeparation)) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                
+                if (!tooClose) {
+                    finalResults.push(cand);
+                }
+            }
 
-                statusDiv.textContent = `Hittade stigning: +${Math.round(maxDiff)}m på ${climbDistMeters}m`;
+            if (finalResults.length > 0) {
+                finalResults.forEach((res, index) => {
+                    const rank = index + 1;
+                    const isWinner = (rank === 1);
+                    
+                    const polyline = L.polyline([res.start.latlng, res.end.latlng], {
+                        color: isWinner ? 'red' : '#ff7f50', 
+                        weight: isWinner ? 5 : 3,
+                        opacity: 0.8
+                    }).addTo(map);
+                    polylines.push(polyline);
+
+                    const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
+                        .bindPopup(`<b>Rank #${rank} (Start)</b><br>Höjd: ${Math.round(res.start.h)} m`);
+                    markers.push(startMarker);
+
+                    const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
+                        .bindPopup(`<b>Rank #${rank} (Topp)</b><br>Höjd: ${Math.round(res.end.h)} m<br>Stigning: +${Math.round(res.diff)} m`);
+                    markers.push(endMarker);
+                    
+                    if (isWinner) endMarker.openPopup();
+                });
+
+                statusDiv.textContent = `Hittade ${finalResults.length} stigningar.`;
             } else {
                 statusDiv.textContent = "Ingen data hittades.";
             }
@@ -649,7 +791,6 @@
             const dLon = de / (R * Math.cos(Math.PI * latlng.lat / 180));
             return L.latLng(latlng.lat + dLat * 180 / Math.PI, latlng.lng + dLon * 180 / Math.PI);
         }
-
     </script>
 </body>
 </html>
