@@ -3,153 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare (v2.9)</title>
+    <title>Topo Höjdsökare</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
-        #map { height: 100vh; width: 100%; }
-        
-        /* --- KONTROLLPANEL --- */
-        #controls {
-            position: absolute; top: 20px; right: 20px;
-            background: rgba(255, 255, 255, 0.5); 
-            padding: 15px;
-            z-index: 2000; 
-            border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-            display: flex; flex-direction: column; gap: 10px;
-            width: 300px; 
-            backdrop-filter: blur(5px);
-            transition: max-height 0.3s ease; 
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        @media (max-width: 600px) {
-            #controls { width: auto; left: 10px; right: 10px; top: 10px; }
-        }
-
-        #controls.minimized #controls-content { display: none; }
-        #controls.minimized { overflow: hidden; }
-
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
-        h3 { margin: 0; font-size: 18px; color: #333; white-space: nowrap; }
-        .toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #555; padding: 0 5px; line-height: 1; }
-        
-        .footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding-top: 10px; border-top: 1px solid #eee; }
-
-        /* MODAL (API NYCKEL RUTA) */
-        #key-modal {
-            display: none; 
-            position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.5); backdrop-filter: blur(3px);
-            align-items: center; justify-content: center;
-        }
-        .modal-content {
-            background-color: #fff; padding: 20px; border-radius: 12px;
-            width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        .modal-content h4 { margin-top: 0; color: #333; margin-bottom: 10px;}
-        .modal-content p { font-size: 14px; color: #555; line-height: 1.5; margin-bottom: 15px; }
-        .modal-content a { color: #007bff; text-decoration: none; font-weight: bold; }
-        .modal-content input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; }
-        .modal-btns { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
-        .save-btn { background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .cancel-btn { background-color: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
-        .save-btn:hover { background-color: #218838; }
-
-        /* ÖVRIG DESIGN */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 20px; height: 20px;
-            transform: translate(-50%, -50%);
-            z-index: 900; pointer-events: none; display: none; 
-        }
-        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #333; }
-        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
-        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
-
-        .live-height-box {
-            background-color: #e3f2fd; border: 1px solid #90caf9;
-            color: #1565c0; padding: 10px; border-radius: 8px;
-            text-align: center; margin-bottom: 5px;
-        }
-        
-        #controls.minimized .live-height-box {
-            background-color: rgba(227, 242, 253, 0.6); 
-            border: 1px solid rgba(144, 202, 249, 0.4);
-            backdrop-filter: blur(2px);
-        }
-
-        .live-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; display: block; margin-bottom: 2px; color: #555; }
-        .live-value { font-size: 24px; font-weight: 800; font-family: monospace; }
-        .gold-icon { filter: hue-rotate(140deg) saturate(3) brightness(1.1); }
-
-        button { cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
-        
-        .action-btn { background-color: #d9534f; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
-        .action-btn:hover { background-color: #c9302c; }
-        .action-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
-
-        .climb-btn { background-color: #e67e22; color: white; padding: 12px; font-size: 14px; width: 100%; margin-top: 5px; transition: all 0.3s ease; }
-        .climb-btn:hover { background-color: #d35400; }
-        .climb-btn:disabled { background-color: #cccccc; color: #666666; cursor: not-allowed; }
-
-        .clear-btn { background-color: #6c757d; color: white; padding: 8px; font-size: 13px; width: 100%; margin-top: 10px; }
-        .clear-btn:hover { background-color: #5a6268; }
-
-        .icon-btn { background: #f8f9fa; border: 1px solid #ced4da; padding: 0 10px; font-size: 16px; min-width: 40px; }
-        .icon-btn:hover { background: #e2e6ea; }
-        
-        .search-group { display: flex; gap: 5px; margin-bottom: 5px; }
-        #searchInput { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
-        
-        .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-        .control-label { font-size: 14px; font-weight: 600; color: #444; }
-        input[type="number"] { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: right; }
-        
-        .select-container { display:flex; gap: 5px; width: 100%; }
-        select { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; background-color: #fff; margin-top: 2px; }
-        #edit-key-btn { display: none; padding: 0 8px; font-size: 14px; margin-top:2px;}
-
-        .checkbox-group { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
-        .checkbox-row { display: flex; gap: 6px; align-items: center; }
-        .checkbox-row label { font-size: 13px; cursor: pointer; user-select: none; }
-        
-        .zoom-badge { background: #e9ecef; color: #495057; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; font-family: monospace; }
-        #status { font-size: 13px; font-weight: 500; color: #444; }
-        #analysis-canvas, #single-point-canvas { display: none; }
-
-        .coord-box { background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 12px; gap: 8px; }
-        .copy-btn { background: white; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 12px; }
-
-        .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
-        .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
-        .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="crosshair"></div>
 
-    <div id="key-modal">
+    <div id="info-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h4 id="info-title">Om Topo Höjdsökare</h4>
+            <p id="info-desc">Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.</p>
+            <p><strong><span id="info-creator">Skapare</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
+            <p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
+                Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.
+            </p>
+            <button id="info-close" class="save-btn" onclick="closeInfo()">Stäng</button>
+        </div>
+    </div>
+
+    <div id="key-modal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="modal-title">Ange API-nyckel</h4>
             <p id="modal-text">...</p>
             <p><a id="modal-link" href="#" target="_blank">Registrera dig här</a></p>
-            <input type="text" id="api-key-input" placeholder="Klistra in din nyckel här...">
+            <input type="text" id="api-key-input" placeholder="...">
             <div class="modal-btns">
-                <button class="save-btn" onclick="saveApiKey()">Spara</button>
-                <button class="cancel-btn" onclick="cancelApiKey()">Avbryt</button>
+                <button id="modal-save" class="save-btn" onclick="saveApiKey()">Spara</button>
+                <button id="modal-cancel" class="cancel-btn" onclick="cancelApiKey()">Avbryt</button>
             </div>
         </div>
     </div>
 
     <div id="controls">
         <div class="header-row">
-            <h3>Topo Höjdsökare</h3>
-            <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
+            <h3 id="app-title">Topo Höjdsökare</h3>
+            <div class="header-buttons">
+                <button class="circle-btn" onclick="toggleLanguage()" title="Byt språk / Switch Language">
+                    <img id="flag-icon" class="flag-img" src="" alt="Flag">
+                </button>
+                <button class="circle-btn info-btn" onclick="showInfo()" title="Om / About">i</button>
+                <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
+            </div>
         </div>
 
         <div class="live-height-box">
@@ -160,7 +56,7 @@
         <div id="controls-content">
             
             <div style="margin-bottom: 10px;">
-                <span class="control-label" style="display:block; margin-bottom:3px;">Kartlager:</span>
+                <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Kartlager:</span>
                 <div class="select-container">
                     <select id="layerSelect" onchange="handleLayerChange(this.value)">
                         <option value="opentopo" selected>OpenTopo</option>
@@ -170,37 +66,37 @@
                         <option value="satellite">Satellit (ESRI)</option>
                         <option value="debug">Höjddata (Debug)</option>
                     </select>
-                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="Ändra API-nyckel">🔑</button>
+                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API">🔑</button>
                 </div>
             </div>
 
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="Sök plats">
-                <button class="icon-btn" onclick="locateUser()" title="Min position">📍</button>
+                <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
                 <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
             </div>
             
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
             
             <div class="control-row">
-                <span class="control-label">Sökradie (km):</span>
+                <span id="lbl-radius" class="control-label">Sökradie (km):</span>
                 <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
             </div>
 
             <div class="control-row">
-                <span class="control-label">Antal punkter:</span>
+                <span id="lbl-points" class="control-label">Antal punkter:</span>
                 <input type="number" id="numPoints" value="3" min="1" max="50">
             </div>
             
             <div class="checkbox-group">
                 <div class="checkbox-row">
                     <input type="checkbox" id="show-circle" checked>
-                    <label for="show-circle">Visa radie</label>
+                    <label id="lbl-show-circle" for="show-circle">Visa radie</label>
                 </div>
                 
                 <div class="checkbox-row">
                     <input type="checkbox" id="lock-circle">
-                    <label for="lock-circle" title="Lås cirkeln vid nuvarande plats">🔒 Lås radie</label>
+                    <label id="lbl-lock-circle" for="lock-circle" title="Lås">🔒 Lås radie</label>
                 </div>
             </div>
 
@@ -209,18 +105,18 @@
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
             
             <div class="control-row">
-                <span class="control-label">Mätsträcka (m):</span>
+                <span id="lbl-climb-dist" class="control-label">Mätsträcka (m):</span>
                 <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
             </div>
 
             <div class="control-row">
-                <span class="control-label">Antal stigningar:</span>
+                <span id="lbl-num-climbs" class="control-label">Antal stigningar:</span>
                 <input type="number" id="numClimbsInput" value="1" min="1" max="10">
             </div>
 
             <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Hitta stigningar</button>
 
-            <button class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
+            <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
             
             <div class="footer-row">
                 <div id="status">Redo.</div>
@@ -234,563 +130,6 @@
     <div id="map"></div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // --- INSTÄLLNINGAR FÖR LÅSTA TJÄNSTER ---
-        const lockedServices = {
-            'tracetrack': {
-                name: 'Tracetrack Topo',
-                storageKey: 'tracetrack_key',
-                link: 'https://www.tracestrack.com/',
-                urlTemplate: 'https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key={key}'
-            },
-            'thunderforest': {
-                name: 'ThunderForest Outdoors',
-                storageKey: 'thunderforest_key',
-                link: 'https://www.thunderforest.com/',
-                urlTemplate: 'https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}'
-            }
-        };
-
-        // --- URL:ER ---
-        const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-        const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-        const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-        const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-
-        // Skapa lager 
-        const layers = {
-            "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
-            "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
-            "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
-            "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-            "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
-            "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
-        };
-        
-        // STANDARD: OpenTopo
-        const map = L.map('map', { zoomControl: false, layers: [layers["opentopo"]] }).setView([67.89, 18.52], 11);
-        L.control.zoom({position: 'bottomright'}).addTo(map);
-
-        let currentLayer = layers["opentopo"];
-        let previousLayerValue = "opentopo"; 
-        let pendingServiceKey = null;
-
-        // --- HANTERING AV NYCKEL & LAGER ---
-        function handleLayerChange(layerKey) {
-            const editBtn = document.getElementById('edit-key-btn');
-            
-            // Kolla om lagret är låst (kräver nyckel)
-            if (lockedServices[layerKey]) {
-                const service = lockedServices[layerKey];
-                const savedKey = localStorage.getItem(service.storageKey);
-                
-                if (savedKey) {
-                    loadLockedLayer(layerKey, savedKey);
-                    switchLayerTo(layerKey);
-                    editBtn.style.display = 'block'; 
-                } else {
-                    showKeyModal(layerKey);
-                }
-            } else {
-                editBtn.style.display = 'none';
-                switchLayerTo(layerKey);
-            }
-        }
-
-        function switchLayerTo(layerKey) {
-            if (currentLayer) map.removeLayer(currentLayer);
-            currentLayer = layers[layerKey];
-            map.addLayer(currentLayer);
-            previousLayerValue = layerKey;
-        }
-
-        function loadLockedLayer(layerKey, key) {
-            const service = lockedServices[layerKey];
-            if (service) {
-                const url = service.urlTemplate.replace('{key}', key);
-                layers[layerKey].setUrl(url);
-            }
-        }
-
-        function showKeyModal(layerKey) {
-            const service = lockedServices[layerKey];
-            if (!service) return;
-
-            pendingServiceKey = layerKey;
-            
-            document.getElementById('modal-title').textContent = `Ange API-nyckel för ${service.name}`;
-            
-            // Uppdaterad text enligt önskemål
-            document.getElementById('modal-text').innerHTML = `För att använda ${service.name} behöver du en API-nyckel.<br><br>Detta kan du skaffa kostnadsfritt genom att registrera dig på länken nedan.`;
-            
-            const linkEl = document.getElementById('modal-link');
-            linkEl.href = service.link;
-            linkEl.textContent = service.link;
-
-            const existingKey = localStorage.getItem(service.storageKey) || '';
-            document.getElementById('api-key-input').value = existingKey;
-
-            document.getElementById('key-modal').style.display = 'flex';
-        }
-
-        function openCurrentKeyModal() {
-            const currentVal = document.getElementById('layerSelect').value;
-            if (lockedServices[currentVal]) {
-                showKeyModal(currentVal);
-            }
-        }
-
-        function saveApiKey() {
-            if (!pendingServiceKey || !lockedServices[pendingServiceKey]) return;
-
-            const input = document.getElementById('api-key-input');
-            const key = input.value.trim();
-            const service = lockedServices[pendingServiceKey];
-
-            if (key) {
-                localStorage.setItem(service.storageKey, key);
-                loadLockedLayer(pendingServiceKey, key);
-                switchLayerTo(pendingServiceKey);
-                
-                document.getElementById('edit-key-btn').style.display = 'block';
-                document.getElementById('layerSelect').value = pendingServiceKey;
-                document.getElementById('key-modal').style.display = 'none';
-                pendingServiceKey = null;
-            } else {
-                alert("Du måste ange en nyckel.");
-            }
-        }
-
-        function cancelApiKey() {
-            document.getElementById('key-modal').style.display = 'none';
-            pendingServiceKey = null;
-            document.getElementById('layerSelect').value = previousLayerValue;
-        }
-
-        // --- ÖVRIGT ---
-        const goldIcon = new L.Icon({
-            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41], className: 'gold-icon'
-        });
-
-        const greenIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        const redIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        let markers = [];
-        let polylines = [];
-        let searchCircle = null;
-        let centerMarker = null;
-        let isLocked = false;
-        let lockedCenterCoords = null;
-        let isControlsMinimized = false;
-        
-        const canvas = document.getElementById('analysis-canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const spCanvas = document.getElementById('single-point-canvas');
-        const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
-
-        const controls = document.getElementById('controls');
-        const crosshair = document.getElementById('crosshair');
-        const centerHeightDisplay = document.getElementById('center-h');
-        const scanBtn = document.getElementById('scan-btn');
-        const climbBtn = document.getElementById('climb-btn');
-        const zoomLabel = document.getElementById('zoom-level');
-        const radiusInput = document.getElementById('radiusInput');
-        const climbDistInput = document.getElementById('climbDistInput');
-        const numClimbsInput = document.getElementById('numClimbsInput');
-        const circleCheckbox = document.getElementById('show-circle');
-        const lockCheckbox = document.getElementById('lock-circle');
-        const searchInput = document.getElementById('searchInput');
-        const statusDiv = document.getElementById('status');
-
-        window.toggleControls = function() {
-            const btn = document.querySelector('.toggle-btn');
-            isControlsMinimized = !isControlsMinimized;
-            if (isControlsMinimized) {
-                controls.classList.add('minimized');
-                btn.textContent = '➕';
-            } else {
-                controls.classList.remove('minimized');
-                btn.textContent = '➖';
-            }
-        };
-
-        searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
-        radiusInput.addEventListener('input', updateUI);
-        circleCheckbox.addEventListener('change', updateUI);
-        
-        lockCheckbox.addEventListener('change', (e) => {
-            isLocked = e.target.checked;
-            if (isLocked) {
-                lockedCenterCoords = map.getCenter();
-                crosshair.style.display = 'block';
-            } else {
-                lockedCenterCoords = null;
-                crosshair.style.display = 'none';
-            }
-            updateUI();
-        });
-
-        async function searchLocation() {
-            const query = searchInput.value.trim();
-            if (!query) return;
-            statusDiv.textContent = "Söker...";
-            const coordMatch = query.match(/^([-+]?\d{1,2}[.]?\d*)[,\s]+([-+]?\d{1,3}[.]?\d*)$/);
-            if (coordMatch) {
-                map.setView([parseFloat(coordMatch[1]), parseFloat(coordMatch[2])], 12);
-                statusDiv.textContent = "Klar."; return;
-            }
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-                const data = await response.json();
-                if (data && data.length > 0) {
-                    map.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 12);
-                    statusDiv.textContent = `Hittade: ${data[0].display_name.split(',')[0]}`;
-                } else { statusDiv.textContent = "Ingen träff."; }
-            } catch (error) { console.error(error); }
-        }
-
-        function locateUser() {
-            if (!navigator.geolocation) { statusDiv.textContent = "GPS saknas."; return; }
-            statusDiv.textContent = "Hämtar pos...";
-            navigator.geolocation.getCurrentPosition(
-                (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], 13); statusDiv.textContent = "Klar."; },
-                () => statusDiv.textContent = "GPS fel."
-            );
-        }
-
-        window.clearResults = function() {
-            markers.forEach(m => map.removeLayer(m));
-            polylines.forEach(p => map.removeLayer(p));
-            markers = [];
-            polylines = [];
-            statusDiv.textContent = "Rensat.";
-        };
-
-        window.copyCoords = function(lat, lng, btnElement) {
-            navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
-                const originalText = btnElement.innerText;
-                btnElement.innerText = "✅";
-                setTimeout(() => btnElement.innerText = originalText, 1500);
-            });
-        };
-
-        function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
-
-        function updateUI() {
-            zoomLabel.innerText = 'Zoom: ' + map.getZoom();
-            const searchCenter = getSearchCenter(); 
-            const radiusKm = parseFloat(radiusInput.value) || 5;
-            
-            if (searchCircle) map.removeLayer(searchCircle);
-            if (centerMarker) map.removeLayer(centerMarker);
-            
-            centerMarker = L.circleMarker(searchCenter, { 
-                radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false 
-            }).addTo(map);
-
-            if (circleCheckbox.checked) {
-                searchCircle = L.circle(searchCenter, { 
-                    color: isLocked ? '#e67e22' : '#007bff', fillColor: isLocked ? '#e67e22' : '#007bff', fillOpacity: 0.1, weight: 1, radius: radiusKm * 1000, interactive: false 
-                }).addTo(map);
-            }
-        }
-
-        async function updateCenterElevation() {
-            const center = map.getCenter();
-            scanBtn.disabled = true;
-            climbBtn.disabled = true;
-            centerHeightDisplay.textContent = "..."; 
-            
-            const zoom = Math.min(Math.floor(map.getZoom()), 14); 
-            const point = map.project(center, zoom);
-            const tileX = Math.floor(point.x / 256);
-            const tileY = Math.floor(point.y / 256);
-            const pixelX = Math.floor(point.x % 256);
-            const pixelY = Math.floor(point.y % 256);
-            const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
-
-            try {
-                const img = new Image();
-                img.crossOrigin = "Anonymous";
-                img.src = url;
-                img.onload = () => {
-                    spCtx.clearRect(0,0,1,1);
-                    spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
-                    const pData = spCtx.getImageData(0, 0, 1, 1).data;
-                    const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
-                    centerHeightDisplay.textContent = Math.round(h) + " m";
-                    scanBtn.disabled = false;
-                    climbBtn.disabled = false;
-                };
-                img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
-            } catch (err) { centerHeightDisplay.textContent = "N/A"; }
-        }
-
-        map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
-        map.on('move', updateUI); 
-        map.on('moveend', updateCenterElevation);
-        updateUI();
-        updateCenterElevation();
-
-        async function fetchTerrainData() {
-            const size = map.getSize();
-            canvas.width = size.x;
-            canvas.height = size.y;
-            ctx.imageSmoothingEnabled = false; 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const bounds = map.getBounds();
-            const zoom = Math.min(Math.floor(map.getZoom()), 14); 
-            const nw = map.project(bounds.getNorthWest(), zoom);
-            const se = map.project(bounds.getSouthEast(), zoom);
-            const tileMin = nw.divideBy(256).floor();
-            const tileMax = se.divideBy(256).floor();
-            
-            const tilesToLoad = [];
-            for (let x = tileMin.x; x <= tileMax.x; x++) {
-                for (let y = tileMin.y; y <= tileMax.y; y++) {
-                    tilesToLoad.push({ x, y, z: zoom });
-                }
-            }
-            await loadAndDrawDataTiles(tilesToLoad, zoom, nw);
-        }
-
-        async function analyzeTerrain() {
-            clearResults();
-            scanBtn.disabled = true;
-            statusDiv.textContent = "Laddar data...";
-            try {
-                await fetchTerrainData();
-                statusDiv.textContent = "Beräknar...";
-                requestAnimationFrame(() => {
-                    findPeaks();
-                    updateCenterElevation();
-                });
-            } catch (err) {
-                console.error(err);
-                statusDiv.textContent = "Fel: " + err.message;
-                updateCenterElevation();
-            }
-        }
-
-        async function findSteepestClimb() {
-            clearResults();
-            climbBtn.disabled = true;
-            statusDiv.textContent = "Söker stigning...";
-            try {
-                await fetchTerrainData();
-                statusDiv.textContent = "Beräknar...";
-                requestAnimationFrame(() => {
-                    calculateMaxClimb();
-                    updateCenterElevation();
-                });
-            } catch (err) {
-                statusDiv.textContent = "Fel: " + err.message;
-                updateCenterElevation();
-            }
-        }
-
-        function loadAndDrawDataTiles(tiles, zoom, nwPixelOrigin) {
-            const promises = tiles.map(t => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.crossOrigin = "Anonymous";
-                    img.src = DATA_TILE_URL.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
-                    img.onload = () => {
-                        const tilePos = new L.Point(t.x * 256, t.y * 256);
-                        const offset = tilePos.subtract(nwPixelOrigin); 
-                        ctx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
-                        resolve();
-                    };
-                    img.onerror = () => resolve(); 
-                });
-            });
-            return Promise.all(promises);
-        }
-
-        function findPeaks() {
-            const w = canvas.width;
-            const h = canvas.height;
-            const imgData = ctx.getImageData(0, 0, w, h).data;
-            const searchCenterLatLng = getSearchCenter();
-            const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
-            let candidates = [];
-            for (let y = 0; y < h; y+=2) { 
-                for (let x = 0; x < w; x+=2) {
-                    const i = (y * w + x) * 4;
-                    if (imgData[i+3] < 255) continue; 
-                    const height = (imgData[i] * 256 + imgData[i+1] + imgData[i+2] / 256) - 32768;
-                    if (height > -50) candidates.push({ x, y, h: height });
-                }
-            }
-            const validPeaks = [];
-            for (let p of candidates) {
-                const latlng = map.containerPointToLatLng([p.x, p.y]);
-                const dist = searchCenterLatLng.distanceTo(latlng); 
-                if (dist <= maxRadiusMeters) {
-                    p.dist = dist; p.lat = latlng.lat; p.lng = latlng.lng;
-                    validPeaks.push(p);
-                }
-            }
-            validPeaks.sort((a, b) => b.h - a.h);
-            const finalPoints = [];
-            const limit = parseInt(document.getElementById('numPoints').value) || 5;
-            const minPixelDist = 40; 
-            for (let p of validPeaks) {
-                if (finalPoints.length >= limit) break;
-                let tooClose = false;
-                for (let existing of finalPoints) {
-                    const dx = p.x - existing.x;
-                    const dy = p.y - existing.y;
-                    if ((dx*dx + dy*dy) < (minPixelDist * minPixelDist)) { tooClose = true; break; }
-                }
-                if (!tooClose) finalPoints.push(p);
-            }
-            if (finalPoints.length === 0) { statusDiv.textContent = "Inga toppar."; return; }
-            finalPoints.forEach((p, idx) => {
-                const distKm = (p.dist / 1000).toFixed(2);
-                const isHighest = (idx === 0);
-                const markerOptions = isHighest ? { icon: goldIcon, zIndexOffset: 1000 } : {};
-                const popupContent = `
-                    <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${isHighest ? '🏆 ' : ''}Plats #${idx+1}</span>
-                    <span class="popup-height">${Math.round(p.h)} m ö.h</span>
-                    <span class="popup-meta">Avstånd: ${distKm} km</span>
-                    <div class="coord-box">
-                        <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                        <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
-                    </div>`;
-                const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
-                if (isHighest) marker.openPopup();
-                markers.push(marker);
-            });
-            statusDiv.textContent = `Hittade ${finalPoints.length} punkter.`;
-        }
-
-        function calculateMaxClimb() {
-            const w = canvas.width;
-            const h = canvas.height;
-            const imgData = ctx.getImageData(0, 0, w, h).data;
-            const searchCenterLatLng = getSearchCenter();
-            const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
-            const climbDistMeters = parseFloat(climbDistInput.value) || 200;
-            const maxResults = parseInt(numClimbsInput.value) || 1; 
-
-            const p1 = map.latLngToContainerPoint(searchCenterLatLng);
-            const p2 = map.latLngToContainerPoint(moveLatLng(searchCenterLatLng, climbDistMeters, 0));
-            const climbDistPx = Math.round(p1.distanceTo(p2));
-
-            if (climbDistPx < 2) {
-                statusDiv.textContent = "Zooma in för bättre precision!";
-                return;
-            }
-
-            let candidates = [];
-
-            const step = 4;
-            for (let y = step; y < h - step; y += step) {
-                for (let x = step; x < w - step; x += step) {
-                    
-                    const startLatLng = map.containerPointToLatLng([x, y]);
-                    if (searchCenterLatLng.distanceTo(startLatLng) > searchRadiusMeters) continue;
-
-                    const i1 = (y * w + x) * 4;
-                    if (imgData[i1+3] < 255) continue;
-                    const h1 = (imgData[i1] * 256 + imgData[i1+1] + imgData[i1+2] / 256) - 32768;
-
-                    const angles = 16; 
-                    for (let a = 0; a < angles; a++) {
-                        const theta = (a / angles) * 2 * Math.PI;
-                        const x2 = Math.round(x + climbDistPx * Math.cos(theta));
-                        const y2 = Math.round(y + climbDistPx * Math.sin(theta));
-
-                        if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
-                            const i2 = (y2 * w + x2) * 4;
-                            if (imgData[i2+3] < 255) continue;
-                            const h2 = (imgData[i2] * 256 + imgData[i2+1] + imgData[i2+2] / 256) - 32768;
-
-                            const diff = h2 - h1;
-                            if (diff > 1) { 
-                                candidates.push({
-                                    diff: diff,
-                                    start: { x: x, y: y, h: h1, latlng: startLatLng },
-                                    end: { x: x2, y: y2, h: h2, latlng: map.containerPointToLatLng([x2, y2]) }
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-
-            candidates.sort((a, b) => b.diff - a.diff);
-
-            const finalResults = [];
-            const minPixelSeparation = 40; 
-
-            for (let cand of candidates) {
-                if (finalResults.length >= maxResults) break;
-                
-                let tooClose = false;
-                for (let existing of finalResults) {
-                    const dx = cand.start.x - existing.start.x;
-                    const dy = cand.start.y - existing.start.y;
-                    if ((dx*dx + dy*dy) < (minPixelSeparation * minPixelSeparation)) {
-                        tooClose = true;
-                        break;
-                    }
-                }
-                
-                if (!tooClose) {
-                    finalResults.push(cand);
-                }
-            }
-
-            if (finalResults.length > 0) {
-                finalResults.forEach((res, index) => {
-                    const rank = index + 1;
-                    const isWinner = (rank === 1);
-                    
-                    const polyline = L.polyline([res.start.latlng, res.end.latlng], {
-                        color: isWinner ? 'red' : '#ff7f50', 
-                        weight: isWinner ? 5 : 3,
-                        opacity: 0.8
-                    }).addTo(map);
-                    polylines.push(polyline);
-
-                    const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
-                        .bindPopup(`<b>Rank #${rank} (Start)</b><br>Höjd: ${Math.round(res.start.h)} m`);
-                    markers.push(startMarker);
-
-                    const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
-                        .bindPopup(`<b>Rank #${rank} (Topp)</b><br>Höjd: ${Math.round(res.end.h)} m<br>Stigning: +${Math.round(res.diff)} m`);
-                    markers.push(endMarker);
-                    
-                    if (isWinner) endMarker.openPopup();
-                });
-
-                statusDiv.textContent = `Hittade ${finalResults.length} stigningar.`;
-            } else {
-                statusDiv.textContent = "Ingen data hittades.";
-            }
-        }
-
-        function moveLatLng(latlng, distMeters, angleDeg) {
-            const R = 6378137;
-            const dn = distMeters * Math.cos(angleDeg * Math.PI / 180);
-            const de = distMeters * Math.sin(angleDeg * Math.PI / 180);
-            const dLat = dn / R;
-            const dLon = de / (R * Math.cos(Math.PI * latlng.lat / 180));
-            return L.latLng(latlng.lat + dLat * 180 / Math.PI, latlng.lng + dLon * 180 / Math.PI);
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
