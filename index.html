@@ -11,17 +11,23 @@
 
     <div id="crosshair"></div>
 
-    <div id="info-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h4 id="info-title">Om Topo Höjdsökare</h4>
-            <p id="info-desc">Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.</p>
-            <p><strong><span id="info-creator">Skapare</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
-            <p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
-                Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.
-            </p>
-            <button id="info-close" class="save-btn" onclick="closeInfo()">Stäng</button>
-        </div>
-    </div>
+	<div id="info-modal" class="modal-overlay">
+			<div class="modal-content">
+				<h4 id="info-title">Om Topo Höjdsökare</h4>
+				<p id="info-desc">Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.</p>
+				
+				<p><strong><span id="info-creator">Skapare</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
+				
+				<p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
+					<span id="lbl-version">Version</span>: <span id="app-version">--</span>
+				</p>
+
+				<p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
+					Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.
+				</p>
+				<button id="info-close" class="save-btn" onclick="closeInfo()">Stäng</button>
+			</div>
+		</div>
 
     <div id="key-modal" class="modal-overlay">
         <div class="modal-content">

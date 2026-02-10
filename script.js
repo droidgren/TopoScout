@@ -1,3 +1,6 @@
+// --- KONFIGURATION ---
+const APP_VERSION = "1.0"; // Versionsnummer
+
 // --- BASE64 FLAGGOR (För att fungera på Windows) ---
 const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxMCI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjEwIiBmaWxsPSIjMDA2YWE3Ii8+PHJlY3QgeD0iNSIgd2lkdGg9IjIiIGhlaWdodD0iMTAiIGZpbGw9IiNmZWNjMDAiLz48cmVjdCB5PSI0IiB3aWR0aD0iMTYiIGhlaWdodD0iMiIgZmlsbD0iI2ZlY2MwMCIvPjwvc3ZnPg==";
 const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCAzMCI+PHBhdGggZmlsbD0iIzAxMjE2OSIgZD0iTTAgMGg2MHYzMEgwVjB6Ii8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEwIiBkPSJNMzAgMHYzME0wIDE1aDYwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0zMCAwdjMwTTAgMTVoNjAiLz48L3N2Zz4=";
@@ -37,6 +40,7 @@ const translations = {
         info_title: "Om Topo Höjdsökare",
         info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.",
         info_creator: "Skapare",
+        lbl_version: "Version",
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
         btn_close: "Stäng",
         // Modal API
@@ -90,6 +94,7 @@ const translations = {
         info_title: "About Topo Elevation Search",
         info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.",
         info_creator: "Creator",
+        lbl_version: "Version",
         info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
         btn_close: "Close",
         // Modal API
@@ -145,6 +150,8 @@ function updateLanguage() {
         document.getElementById('info-title').textContent = t.info_title;
         document.getElementById('info-desc').textContent = t.info_desc;
         document.getElementById('info-creator').textContent = t.info_creator;
+        document.getElementById('lbl-version').textContent = t.lbl_version; // NY: Etikett för version
+        document.getElementById('app-version').textContent = APP_VERSION;   // NY: Själva numret
         document.getElementById('info-privacy').textContent = t.info_privacy;
         document.getElementById('info-close').textContent = t.btn_close;
 
@@ -205,7 +212,6 @@ const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
 const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
 const savedLayer = localStorage.getItem('topo_layer') || "opentopo";
 
-// Skapa kartan men vänta med att lägga till lager tills vi kollat savedLayer
 const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
 L.control.zoom({position: 'bottomright'}).addTo(map);
 
@@ -213,14 +219,14 @@ let currentLayer = null;
 let previousLayerValue = savedLayer; 
 let pendingServiceKey = null;
 
-// Initiera språk
+// Initiera språk och version
 updateLanguage();
 
 // Sätt dropdown till sparat värde och ladda lagret
 const layerSelect = document.getElementById('layerSelect');
 if(layerSelect) {
     layerSelect.value = savedLayer;
-    handleLayerChange(savedLayer); // Detta laddar lagret och kollar ev. nycklar
+    handleLayerChange(savedLayer);
 }
 
 // --- SPARA POSITION VID RÖRELSE ---
@@ -247,8 +253,6 @@ function handleLayerChange(layerKey) {
             switchLayerTo(layerKey);
             editBtn.style.display = 'block'; 
         } else {
-            // Om vi laddar sidan och har ett sparat lager men ingen nyckel (t.ex. rensat cache)
-            // så visar vi modalen.
             showKeyModal(layerKey);
         }
     } else {
@@ -320,8 +324,6 @@ function cancelApiKey() {
     document.getElementById('key-modal').style.display = 'none';
     pendingServiceKey = null;
     
-    // Om vi avbryter och det inte fanns ett tidigare lager (t.ex. vid sidladdning),
-    // fall tillbaka till opentopo.
     if(currentLayer === null) {
         document.getElementById('layerSelect').value = "opentopo";
         handleLayerChange("opentopo");
@@ -505,11 +507,7 @@ async function updateCenterElevation() {
 }
 
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
-// map.on('move', updateUI); // Denna är redundant om vi har moveend för sparning, men bra för cirkel-UI
-map.on('move', () => { updateUI(); }); // Behåller UI uppdatering vid drag
-// Vi använder moveend för att spara position och hämta höjddata för att spara prestanda
-// updateCenterElevation anropas redan i moveend i min nya kod ovan
-
+map.on('move', () => { updateUI(); }); 
 updateUI();
 updateCenterElevation();
 
