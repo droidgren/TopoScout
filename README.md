@@ -4,6 +4,8 @@ Topo Elevation Search is a client-side web application designed to analyze terra
 
 The application relies on global elevation tiles and runs entirely in the browser without sending user data or search queries to a backend server.
 
+To access the webapp go here:   https://droidgren.github.io/elevation_finder/
+
 ## Features
 
 * **Real-time Elevation:** Displays the elevation above sea level for the map center dynamically.
@@ -71,7 +73,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Credits
 
-**Created by:** [droidgren.github.io](http://droidgren.github.io/)
+**Created by:** [droidgren.github.io](http://droidgren.github.io/) mostly using Gemini Pro.
 
 ### Third-party libraries and data:
 * **Leaflet:** Interactive maps.
