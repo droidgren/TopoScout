@@ -38,17 +38,13 @@ const translations = {
         input_search_ph: "Sök plats",
         // Modal Info
         info_title: "Om Höjdsökaren",
-        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område. Fungerar på mobila enheter, men gör sig bäst på datorskärm.",
+        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.",
         info_howto_title: "Så funkar det:",
-        info_section_peaks: "Hitta högsta punkter",
-        info_help_radius: "Sökradie: Ange sökområdets storlek.",
-        info_help_points: "Antal punkter: Hur många toppar som ska hittas inom sökområdet.",
-        info_help_show_radius: "Visa radie: Dölja eller visa den blå cirkeln",
-        info_help_lock_radius: "Lås radie: Fäst sökradien på nuvarande position",
-        info_section_climbs: "Hitta stigningar",
-        info_help_dist: "Mätsträcka: Längsta sträcka som stigningen får vara",
-        info_help_climbs: "Antal stigningar: Hur många stigningar som ska hittas.",
-        info_results_desc: "Resultaten visar ranking (Högst först), Höjd, Avstånd från centrum samt koordinater.",
+        info_help_radius: "Radie: Sätter sökområdets storlek.",
+        info_help_points: "Punkter: Hur många toppar som ska hittas.",
+        info_help_dist: "Mätsträcka: Avstånd för att mäta stigning.",
+        info_help_climbs: "Stigningar: Hur många branta partier som ska hittas.",
+        info_mobile_note: "Fungerar på mobil, men gör sig bäst på datorskärm.",
         info_creator: "Skapare",
         lbl_version: "Version",
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
@@ -102,17 +98,13 @@ const translations = {
         input_search_ph: "Search location",
         // Modal Info
         info_title: "About Elevation Finder",
-        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area. Works on mobile, but best experienced on desktop.",
-        info_howto_title: "How it works:",
-        info_section_peaks: "Find Highest Points",
-        info_help_radius: "Radius: Set the size of the search area.",
-        info_help_points: "Points: How many peaks to find within the area.",
-        info_help_show_radius: "Show Radius: Hide or show the blue circle.",
-        info_help_lock_radius: "Lock Radius: Pin the search radius to current position.",
-        info_section_climbs: "Find Climbs",
-        info_help_dist: "Measure Dist: Max distance for the ascent.",
-        info_help_climbs: "Num Climbs: How many climbs to find.",
-        info_results_desc: "Results show rank (Highest first), Elevation, Distance from center, and coordinates.",
+        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.",
+        info_howto_title: "How to use:",
+        info_help_radius: "Radius: Sets the circular search area.",
+        info_help_points: "Points: Number of peaks to find.",
+        info_help_dist: "Measure Dist: Distance for ascent calc.",
+        info_help_climbs: "Climbs: Number of steep paths to find.",
+        info_mobile_note: "Works on mobile, but best experienced on desktop.",
         info_creator: "Creator",
         lbl_version: "Version",
         info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
@@ -137,6 +129,7 @@ const translations = {
     }
 };
 
+// Sätter engelska som standard om inget språk är sparat sedan tidigare
 let currentLang = localStorage.getItem('topo_lang') || 'en';
 
 function updateLanguage() {
@@ -169,23 +162,13 @@ function updateLanguage() {
         // Info Modal
         document.getElementById('info-title').textContent = t.info_title;
         document.getElementById('info-desc').textContent = t.info_desc;
-        // Hjälptexter (Sektioner och listor)
+        // Hjälptexter
         document.getElementById('info-howto-title').textContent = t.info_howto_title;
-        document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
         document.getElementById('info-help-radius').textContent = t.info_help_radius;
         document.getElementById('info-help-points').textContent = t.info_help_points;
-        document.getElementById('info-help-show_radius').textContent = t.info_help_show_radius; // Fixat i HTML: show-radius
-        document.getElementById('info-help-lock_radius').textContent = t.info_help_lock_radius; // Fixat i HTML: lock-radius
-        
-        // OBS: Jag använder rätt ID:n här för att matcha HTML
-        document.getElementById('info-help-show-radius').textContent = t.info_help_show_radius;
-        document.getElementById('info-help-lock-radius').textContent = t.info_help_lock_radius;
-
-        document.getElementById('info-section-climbs').textContent = t.info_section_climbs;
         document.getElementById('info-help-dist').textContent = t.info_help_dist;
         document.getElementById('info-help-climbs').textContent = t.info_help_climbs;
-        
-        document.getElementById('info-results-desc').textContent = t.info_results_desc;
+        document.getElementById('info-mobile-note').textContent = t.info_mobile_note;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
