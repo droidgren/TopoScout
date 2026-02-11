@@ -1,11 +1,63 @@
-// --- KONFIGURATION ---
-const APP_VERSION = "1.0"; // Versionsnummer
+// ==========================================
+// 1. KONFIGURATION & KONSTANTER
+// ==========================================
+const APP_VERSION = "1.1";
 
-// --- BASE64 FLAGGOR ---
+
+// Base64-flaggor
 const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxMCI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjEwIiBmaWxsPSIjMDA2YWE3Ii8+PHJlY3QgeD0iNSIgd2lkdGg9IjIiIGhlaWdodD0iMTAiIGZpbGw9IiNmZWNjMDAiLz48cmVjdCB5PSI0IiB3aWR0aD0iMTYiIGhlaWdodD0iMiIgZmlsbD0iI2ZlY2MwMCIvPjwvc3ZnPg==";
 const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCAzMCI+PHBhdGggZmlsbD0iIzAxMjE2OSIgZD0iTTAgMGg2MHYzMEgwVjB6Ii8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEwIiBkPSJNMzAgMHYzME0wIDE1aDYwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0zMCAwdjMwTTAgMTVoNjAiLz48L3N2Zz4=";
 
-// --- SPRÅKHANTERING ---
+// Tjänster som kräver API-nycklar
+const lockedServices = {
+    'tracetrack': {
+        name: 'Tracetrack Topo',
+        storageKey: 'tracetrack_key',
+        link: 'https://www.tracestrack.com/',
+        urlTemplate: 'https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key={key}'
+    },
+    'thunderforest': {
+        name: 'ThunderForest Outdoors',
+        storageKey: 'thunderforest_key',
+        link: 'https://www.thunderforest.com/',
+        urlTemplate: 'https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}'
+    }
+};
+
+// Kart-URL:er
+const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+const WORKER_URL = "https://lm.clackspark.workers.dev"; 
+
+// ==========================================
+// 2. DOM ELEMENT
+// ==========================================
+const canvas = document.getElementById('analysis-canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const spCanvas = document.getElementById('single-point-canvas');
+const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
+
+const controls = document.getElementById('controls');
+const crosshair = document.getElementById('crosshair');
+const centerHeightDisplay = document.getElementById('center-h');
+const scanBtn = document.getElementById('scan-btn');
+const climbBtn = document.getElementById('climb-btn');
+const zoomLabel = document.getElementById('zoom-level');
+const radiusInput = document.getElementById('radiusInput');
+const climbDistInput = document.getElementById('climbDistInput');
+const numClimbsInput = document.getElementById('numClimbsInput');
+const circleCheckbox = document.getElementById('show-circle');
+const lockCheckbox = document.getElementById('lock-circle');
+const searchInput = document.getElementById('searchInput');
+const statusDiv = document.getElementById('status');
+const layerSelect = document.getElementById('layerSelect');
+const editKeyBtn = document.getElementById('edit-key-btn');
+
+// ==========================================
+// 3. SPRÅK & ÖVERSÄTTNINGAR
+// ==========================================
 const translations = {
     sv: {
         title: "Höjdsökaren",
@@ -36,34 +88,34 @@ const translations = {
         status_found_climbs: "Hittade {n} stigningar.",
         status_no_data: "Ingen data hittades.",
         input_search_ph: "Sök plats",
-        // Modal Info
         info_title: "Om Höjdsökaren",
-        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.",
-        info_howto_title: "Så funkar det:",
-        info_help_radius: "Radie: Sätter sökområdets storlek.",
-        info_help_points: "Punkter: Hur många toppar som ska hittas.",
-        info_help_dist: "Mätsträcka: Avstånd för att mäta stigning.",
-        info_help_climbs: "Stigningar: Hur många branta partier som ska hittas.",
-        info_mobile_note: "Fungerar på mobil, men gör sig bäst på datorskärm.",
+        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.<br>Applikationen fungerar på mobila enheter, men gör sig bäst på större skärmar.",
+        info_section_peaks: "Hitta högsta punkter",
+        info_help_radius: "Sökradie: Ange sökområdets storlek.",
+        info_help_points: "Antal punkter: Hur många toppar som ska hittas inom sökområdet.",
+        info_help_show_radius: "Visa radie: Dölja eller visa den blå cirkeln",
+        info_help_lock_radius: "Lås radie: Fäst sökradien på nuvarande position",
+        info_section_climbs: "Hitta stigningar",
+        info_help_dist: "Mätsträcka: Längsta sträcka som stigningen får vara",
+        info_help_climbs: "Antal stigningar: Hur många stigningar som ska hittas.",
+        info_results_desc: "Resultaten visar ranking (Högst först), Höjd, Avstånd från centrum samt koordinater.",
         info_creator: "Skapare",
         lbl_version: "Version",
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
         btn_close: "Stäng",
-        // Modal API
         modal_api_title: "Ange API-nyckel för {service}",
         modal_api_text: "För att använda {service} behöver du en API-nyckel. Detta kan du skaffa kostnadsfritt genom att registrera dig på länken nedan.",
         input_api_ph: "Klistra in din nyckel här...",
         btn_save: "Spara",
         btn_cancel: "Avbryt",
         msg_api_alert: "Du måste ange en nyckel.",
-        // Results
         res_rank: "Plats",
         res_start: "Start",
         res_peak: "Topp",
         res_dist: "Avstånd",
         res_elev: "Höjd",
         res_climb: "Stigning",
-        // Layers
+        layer_lm_map: "Lantmäteriet", // UPPDATERAD
         layer_satellite: "Satellit",
         layer_debug: "Höjddata (Debug)"
     },
@@ -96,41 +148,103 @@ const translations = {
         status_found_climbs: "Found {n} climbs.",
         status_no_data: "No data found.",
         input_search_ph: "Search location",
-        // Modal Info
         info_title: "About Elevation Finder",
-        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.",
-        info_howto_title: "How to use:",
-        info_help_radius: "Radius: Sets the circular search area.",
-        info_help_points: "Points: Number of peaks to find.",
-        info_help_dist: "Measure Dist: Distance for ascent calc.",
-        info_help_climbs: "Climbs: Number of steep paths to find.",
-        info_mobile_note: "Works on mobile, but best experienced on desktop.",
+        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.<br><br>The web application works on mobile devices, but is best experienced on larger screens.",
+        info_section_peaks: "Find Highest Points",
+        info_help_radius: "Radius: Set the size of the search area.",
+        info_help_points: "Points: How many peaks to find within the area.",
+        info_help_show_radius: "Show Radius: Hide or show the blue circle.",
+        info_help_lock_radius: "Lock Radius: Pin the search radius to current position.",
+        info_section_climbs: "Find Climbs",
+        info_help_dist: "Measure Dist: Max distance for the ascent.",
+        info_help_climbs: "Num Climbs: How many climbs to find.",
+        info_results_desc: "Results show rank (Highest first), Elevation, Distance from center, and coordinates.",
         info_creator: "Creator",
         lbl_version: "Version",
         info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
         btn_close: "Close",
-        // Modal API
         modal_api_title: "Enter API Key for {service}",
         modal_api_text: "To use {service}, you need an API key. You can get one for free by registering at the link below.",
         input_api_ph: "Paste your key here...",
         btn_save: "Save",
         btn_cancel: "Cancel",
         msg_api_alert: "You must enter a key.",
-        // Results
         res_rank: "Rank",
         res_start: "Start",
         res_peak: "Peak",
         res_dist: "Distance",
         res_elev: "Elevation",
         res_climb: "Ascent",
-        // Layers
+        layer_lm_map: "Lantmäteriet (Sweden)", // UPPDATERAD
         layer_satellite: "Satellite",
         layer_debug: "Elevation Data (Debug)"
     }
 };
 
-// Sätter engelska som standard om inget språk är sparat sedan tidigare
 let currentLang = localStorage.getItem('topo_lang') || 'en';
+
+// ==========================================
+// 4. KART- & VARIABELINITIERING
+// ==========================================
+
+const layers = {
+    "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
+    "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
+    "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
+    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, { // UPPDATERAD KEY
+        attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a>',
+        maxZoom: 17 
+    }),
+    "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
+    "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
+    "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
+};
+
+// Ikoner
+const goldIcon = new L.Icon({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41], className: 'gold-icon'
+});
+const greenIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+});
+const redIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+});
+
+let markers = [];
+let polylines = [];
+let searchCircle = null;
+let centerMarker = null;
+let isLocked = false;
+let lockedCenterCoords = null;
+let isControlsMinimized = false;
+let currentLayer = null; 
+let previousLayerValue = "opentopo"; 
+let pendingServiceKey = null;
+
+// Ladda sparad position
+const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
+const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
+const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
+let savedLayer = localStorage.getItem('topo_layer') || "opentopo";
+
+if(!layers[savedLayer]) {
+    savedLayer = "opentopo";
+}
+
+// Skapa kartan
+const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
+L.control.zoom({position: 'bottomright'}).addTo(map);
+
+// ==========================================
+// 5. FUNKTIONER
+// ==========================================
 
 function updateLanguage() {
     const t = translations[currentLang];
@@ -161,14 +275,21 @@ function updateLanguage() {
 
         // Info Modal
         document.getElementById('info-title').textContent = t.info_title;
-        document.getElementById('info-desc').textContent = t.info_desc;
-        // Hjälptexter
-        document.getElementById('info-howto-title').textContent = t.info_howto_title;
+        
+        // ANVÄNDER INNERHTML HÄR FÖR ATT HTML-TAGGAR SKA FUNGERA
+        document.getElementById('info-desc').innerHTML = t.info_desc;
+        
+        document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
         document.getElementById('info-help-radius').textContent = t.info_help_radius;
         document.getElementById('info-help-points').textContent = t.info_help_points;
+        document.getElementById('info-help-show-radius').textContent = t.info_help_show_radius;
+        document.getElementById('info-help-lock-radius').textContent = t.info_help_lock_radius;
+
+        document.getElementById('info-section-climbs').textContent = t.info_section_climbs;
         document.getElementById('info-help-dist').textContent = t.info_help_dist;
         document.getElementById('info-help-climbs').textContent = t.info_help_climbs;
-        document.getElementById('info-mobile-note').textContent = t.info_mobile_note;
+        
+        document.getElementById('info-results-desc').textContent = t.info_results_desc;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
@@ -181,11 +302,14 @@ function updateLanguage() {
         document.getElementById('modal-cancel').textContent = t.btn_cancel;
         document.getElementById('api-key-input').placeholder = t.input_api_ph;
 
-        // Update Select Options (Only text, not values)
-        const sel = document.getElementById('layerSelect');
-        if(sel) {
-            sel.options[4].text = t.layer_satellite + " (ESRI)";
-            sel.options[5].text = t.layer_debug;
+        // Uppdatera dropdown-text säkert via value-matchning
+        if(layerSelect) {
+            for (let i = 0; i < layerSelect.options.length; i++) {
+                const val = layerSelect.options[i].value;
+                if(val === 'lm_map') layerSelect.options[i].text = t.layer_lm_map;
+                else if(val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
+                else if(val === 'debug') layerSelect.options[i].text = t.layer_debug;
+            }
         }
     }
 }
@@ -196,72 +320,7 @@ function toggleLanguage() {
     updateLanguage();
 }
 
-// --- SLUT SPRÅK ---
-
-const lockedServices = {
-    'tracetrack': {
-        name: 'Tracetrack Topo',
-        storageKey: 'tracetrack_key',
-        link: 'https://www.tracestrack.com/',
-        urlTemplate: 'https://tile.tracestrack.com/topo_sv/{z}/{x}/{y}.webp?key={key}'
-    },
-    'thunderforest': {
-        name: 'ThunderForest Outdoors',
-        storageKey: 'thunderforest_key',
-        link: 'https://www.thunderforest.com/',
-        urlTemplate: 'https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}'
-    }
-};
-
-const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-
-const layers = {
-    "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
-    "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
-    "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
-    "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-    "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
-    "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
-};
-
-// --- INITIERA KARTA MED SPARAD POSITION ---
-const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
-const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
-const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
-const savedLayer = localStorage.getItem('topo_layer') || "opentopo";
-
-const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
-L.control.zoom({position: 'bottomright'}).addTo(map);
-
-let currentLayer = null; 
-let previousLayerValue = savedLayer; 
-let pendingServiceKey = null;
-
-// Initiera språk och version
-updateLanguage();
-
-// Sätt dropdown till sparat värde och ladda lagret
-const layerSelect = document.getElementById('layerSelect');
-if(layerSelect) {
-    layerSelect.value = savedLayer;
-    handleLayerChange(savedLayer);
-}
-
-// --- SPARA POSITION VID RÖRELSE ---
-map.on('moveend', () => {
-    const center = map.getCenter();
-    localStorage.setItem('topo_lat', center.lat);
-    localStorage.setItem('topo_lng', center.lng);
-    localStorage.setItem('topo_zoom', map.getZoom());
-    updateCenterElevation();
-});
-
 function handleLayerChange(layerKey) {
-    const editBtn = document.getElementById('edit-key-btn');
-    
     // Spara valet
     localStorage.setItem('topo_layer', layerKey);
 
@@ -272,12 +331,12 @@ function handleLayerChange(layerKey) {
         if (savedKey) {
             loadLockedLayer(layerKey, savedKey);
             switchLayerTo(layerKey);
-            editBtn.style.display = 'block'; 
+            if(editKeyBtn) editKeyBtn.style.display = 'block'; 
         } else {
             showKeyModal(layerKey);
         }
     } else {
-        editBtn.style.display = 'none';
+        if(editKeyBtn) editKeyBtn.style.display = 'none';
         switchLayerTo(layerKey);
     }
 }
@@ -285,8 +344,10 @@ function handleLayerChange(layerKey) {
 function switchLayerTo(layerKey) {
     if (currentLayer) map.removeLayer(currentLayer);
     currentLayer = layers[layerKey];
-    map.addLayer(currentLayer);
-    previousLayerValue = layerKey;
+    if(currentLayer) {
+        map.addLayer(currentLayer);
+        previousLayerValue = layerKey;
+    }
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -316,8 +377,10 @@ function showKeyModal(layerKey) {
 }
 
 function openCurrentKeyModal() {
-    const currentVal = document.getElementById('layerSelect').value;
-    if (lockedServices[currentVal]) showKeyModal(currentVal);
+    if(layerSelect) {
+        const currentVal = layerSelect.value;
+        if (lockedServices[currentVal]) showKeyModal(currentVal);
+    }
 }
 
 function saveApiKey() {
@@ -332,8 +395,8 @@ function saveApiKey() {
         loadLockedLayer(pendingServiceKey, key);
         switchLayerTo(pendingServiceKey);
         
-        document.getElementById('edit-key-btn').style.display = 'block';
-        document.getElementById('layerSelect').value = pendingServiceKey;
+        if(editKeyBtn) editKeyBtn.style.display = 'block';
+        if(layerSelect) layerSelect.value = pendingServiceKey;
         document.getElementById('key-modal').style.display = 'none';
         pendingServiceKey = null;
     } else {
@@ -346,62 +409,17 @@ function cancelApiKey() {
     pendingServiceKey = null;
     
     if(currentLayer === null) {
-        document.getElementById('layerSelect').value = "opentopo";
+        if(layerSelect) layerSelect.value = "opentopo";
         handleLayerChange("opentopo");
     } else {
-        document.getElementById('layerSelect').value = previousLayerValue;
+        if(layerSelect) layerSelect.value = previousLayerValue;
     }
 }
 
 function showInfo() { document.getElementById('info-modal').style.display = 'flex'; }
 function closeInfo() { document.getElementById('info-modal').style.display = 'none'; }
 
-const goldIcon = new L.Icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41], className: 'gold-icon'
-});
-
-const greenIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
-
-const redIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
-
-let markers = [];
-let polylines = [];
-let searchCircle = null;
-let centerMarker = null;
-let isLocked = false;
-let lockedCenterCoords = null;
-let isControlsMinimized = false;
-
-const canvas = document.getElementById('analysis-canvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
-const spCanvas = document.getElementById('single-point-canvas');
-const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
-
-const controls = document.getElementById('controls');
-const crosshair = document.getElementById('crosshair');
-const centerHeightDisplay = document.getElementById('center-h');
-const scanBtn = document.getElementById('scan-btn');
-const climbBtn = document.getElementById('climb-btn');
-const zoomLabel = document.getElementById('zoom-level');
-const radiusInput = document.getElementById('radiusInput');
-const climbDistInput = document.getElementById('climbDistInput');
-const numClimbsInput = document.getElementById('numClimbsInput');
-const circleCheckbox = document.getElementById('show-circle');
-const lockCheckbox = document.getElementById('lock-circle');
-const searchInput = document.getElementById('searchInput');
-const statusDiv = document.getElementById('status');
-
-window.toggleControls = function() {
+function toggleControls() {
     const btn = document.querySelector('.toggle-btn');
     isControlsMinimized = !isControlsMinimized;
     if (isControlsMinimized) {
@@ -412,22 +430,6 @@ window.toggleControls = function() {
         btn.textContent = '➖';
     }
 };
-
-searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
-radiusInput.addEventListener('input', updateUI);
-circleCheckbox.addEventListener('change', updateUI);
-
-lockCheckbox.addEventListener('change', (e) => {
-    isLocked = e.target.checked;
-    if (isLocked) {
-        lockedCenterCoords = map.getCenter();
-        crosshair.style.display = 'block';
-    } else {
-        lockedCenterCoords = null;
-        crosshair.style.display = 'none';
-    }
-    updateUI();
-});
 
 async function searchLocation() {
     const t = translations[currentLang];
@@ -478,6 +480,7 @@ window.copyCoords = function(lat, lng, btnElement) {
 function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
 
 function updateUI() {
+    if(!zoomLabel) return; // Säkerhet
     zoomLabel.innerText = 'Zoom: ' + map.getZoom();
     const searchCenter = getSearchCenter(); 
     const radiusKm = parseFloat(radiusInput.value) || 5;
@@ -497,9 +500,10 @@ function updateUI() {
 }
 
 async function updateCenterElevation() {
+    if(!centerHeightDisplay) return;
     const center = map.getCenter();
-    scanBtn.disabled = true;
-    climbBtn.disabled = true;
+    if(scanBtn) scanBtn.disabled = true;
+    if(climbBtn) climbBtn.disabled = true;
     centerHeightDisplay.textContent = "..."; 
     
     const zoom = Math.min(Math.floor(map.getZoom()), 14); 
@@ -520,17 +524,12 @@ async function updateCenterElevation() {
             const pData = spCtx.getImageData(0, 0, 1, 1).data;
             const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
             centerHeightDisplay.textContent = Math.round(h) + " m";
-            scanBtn.disabled = false;
-            climbBtn.disabled = false;
+            if(scanBtn) scanBtn.disabled = false;
+            if(climbBtn) climbBtn.disabled = false;
         };
         img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
 }
-
-map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
-map.on('move', () => { updateUI(); }); 
-updateUI();
-updateCenterElevation();
 
 async function fetchTerrainData() {
     const size = map.getSize();
@@ -557,7 +556,7 @@ async function fetchTerrainData() {
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
-    scanBtn.disabled = true;
+    if(scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
         await fetchTerrainData();
@@ -576,7 +575,7 @@ async function analyzeTerrain() {
 async function findSteepestClimb() {
     const t = translations[currentLang];
     clearResults();
-    climbBtn.disabled = true;
+    if(climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
         await fetchTerrainData();
@@ -811,3 +810,43 @@ function moveLatLng(latlng, distMeters, angleDeg) {
     const dLon = de / (R * Math.cos(Math.PI * latlng.lat / 180));
     return L.latLng(latlng.lat + dLat * 180 / Math.PI, latlng.lng + dLon * 180 / Math.PI);
 }
+
+// ==========================================
+// 6. STARTA LOGIK (Event Listeners & Init)
+// ==========================================
+
+// Event Listeners
+if(searchInput) searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
+if(radiusInput) radiusInput.addEventListener('input', updateUI);
+if(circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
+if(lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
+    isLocked = e.target.checked;
+    if (isLocked) {
+        lockedCenterCoords = map.getCenter();
+        crosshair.style.display = 'block';
+    } else {
+        lockedCenterCoords = null;
+        crosshair.style.display = 'none';
+    }
+    updateUI();
+});
+
+// Map Events
+map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
+map.on('move', () => { updateUI(); }); // UI (cirkel) uppdateras direkt
+map.on('moveend', () => { // Data sparas/hämtas vid slut av rörelse
+    const center = map.getCenter();
+    localStorage.setItem('topo_lat', center.lat);
+    localStorage.setItem('topo_lng', center.lng);
+    localStorage.setItem('topo_zoom', map.getZoom());
+    updateCenterElevation();
+});
+
+// Initiera
+updateLanguage();
+if(layerSelect) {
+    layerSelect.value = savedLayer;
+}
+handleLayerChange(savedLayer); // Nu är allt laddat, så detta fungerar!
+updateUI();
+updateCenterElevation();

@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="en"> <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Elevation Finder</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,25 +16,34 @@
     <div id="info-modal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
-            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.</p>
+            
+            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.<br>The application works on mobile devices, but is best experienced on larger screens.</p>
             
             <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; color: #555;">
-                <strong id="info-howto-title">How to use:</strong>
+                
+                <div id="info-section-peaks" style="font-weight: 700; color: #333; margin-top: 5px;">Find Highest Points</div>
                 <ul style="padding-left: 20px; margin: 5px 0;">
-                    <li id="info-help-radius">Radius: Search area size.</li>
-                    <li id="info-help-points">Points: Number of peaks to find.</li>
-                    <li id="info-help-dist">Measure Dist: Distance for ascent calc.</li>
-                    <li id="info-help-climbs">Climbs: Number of steep paths to find.</li>
+                    <li id="info-help-radius">Radius: Set the size of the search area.</li>
+                    <li id="info-help-points">Points: How many peaks to find.</li>
+                    <li id="info-help-show-radius">Show Radius: Hide or show the blue circle.</li>
+                    <li id="info-help-lock-radius">Lock Radius: Pin search to current pos.</li>
                 </ul>
-                <p id="info-mobile-note" style="margin-top:8px; font-style:italic; font-size:12px;">
-                    Works on mobile, but best experienced on desktop.
+
+                <div id="info-section-climbs" style="font-weight: 700; color: #333; margin-top: 10px;">Find Climbs</div>
+                <ul style="padding-left: 20px; margin: 5px 0;">
+                    <li id="info-help-dist">Measure Dist: Max distance for ascent.</li>
+                    <li id="info-help-climbs">Num Climbs: How many climbs to find.</li>
+                </ul>
+
+                <p id="info-results-desc" style="margin-top:10px; font-style: italic; border-top: 1px solid #ddd; padding-top: 5px;">
+                    Results show rank, elevation, distance and coordinates.
                 </p>
             </div>
 
             <p><strong><span id="info-creator">Creator</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
             
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">--</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">1.1</span>
             </p>
 
             <p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
@@ -78,13 +90,14 @@
                 <div class="select-container">
                     <select id="layerSelect" onchange="handleLayerChange(this.value)">
                         <option value="opentopo" selected>OpenTopo</option>
-                        <option value="osm">OpenStreetMap</option>
                         <option value="tracetrack">Tracetrack Topo</option>
                         <option value="thunderforest">ThunderForest Outdoors</option>
-                        <option value="satellite">Satellit (ESRI)</option>
-                        <option value="debug">Höjddata (Debug)</option>
+                        <option value="lm_map">Lantmäteriet (Sweden)</option>
+                        <option value="osm">OpenStreetMap</option>
+                        <option value="satellite">Satellite (ESRI)</option>
+                        <option value="debug">Elevation Data (Debug)</option>
                     </select>
-                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API">🔑</button>
+                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API" style="display:none;">🔑</button>
                 </div>
             </div>
 
@@ -145,6 +158,7 @@
 
     <canvas id="analysis-canvas"></canvas>
     <canvas id="single-point-canvas" width="1" height="1"></canvas>
+    
     <div id="map"></div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
