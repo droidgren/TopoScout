@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en"> <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Elevation Finder</title>
@@ -13,18 +14,28 @@
     <div id="info-modal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
-            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.</p>
+            
+            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area. Works on mobile, but best experienced on desktop.</p>
             
             <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; color: #555;">
-                <strong id="info-howto-title">How to use:</strong>
+                <strong id="info-howto-title" style="display:block; margin-bottom:5px;">How to use:</strong>
+                
+                <div id="info-section-peaks" style="font-weight: 700; color: #333; margin-top: 5px;">Find Highest Points</div>
                 <ul style="padding-left: 20px; margin: 5px 0;">
-                    <li id="info-help-radius">Radius: Search area size.</li>
-                    <li id="info-help-points">Points: Number of peaks to find.</li>
-                    <li id="info-help-dist">Measure Dist: Distance for ascent calc.</li>
-                    <li id="info-help-climbs">Climbs: Number of steep paths to find.</li>
+                    <li id="info-help-radius">Radius: ...</li>
+                    <li id="info-help-points">Points: ...</li>
+                    <li id="info-help-show-radius">Show Radius: ...</li>
+                    <li id="info-help-lock-radius">Lock Radius: ...</li>
                 </ul>
-                <p id="info-mobile-note" style="margin-top:8px; font-style:italic; font-size:12px;">
-                    Works on mobile, but best experienced on desktop.
+
+                <div id="info-section-climbs" style="font-weight: 700; color: #333; margin-top: 10px;">Find Climbs</div>
+                <ul style="padding-left: 20px; margin: 5px 0;">
+                    <li id="info-help-dist">Measure Dist: ...</li>
+                    <li id="info-help-climbs">Num Climbs: ...</li>
+                </ul>
+
+                <p id="info-results-desc" style="margin-top:10px; font-style: italic; border-top: 1px solid #ddd; padding-top: 5px;">
+                    Results show...
                 </p>
             </div>
 
