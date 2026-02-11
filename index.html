@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="sv">
-<head>
+<html lang="en"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topo Höjdsökare</title>
+    <title>Elevation Finder</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
 </head>
@@ -11,58 +10,71 @@
 
     <div id="crosshair"></div>
 
-	<div id="info-modal" class="modal-overlay">
-			<div class="modal-content">
-				<h4 id="info-title">Om Topo Höjdsökare</h4>
-				<p id="info-desc">Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.</p>
-				
-				<p><strong><span id="info-creator">Skapare</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
-				
-				<p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-					<span id="lbl-version">Version</span>: <span id="app-version">--</span>
-				</p>
+    <div id="info-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h4 id="info-title">About Elevation Finder</h4>
+            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.</p>
+            
+            <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; color: #555;">
+                <strong id="info-howto-title">How to use:</strong>
+                <ul style="padding-left: 20px; margin: 5px 0;">
+                    <li id="info-help-radius">Radius: Search area size.</li>
+                    <li id="info-help-points">Points: Number of peaks to find.</li>
+                    <li id="info-help-dist">Measure Dist: Distance for ascent calc.</li>
+                    <li id="info-help-climbs">Climbs: Number of steep paths to find.</li>
+                </ul>
+                <p id="info-mobile-note" style="margin-top:8px; font-style:italic; font-size:12px;">
+                    Works on mobile, but best experienced on desktop.
+                </p>
+            </div>
 
-				<p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
-					Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.
-				</p>
-				<button id="info-close" class="save-btn" onclick="closeInfo()">Stäng</button>
-			</div>
-		</div>
+            <p><strong><span id="info-creator">Creator</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
+            
+            <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
+                <span id="lbl-version">Version</span>: <span id="app-version">--</span>
+            </p>
+
+            <p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
+                This application is fully client-side. No data saved on server.
+            </p>
+            <button id="info-close" class="save-btn" onclick="closeInfo()">Close</button>
+        </div>
+    </div>
 
     <div id="key-modal" class="modal-overlay">
         <div class="modal-content">
-            <h4 id="modal-title">Ange API-nyckel</h4>
+            <h4 id="modal-title">Enter API Key</h4>
             <p id="modal-text">...</p>
-            <p><a id="modal-link" href="#" target="_blank">Registrera dig här</a></p>
+            <p><a id="modal-link" href="#" target="_blank">Register here</a></p>
             <input type="text" id="api-key-input" placeholder="...">
             <div class="modal-btns">
-                <button id="modal-save" class="save-btn" onclick="saveApiKey()">Spara</button>
-                <button id="modal-cancel" class="cancel-btn" onclick="cancelApiKey()">Avbryt</button>
+                <button id="modal-save" class="save-btn" onclick="saveApiKey()">Save</button>
+                <button id="modal-cancel" class="cancel-btn" onclick="cancelApiKey()">Cancel</button>
             </div>
         </div>
     </div>
 
     <div id="controls">
         <div class="header-row">
-            <h3 id="app-title">Topo Höjdsökare</h3>
+            <h3 id="app-title">Elevation Finder</h3>
             <div class="header-buttons">
-                <button class="circle-btn" onclick="toggleLanguage()" title="Byt språk / Switch Language">
+                <button class="circle-btn" onclick="toggleLanguage()" title="Switch Language">
                     <img id="flag-icon" class="flag-img" src="" alt="Flag">
                 </button>
-                <button class="circle-btn info-btn" onclick="showInfo()" title="Om / About">i</button>
-                <button class="toggle-btn" onclick="toggleControls()" title="Minimera/Expandera">➖</button>
+                <button class="circle-btn info-btn" onclick="showInfo()" title="Info">i</button>
+                <button class="toggle-btn" onclick="toggleControls()" title="Minimize">➖</button>
             </div>
         </div>
 
         <div class="live-height-box">
-            <span id="liveLabel" class="live-label">HÖJD ÖVER HAVET</span>
+            <span id="liveLabel" class="live-label">ELEVATION</span>
             <span id="center-h" class="live-value">-- m</span>
         </div>
 
         <div id="controls-content">
             
             <div style="margin-bottom: 10px;">
-                <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Kartlager:</span>
+                <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Map Layer:</span>
                 <div class="select-container">
                     <select id="layerSelect" onchange="handleLayerChange(this.value)">
                         <option value="opentopo" selected>OpenTopo</option>
@@ -77,55 +89,55 @@
             </div>
 
             <div class="search-group">
-                <input type="text" id="searchInput" placeholder="Sök plats">
+                <input type="text" id="searchInput" placeholder="Search location">
                 <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
-                <button class="icon-btn" onclick="searchLocation()" title="Sök">🔍</button>
+                <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
             </div>
             
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
             
             <div class="control-row">
-                <span id="lbl-radius" class="control-label">Sökradie (km):</span>
+                <span id="lbl-radius" class="control-label">Search Radius (km):</span>
                 <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
             </div>
 
             <div class="control-row">
-                <span id="lbl-points" class="control-label">Antal punkter:</span>
+                <span id="lbl-points" class="control-label">Num Points:</span>
                 <input type="number" id="numPoints" value="3" min="1" max="50">
             </div>
             
             <div class="checkbox-group">
                 <div class="checkbox-row">
                     <input type="checkbox" id="show-circle" checked>
-                    <label id="lbl-show-circle" for="show-circle">Visa radie</label>
+                    <label id="lbl-show-circle" for="show-circle">Show Radius</label>
                 </div>
                 
                 <div class="checkbox-row">
                     <input type="checkbox" id="lock-circle">
-                    <label id="lbl-lock-circle" for="lock-circle" title="Lås">🔒 Lås radie</label>
+                    <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
                 </div>
             </div>
 
-            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Hitta högsta punkter</button>
+            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
 
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
             
             <div class="control-row">
-                <span id="lbl-climb-dist" class="control-label">Mätsträcka (m):</span>
+                <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
                 <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
             </div>
 
             <div class="control-row">
-                <span id="lbl-num-climbs" class="control-label">Antal stigningar:</span>
+                <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
                 <input type="number" id="numClimbsInput" value="1" min="1" max="10">
             </div>
 
-            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Hitta stigningar</button>
+            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
 
-            <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Rensa resultat</button>
+            <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
             
             <div class="footer-row">
-                <div id="status">Redo.</div>
+                <div id="status">Ready.</div>
                 <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
             </div>
         </div>
