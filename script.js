@@ -1,7 +1,7 @@
 // ==========================================
 // 1. KONFIGURATION & KONSTANTER
 // ==========================================
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.1";
 
 // Vattenanalys (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -97,7 +97,7 @@ const translations = {
         status_no_data: "Ingen data hittades.",
         input_search_ph: "Sök plats",
         info_title: "Om Höjdsökaren",
-        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område. Appen fungerar på mobila enheter, men gör sig bäst på större skärmar",
+        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.Applikationen fungerar på mobila enheter, men gör sig bäst på större skärmar.",
         info_section_peaks: "Hitta högsta punkter",
         info_help_radius: "Sökradie: Ange sökområdets storlek.",
         info_help_points: "Antal punkter: Hur många toppar som ska hittas inom sökområdet.",
@@ -157,7 +157,7 @@ const translations = {
         status_no_data: "No data found.",
         input_search_ph: "Search location",
         info_title: "About Elevation Finder",
-        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.The app works on mobile devices, but is best experienced on larger screens.",
+        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area. The app works on mobile devices, but is best experienced on larger screens",
         info_section_peaks: "Find Highest Points",
         info_help_radius: "Radius: Set the size of the search area.",
         info_help_points: "Points: How many peaks to find within the area.",
@@ -264,11 +264,9 @@ function updateLanguage() {
     const t = translations[currentLang];
     const isEn = currentLang === 'en';
 
-    // Update Flag Image (Src)
     const flagImg = document.getElementById('flag-icon');
     if(flagImg) flagImg.src = isEn ? FLAG_GB : FLAG_SE;
 
-    // Static UI Elements
     if(document.getElementById('app-title')) {
         document.getElementById('app-title').textContent = t.title;
         document.title = t.title;
@@ -287,9 +285,7 @@ function updateLanguage() {
         document.getElementById('searchInput').placeholder = t.input_search_ph;
         document.getElementById('status').textContent = t.status_ready;
 
-        // Info Modal
         document.getElementById('info-title').textContent = t.info_title;
-        
         document.getElementById('info-desc').innerHTML = t.info_desc;
         
         document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
@@ -310,7 +306,6 @@ function updateLanguage() {
         document.getElementById('info-privacy').textContent = t.info_privacy;
         document.getElementById('info-close').textContent = t.btn_close;
 
-        // API Modal buttons
         document.getElementById('modal-save').textContent = t.btn_save;
         document.getElementById('modal-cancel').textContent = t.btn_cancel;
         document.getElementById('api-key-input').placeholder = t.input_api_ph;
@@ -576,36 +571,13 @@ async function fetchAnalysisData() {
     ]);
 }
 
-// Den gamla fetchTerrainData används för stigningar (som inte behöver vattenkoll)
-async function fetchTerrainData() {
-    const size = map.getSize();
-    canvas.width = size.x;
-    canvas.height = size.y;
-    ctx.imageSmoothingEnabled = false; 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 14); 
-    const nw = map.project(bounds.getNorthWest(), zoom);
-    const se = map.project(bounds.getSouthEast(), zoom);
-    const tileMin = nw.divideBy(256).floor();
-    const tileMax = se.divideBy(256).floor();
-    
-    const tilesToLoad = [];
-    for (let x = tileMin.x; x <= tileMax.x; x++) {
-        for (let y = tileMin.y; y <= tileMax.y; y++) {
-            tilesToLoad.push({ x, y, z: zoom });
-        }
-    }
-    await loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw);
-}
-
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
     if(scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchAnalysisData(); // Använder nya funktionen med vattenkoll
+        await fetchAnalysisData(); 
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             findPeaks();
@@ -624,7 +596,8 @@ async function findSteepestClimb() {
     if(climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchTerrainData(); // Kör gamla (snabbare, ingen vattenkoll behövs)
+        // ÄNDRING: Använd fetchAnalysisData för att även ladda vattenkartan
+        await fetchAnalysisData(); 
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             calculateMaxClimb();
@@ -729,6 +702,10 @@ function calculateMaxClimb() {
     const w = canvas.width;
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
+    
+    // NYTT: Hämta data från vatten-canvasen
+    const waterData = waterCtx.getImageData(0, 0, w, h).data;
+
     const searchCenterLatLng = getSearchCenter();
     const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
     const climbDistMeters = parseFloat(climbDistInput.value) || 200;
@@ -749,10 +726,13 @@ function calculateMaxClimb() {
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
             
+            // KONTROLLERA VATTEN PÅ STARTPUNKTEN
+            const i1 = (y * w + x) * 4;
+            if (isWaterPixel(waterData[i1], waterData[i1+1], waterData[i1+2])) continue;
+
             const startLatLng = map.containerPointToLatLng([x, y]);
             if (searchCenterLatLng.distanceTo(startLatLng) > searchRadiusMeters) continue;
 
-            const i1 = (y * w + x) * 4;
             if (imgData[i1+3] < 255) continue;
             const h1 = (imgData[i1] * 256 + imgData[i1+1] + imgData[i1+2] / 256) - 32768;
 
@@ -763,7 +743,11 @@ function calculateMaxClimb() {
                 const y2 = Math.round(y + climbDistPx * Math.sin(theta));
 
                 if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
+                    
+                    // KONTROLLERA VATTEN PÅ SLUTPUNKTEN
                     const i2 = (y2 * w + x2) * 4;
+                    if (isWaterPixel(waterData[i2], waterData[i2+1], waterData[i2+2])) continue;
+
                     if (imgData[i2+3] < 255) continue;
                     const h2 = (imgData[i2] * 256 + imgData[i2+1] + imgData[i2+2] / 256) - 32768;
 
