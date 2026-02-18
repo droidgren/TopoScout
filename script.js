@@ -97,7 +97,7 @@ const translations = {
         status_no_data: "Ingen data hittades.",
         input_search_ph: "Sök plats",
         info_title: "Om Höjdsökaren",
-        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.Applikationen fungerar på mobila enheter, men gör sig bäst på större skärmar.",
+        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område. Appen fungerar på mobila enheter, men gör sig bäst på större skärmar.",
         info_section_peaks: "Hitta högsta punkter",
         info_help_radius: "Sökradie: Ange sökområdets storlek.",
         info_help_points: "Antal punkter: Hur många toppar som ska hittas inom sökområdet.",
