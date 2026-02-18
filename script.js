@@ -1,8 +1,12 @@
 // ==========================================
 // 1. KONFIGURATION & KONSTANTER
 // ==========================================
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 
+// Vattenanalys (CartoDB Light No Labels)
+const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
+const WATER_TOLERANCE = 25;
+const WATER_CHECK_URL = "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
 
 // Base64-flaggor
 const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxMCI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjEwIiBmaWxsPSIjMDA2YWE3Ii8+PHJlY3QgeD0iNSIgd2lkdGg9IjIiIGhlaWdodD0iMTAiIGZpbGw9IiNmZWNjMDAiLz48cmVjdCB5PSI0IiB3aWR0aD0iMTYiIGhlaWdodD0iMiIgZmlsbD0iI2ZlY2MwMCIvPjwvc3ZnPg==";
@@ -38,6 +42,10 @@ const canvas = document.getElementById('analysis-canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const spCanvas = document.getElementById('single-point-canvas');
 const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
+
+// Skapa en separat canvas för vattenanalys (visas ej i UI)
+const waterCanvas = document.createElement('canvas');
+const waterCtx = waterCanvas.getContext('2d', { willReadFrequently: true });
 
 const controls = document.getElementById('controls');
 const crosshair = document.getElementById('crosshair');
@@ -89,7 +97,7 @@ const translations = {
         status_no_data: "Ingen data hittades.",
         input_search_ph: "Sök plats",
         info_title: "Om Höjdsökaren",
-        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område.<br>Applikationen fungerar på mobila enheter, men gör sig bäst på större skärmar.",
+        info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna samt beräkna maximal stigning inom ett givet område. Appen fungerar på mobila enheter, men gör sig bäst på större skärmar",
         info_section_peaks: "Hitta högsta punkter",
         info_help_radius: "Sökradie: Ange sökområdets storlek.",
         info_help_points: "Antal punkter: Hur många toppar som ska hittas inom sökområdet.",
@@ -115,7 +123,7 @@ const translations = {
         res_dist: "Avstånd",
         res_elev: "Höjd",
         res_climb: "Stigning",
-        layer_lm_map: "Lantmäteriet", // UPPDATERAD
+        layer_lm_map: "Lantmäteriet", 
         layer_satellite: "Satellit",
         layer_debug: "Höjddata (Debug)"
     },
@@ -149,7 +157,7 @@ const translations = {
         status_no_data: "No data found.",
         input_search_ph: "Search location",
         info_title: "About Elevation Finder",
-        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.<br><br>The web application works on mobile devices, but is best experienced on larger screens.",
+        info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.The app works on mobile devices, but is best experienced on larger screens.",
         info_section_peaks: "Find Highest Points",
         info_help_radius: "Radius: Set the size of the search area.",
         info_help_points: "Points: How many peaks to find within the area.",
@@ -175,7 +183,7 @@ const translations = {
         res_dist: "Distance",
         res_elev: "Elevation",
         res_climb: "Ascent",
-        layer_lm_map: "Lantmäteriet (Sweden)", // UPPDATERAD
+        layer_lm_map: "Lantmäteriet (Sweden)", 
         layer_satellite: "Satellite",
         layer_debug: "Elevation Data (Debug)"
     }
@@ -191,7 +199,7 @@ const layers = {
     "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
     "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
     "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, { // UPPDATERAD KEY
+    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, { 
         attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a>',
         maxZoom: 17 
     }),
@@ -246,6 +254,12 @@ L.control.zoom({position: 'bottomright'}).addTo(map);
 // 5. FUNKTIONER
 // ==========================================
 
+function isWaterPixel(r, g, b) {
+    return Math.abs(r - WATER_COLOR.r) <= WATER_TOLERANCE &&
+           Math.abs(g - WATER_COLOR.g) <= WATER_TOLERANCE &&
+           Math.abs(b - WATER_COLOR.b) <= WATER_TOLERANCE;
+}
+
 function updateLanguage() {
     const t = translations[currentLang];
     const isEn = currentLang === 'en';
@@ -276,7 +290,6 @@ function updateLanguage() {
         // Info Modal
         document.getElementById('info-title').textContent = t.info_title;
         
-        // ANVÄNDER INNERHTML HÄR FÖR ATT HTML-TAGGAR SKA FUNGERA
         document.getElementById('info-desc').innerHTML = t.info_desc;
         
         document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
@@ -302,7 +315,6 @@ function updateLanguage() {
         document.getElementById('modal-cancel').textContent = t.btn_cancel;
         document.getElementById('api-key-input').placeholder = t.input_api_ph;
 
-        // Uppdatera dropdown-text säkert via value-matchning
         if(layerSelect) {
             for (let i = 0; i < layerSelect.options.length; i++) {
                 const val = layerSelect.options[i].value;
@@ -321,7 +333,6 @@ function toggleLanguage() {
 }
 
 function handleLayerChange(layerKey) {
-    // Spara valet
     localStorage.setItem('topo_layer', layerKey);
 
     if (lockedServices[layerKey]) {
@@ -480,7 +491,7 @@ window.copyCoords = function(lat, lng, btnElement) {
 function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
 
 function updateUI() {
-    if(!zoomLabel) return; // Säkerhet
+    if(!zoomLabel) return; 
     zoomLabel.innerText = 'Zoom: ' + map.getZoom();
     const searchCenter = getSearchCenter(); 
     const radiusKm = parseFloat(radiusInput.value) || 5;
@@ -531,6 +542,41 @@ async function updateCenterElevation() {
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
 }
 
+// Uppdaterad funktion som hämtar både höjd- och vatten-tiles
+async function fetchAnalysisData() {
+    const size = map.getSize();
+    canvas.width = size.x;
+    canvas.height = size.y;
+    waterCanvas.width = size.x;
+    waterCanvas.height = size.y;
+    
+    ctx.imageSmoothingEnabled = false; 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    waterCtx.imageSmoothingEnabled = false;
+    waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
+    
+    const bounds = map.getBounds();
+    const zoom = Math.min(Math.floor(map.getZoom()), 14); 
+    const nw = map.project(bounds.getNorthWest(), zoom);
+    const se = map.project(bounds.getSouthEast(), zoom);
+    const tileMin = nw.divideBy(256).floor();
+    const tileMax = se.divideBy(256).floor();
+    
+    const tilesToLoad = [];
+    for (let x = tileMin.x; x <= tileMax.x; x++) {
+        for (let y = tileMin.y; y <= tileMax.y; y++) {
+            tilesToLoad.push({ x, y, z: zoom });
+        }
+    }
+
+    // Ladda båda lagren parallellt
+    await Promise.all([
+        loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw),
+        loadAndDrawTiles(WATER_CHECK_URL, waterCtx, tilesToLoad, nw)
+    ]);
+}
+
+// Den gamla fetchTerrainData används för stigningar (som inte behöver vattenkoll)
 async function fetchTerrainData() {
     const size = map.getSize();
     canvas.width = size.x;
@@ -550,7 +596,7 @@ async function fetchTerrainData() {
             tilesToLoad.push({ x, y, z: zoom });
         }
     }
-    await loadAndDrawDataTiles(tilesToLoad, zoom, nw);
+    await loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw);
 }
 
 async function analyzeTerrain() {
@@ -559,7 +605,7 @@ async function analyzeTerrain() {
     if(scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchTerrainData();
+        await fetchAnalysisData(); // Använder nya funktionen med vattenkoll
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             findPeaks();
@@ -578,7 +624,7 @@ async function findSteepestClimb() {
     if(climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchTerrainData();
+        await fetchTerrainData(); // Kör gamla (snabbare, ingen vattenkoll behövs)
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             calculateMaxClimb();
@@ -590,16 +636,17 @@ async function findSteepestClimb() {
     }
 }
 
-function loadAndDrawDataTiles(tiles, zoom, nwPixelOrigin) {
+// Generaliserad funktion
+function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
     const promises = tiles.map(t => {
         return new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = "Anonymous";
-            img.src = DATA_TILE_URL.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
+            img.src = urlTemplate.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
             img.onload = () => {
                 const tilePos = new L.Point(t.x * 256, t.y * 256);
                 const offset = tilePos.subtract(nwPixelOrigin); 
-                ctx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
+                targetCtx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
                 resolve();
             };
             img.onerror = () => resolve(); 
@@ -613,6 +660,9 @@ function findPeaks() {
     const w = canvas.width;
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
+    // Hämta data från vatten-canvasen
+    const waterData = waterCtx.getImageData(0, 0, w, h).data;
+
     const searchCenterLatLng = getSearchCenter();
     const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
     let candidates = [];
@@ -620,6 +670,12 @@ function findPeaks() {
         for (let x = 0; x < w; x+=2) {
             const i = (y * w + x) * 4;
             if (imgData[i+3] < 255) continue; 
+            
+            // KONTROLLERA VATTEN
+            if (isWaterPixel(waterData[i], waterData[i+1], waterData[i+2])) {
+                continue; // Hoppa över om det är vatten
+            }
+
             const height = (imgData[i] * 256 + imgData[i+1] + imgData[i+2] / 256) - 32768;
             if (height > -50) candidates.push({ x, y, h: height });
         }
