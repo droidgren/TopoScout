@@ -140,3 +140,13 @@ select { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px;
 .popup-header { font-weight: bold; font-size: 14px; display:block; margin-bottom: 2px;}
 .popup-height { font-size: 18px; color: #d9534f; font-weight: 800; display:block; margin-bottom: 5px; }
 .popup-meta { font-size: 11px; color: #666; display:block; margin-bottom: 8px; }
+
+/* CHANGELOG ACCORDION */
+details summary:hover {
+    color: #007bff !important;
+}
+details[open] summary {
+    margin-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}

@@ -32,7 +32,7 @@ const lockedServices = {
 const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const DATA_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPPDATERAD TILL MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev"; 
 
 // ==========================================
@@ -109,6 +109,7 @@ const translations = {
         info_results_desc: "Resultaten visar ranking (Högst först), Höjd, Avstånd från centrum samt koordinater.",
         info_creator: "Skapare",
         lbl_version: "Version",
+		info_changelog_title: "Ändringslogg",
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
         btn_close: "Stäng",
         modal_api_title: "Ange API-nyckel för {service}",
@@ -125,7 +126,7 @@ const translations = {
         res_climb: "Stigning",
         layer_lm_map: "Lantmäteriet", 
         layer_satellite: "Satellit",
-        layer_debug: "Höjddata (Debug)"
+        layer_debug: "Höjddata (Mapterhorn)"
     },
     en: {
         title: "Elevation Finder",
@@ -169,6 +170,7 @@ const translations = {
         info_results_desc: "Results show rank (Highest first), Elevation, Distance from center, and coordinates.",
         info_creator: "Creator",
         lbl_version: "Version",
+		info_changelog_title: "Changelog",
         info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
         btn_close: "Close",
         modal_api_title: "Enter API Key for {service}",
@@ -185,7 +187,7 @@ const translations = {
         res_climb: "Ascent",
         layer_lm_map: "Lantmäteriet (Sweden)", 
         layer_satellite: "Satellite",
-        layer_debug: "Elevation Data (Debug)"
+        layer_debug: "Elevation Data (Mapterhorn)"
     }
 };
 
@@ -205,7 +207,7 @@ const layers = {
     }),
     "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
     "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
-    "debug": L.tileLayer(DATA_TILE_URL, { attribution: 'Mapzen Rådata', maxZoom: 15, opacity: 1 })
+    "debug": L.tileLayer(DATA_TILE_URL, { attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 })
 };
 
 // Ikoner
@@ -303,6 +305,7 @@ function updateLanguage() {
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
         document.getElementById('app-version').textContent = APP_VERSION;
+	     if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
         document.getElementById('info-privacy').textContent = t.info_privacy;
         document.getElementById('info-close').textContent = t.btn_close;
 
@@ -516,8 +519,11 @@ async function updateCenterElevation() {
     const point = map.project(center, zoom);
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
-    const pixelX = Math.floor(point.x % 256);
-    const pixelY = Math.floor(point.y % 256);
+    
+    // UPPDATERAT: Eftersom Mapterhorn är 512x512 multiplicerar vi pixel-offset med 2
+    const pixelX = Math.floor((point.x % 256) * 2);
+    const pixelY = Math.floor((point.y % 256) * 2);
+    
     const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
 
     try {
@@ -525,11 +531,18 @@ async function updateCenterElevation() {
         img.crossOrigin = "Anonymous";
         img.src = url;
         img.onload = () => {
+            spCtx.imageSmoothingEnabled = false; // UPPDATERAT: Stäng av smoothing
             spCtx.clearRect(0,0,1,1);
             spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
             const pData = spCtx.getImageData(0, 0, 1, 1).data;
-            const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
-            centerHeightDisplay.textContent = Math.round(h) + " m";
+            
+            if (pData[3] === 0) { // UPPDATERAT: Hantera genomskinliga pixlar (ingen data)
+                centerHeightDisplay.textContent = "N/A";
+            } else {
+                const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
+                centerHeightDisplay.textContent = Math.round(h) + " m";
+            }
+            
             if(scanBtn) scanBtn.disabled = false;
             if(climbBtn) climbBtn.disabled = false;
         };
@@ -596,7 +609,6 @@ async function findSteepestClimb() {
     if(climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        // ÄNDRING: Använd fetchAnalysisData för att även ladda vattenkartan
         await fetchAnalysisData(); 
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
@@ -856,6 +868,8 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 // ==========================================
 
 // Event Listeners
+if(scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // LADE TILLBAKA DENNA Event Listener
+if(climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // LADE TILLBAKA DENNA Event Listener
 if(searchInput) searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
 if(radiusInput) radiusInput.addEventListener('input', updateUI);
 if(circleCheckbox) circleCheckbox.addEventListener('change', updateUI);

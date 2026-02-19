@@ -4,7 +4,7 @@ Topo Elevation Search is a client-side web application designed to analyze terra
 
 The application relies on global elevation tiles and runs entirely in the browser without sending user data or search queries to a backend server.
 
-To access the webapp go here:   https://droidgren.github.io/elevation_finder/
+To access the webapp go here: https://droidgren.github.io/elevation_finder/
 
 ## Features
 
@@ -55,13 +55,19 @@ This project is ready to be hosted on GitHub Pages or any static web server (Apa
 
 ## Technical Details
 
-This application uses **Leaflet.js** for map rendering. Elevation data is fetched using **Mapzen Terrarium** encoding (RGB-encoded elevation) from AWS S3 terrain tiles.
+This application uses **Leaflet.js** for map rendering. Elevation data is fetched using high-resolution 512x512 WebP terrain tiles from **Mapterhorn**. 
 
 ### How it works
 1.  The application loads invisible elevation tiles onto an HTML5 Canvas element corresponding to the current map view.
 2.  When an analysis is triggered, the script reads pixel data (R, G, B) from the canvas.
-3.  Elevation is decoded using the formula: `(R * 256 + G + B / 256) - 32768`.
+3.  Elevation is decoded using the Terrarium formula: `(R * 256 + G + B / 256) - 32768`.
 4.  The algorithm iterates through the pixel data to find local maxima (peaks) or maximum differentials (climbs) based on the user's parameters.
+
+## Changelog
+
+* **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
+* **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
+* **v1.0:** Initial release.
 
 ## Privacy Policy
 
@@ -79,7 +85,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 * **Leaflet:** Interactive maps.
 * **OpenTopoMap:** Topographic map tiles.
 * **OpenStreetMap:** Map data and geocoding.
-* **Mapzen/Nextzen:** Terrain tiles.
+* **Mapterhorn:** High-resolution WebP elevation tiles.
 
 ## License
 
