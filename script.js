@@ -200,7 +200,7 @@ const layers = {
     "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
     "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
     "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, { 
-        attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a>',
+        attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
         maxZoom: 17 
     }),
     "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
