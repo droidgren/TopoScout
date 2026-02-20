@@ -65,6 +65,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
 * **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
 * **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
 * **v1.0:** Initial release.

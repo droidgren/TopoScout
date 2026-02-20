@@ -341,9 +341,16 @@ button {
 .icon-btn {
     background: #f8f9fa;
     border: 1px solid #ced4da;
-    padding: 0 10px;
+    padding: 0;
+    width: 32px;
+    height: 32px;
     font-size: 16px;
-    min-width: 40px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    margin: 0;
 }
 
 .icon-btn:hover {
@@ -354,15 +361,22 @@ button {
     display: flex;
     gap: 5px;
     margin-bottom: 5px;
+    align-items: center;
 }
 
 #searchInput {
     flex-grow: 1;
-    padding: 8px;
+    height: 32px;
+    padding: 0 8px;
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
+    line-height: normal;
     outline: none;
+    box-sizing: border-box;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .control-row {
@@ -379,11 +393,59 @@ button {
 }
 
 input[type="number"] {
-    width: 70px;
+    width: 40px;
+    height: 32px;
     padding: 6px;
     border: 1px solid #ccc;
-    border-radius: 6px;
-    text-align: right;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+.number-input-group {
+    display: flex;
+    align-items: center;
+}
+
+.num-btn {
+    width: 30px;
+    height: 32px;
+    background: #f8f9fa;
+    border: 1px solid #ccc;
+    color: #333;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.num-btn:hover {
+    background: #e2e6ea;
+}
+
+.num-btn:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.num-btn:last-child {
+    border-radius: 0 6px 6px 0;
 }
 
 .select-container {
