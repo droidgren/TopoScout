@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Elevation Finder</title>
-    
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <div id="crosshair"></div>
@@ -16,12 +18,16 @@
     <div id="info-modal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
-            
-            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area.<br>The application works on mobile devices, but is best experienced on larger screens.</p>
-            
-            <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; color: #555;">
-                
-                <div id="info-section-peaks" style="font-weight: 700; color: #333; margin-top: 5px;">Find Highest Points</div>
+
+            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent
+                within a given area.<br>The application works on mobile devices, but is best experienced on larger
+                screens.</p>
+
+            <div
+                style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; color: #555;">
+
+                <div id="info-section-peaks" style="font-weight: 700; color: #333; margin-top: 5px;">Find Highest Points
+                </div>
                 <ul style="padding-left: 20px; margin: 5px 0;">
                     <li id="info-help-radius">Radius: Set the size of the search area.</li>
                     <li id="info-help-points">Points: How many peaks to find.</li>
@@ -35,29 +41,50 @@
                     <li id="info-help-climbs">Num Climbs: How many climbs to find.</li>
                 </ul>
 
-                <p id="info-results-desc" style="margin-top:10px; font-style: italic; border-top: 1px solid #ddd; padding-top: 5px;">
+                <p id="info-results-desc"
+                    style="margin-top:10px; font-style: italic; border-top: 1px solid #ddd; padding-top: 5px;">
                     Results show rank, elevation, distance and coordinates.
                 </p>
             </div>
 
-            <p><strong><span id="info-creator">Creator</span>:</strong> <a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></p>
-            
+            <p><strong><span id="info-creator">Creator</span>:</strong> <a href="http://droidgren.github.io/"
+                    target="_blank">droidgren.github.io</a></p>
+
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">1.2</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">1.2.1</span>
             </p>
 
-            <details style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #555;">
-                <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;" id="info-changelog-title">Changelog</summary>
+            <details
+                style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #555;">
+                <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
+                    id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v1.2.1:</strong> Fixed incorrect results at zoom level 15+. Added toggleable water
+                        analysis in debug settings.</li>
                     <li><strong>v1.2:</strong> Migrated elevation tiles to Mapterhorn (512px resolution).</li>
-                    <li><strong>v1.1:</strong> Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.</li>
+                    <li><strong>v1.1:</strong> Added "Find Climbs" feature, Lantmäteriet map, and multi-language
+                        support.</li>
                     <li><strong>v1.0:</strong> Initial release.</li>
                 </ul>
             </details>
 
-            <p id="info-privacy" style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
+            <p id="info-privacy"
+                style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
                 This application is fully client-side. No data saved on server.
             </p>
+
+            <details
+                style="text-align: left; background: #f0f0f0; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #777;">
+                <summary style="font-weight: 600; color: #999; cursor: pointer; outline: none;" id="info-debug-title">
+                    Debug settings</summary>
+                <div style="margin-top: 8px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="water-analysis-toggle">
+                        <span id="lbl-water-analysis">Water analysis (filter water from results)</span>
+                    </label>
+                </div>
+            </details>
+
             <button id="info-close" class="save-btn" onclick="closeInfo()">Close</button>
         </div>
     </div>
@@ -93,7 +120,7 @@
         </div>
 
         <div id="controls-content">
-            
+
             <div style="margin-bottom: 10px;">
                 <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Map Layer:</span>
                 <div class="select-container">
@@ -106,7 +133,8 @@
                         <option value="satellite">Satellite (ESRI)</option>
                         <option value="debug">Elevation Data (Debug)</option>
                     </select>
-                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API" style="display:none;">🔑</button>
+                    <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API"
+                        style="display:none;">🔑</button>
                 </div>
             </div>
 
@@ -115,9 +143,9 @@
                 <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
                 <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
             </div>
-            
+
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
-            
+
             <div class="control-row">
                 <span id="lbl-radius" class="control-label">Search Radius (km):</span>
                 <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
@@ -127,13 +155,13 @@
                 <span id="lbl-points" class="control-label">Num Points:</span>
                 <input type="number" id="numPoints" value="3" min="1" max="50">
             </div>
-            
+
             <div class="checkbox-group">
                 <div class="checkbox-row">
                     <input type="checkbox" id="show-circle" checked>
                     <label id="lbl-show-circle" for="show-circle">Show Radius</label>
                 </div>
-                
+
                 <div class="checkbox-row">
                     <input type="checkbox" id="lock-circle">
                     <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
@@ -143,7 +171,7 @@
             <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
 
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
-            
+
             <div class="control-row">
                 <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
                 <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
@@ -157,7 +185,7 @@
             <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
 
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
-            
+
             <div class="footer-row">
                 <div id="status">Ready.</div>
                 <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
@@ -167,10 +195,11 @@
 
     <canvas id="analysis-canvas"></canvas>
     <canvas id="single-point-canvas" width="1" height="1"></canvas>
-    
+
     <div id="map"></div>
-    
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>

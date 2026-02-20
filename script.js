@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2.1";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -126,7 +126,9 @@ const translations = {
         res_climb: "Stigning",
         layer_lm_map: "Lantmäteriet",
         layer_satellite: "Satellit",
-        layer_debug: "Höjddata (Mapterhorn)"
+        layer_debug: "Höjddata (Mapterhorn)",
+        debug_settings: "Felsökningsinställningar",
+        lbl_water_analysis: "Vattenanalys (filtrera vatten från resultat)"
     },
     en: {
         title: "Elevation Finder",
@@ -187,11 +189,14 @@ const translations = {
         res_climb: "Ascent",
         layer_lm_map: "Lantmäteriet (Sweden)",
         layer_satellite: "Satellite",
-        layer_debug: "Elevation Data (Mapterhorn)"
+        layer_debug: "Elevation Data (Mapterhorn)",
+        debug_settings: "Debug settings",
+        lbl_water_analysis: "Water analysis (filter water from results)"
     }
 };
 
 let currentLang = localStorage.getItem('topo_lang') || 'en';
+let waterAnalysisEnabled = localStorage.getItem('topo_water_analysis') === 'true';
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
@@ -237,6 +242,8 @@ let isControlsMinimized = false;
 let currentLayer = null;
 let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
+let analysisZoom = null;
+let analysisNwOrigin = null;
 
 // Load saved position
 const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
@@ -307,6 +314,10 @@ function updateLanguage() {
         document.getElementById('app-version').textContent = APP_VERSION;
         if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
         document.getElementById('info-privacy').textContent = t.info_privacy;
+        if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
+        if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
+        const waterToggle = document.getElementById('water-analysis-toggle');
+        if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         document.getElementById('info-close').textContent = t.btn_close;
 
         document.getElementById('modal-save').textContent = t.btn_save;
@@ -565,7 +576,9 @@ async function fetchAnalysisData() {
 
     const bounds = map.getBounds();
     const zoom = Math.min(Math.floor(map.getZoom()), 14);
+    analysisZoom = zoom;
     const nw = map.project(bounds.getNorthWest(), zoom);
+    analysisNwOrigin = nw;
     const se = map.project(bounds.getSouthEast(), zoom);
     const tileMin = nw.divideBy(256).floor();
     const tileMax = se.divideBy(256).floor();
@@ -577,11 +590,12 @@ async function fetchAnalysisData() {
         }
     }
 
-    // Load both layers in parallel
-    await Promise.all([
-        loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw),
-        loadAndDrawTiles(WATER_CHECK_URL, waterCtx, tilesToLoad, nw)
-    ]);
+    // Load elevation tiles (and water tiles if enabled)
+    const tilePromises = [loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw)];
+    if (waterAnalysisEnabled) {
+        tilePromises.push(loadAndDrawTiles(WATER_CHECK_URL, waterCtx, tilesToLoad, nw));
+    }
+    await Promise.all(tilePromises);
 }
 
 async function analyzeTerrain() {
@@ -640,13 +654,19 @@ function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
     return Promise.all(promises);
 }
 
+// Convert canvas pixel position to lat/lng using the analysis zoom
+function canvasPointToLatLng(x, y) {
+    const pixelPoint = analysisNwOrigin.add(L.point(x, y));
+    return map.unproject(pixelPoint, analysisZoom);
+}
+
 function findPeaks() {
     const t = translations[currentLang];
     const w = canvas.width;
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
-    // Get data from the water canvas
-    const waterData = waterCtx.getImageData(0, 0, w, h).data;
+    // Get data from the water canvas (if enabled)
+    const waterData = waterAnalysisEnabled ? waterCtx.getImageData(0, 0, w, h).data : null;
 
     const searchCenterLatLng = getSearchCenter();
     const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
@@ -656,8 +676,8 @@ function findPeaks() {
             const i = (y * w + x) * 4;
             if (imgData[i + 3] < 255) continue;
 
-            // CHECK WATER
-            if (isWaterPixel(waterData[i], waterData[i + 1], waterData[i + 2])) {
+            // CHECK WATER (if enabled)
+            if (waterData && isWaterPixel(waterData[i], waterData[i + 1], waterData[i + 2])) {
                 continue; // Skip if it is water
             }
 
@@ -667,7 +687,7 @@ function findPeaks() {
     }
     const validPeaks = [];
     for (let p of candidates) {
-        const latlng = map.containerPointToLatLng([p.x, p.y]);
+        const latlng = canvasPointToLatLng(p.x, p.y);
         const dist = searchCenterLatLng.distanceTo(latlng);
         if (dist <= maxRadiusMeters) {
             p.dist = dist; p.lat = latlng.lat; p.lng = latlng.lng;
@@ -715,16 +735,16 @@ function calculateMaxClimb() {
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
 
-    // NEW: Get data from the water canvas
-    const waterData = waterCtx.getImageData(0, 0, w, h).data;
+    // Get data from the water canvas (if enabled)
+    const waterData = waterAnalysisEnabled ? waterCtx.getImageData(0, 0, w, h).data : null;
 
     const searchCenterLatLng = getSearchCenter();
     const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
     const climbDistMeters = parseFloat(climbDistInput.value) || 200;
     const maxResults = parseInt(numClimbsInput.value) || 1;
 
-    const p1 = map.latLngToContainerPoint(searchCenterLatLng);
-    const p2 = map.latLngToContainerPoint(moveLatLng(searchCenterLatLng, climbDistMeters, 0));
+    const p1 = map.project(searchCenterLatLng, analysisZoom);
+    const p2 = map.project(moveLatLng(searchCenterLatLng, climbDistMeters, 0), analysisZoom);
     const climbDistPx = Math.round(p1.distanceTo(p2));
 
     if (climbDistPx < 2) {
@@ -738,11 +758,11 @@ function calculateMaxClimb() {
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
 
-            // CHECK WATER AT START POINT
+            // CHECK WATER AT START POINT (if enabled)
             const i1 = (y * w + x) * 4;
-            if (isWaterPixel(waterData[i1], waterData[i1 + 1], waterData[i1 + 2])) continue;
+            if (waterData && isWaterPixel(waterData[i1], waterData[i1 + 1], waterData[i1 + 2])) continue;
 
-            const startLatLng = map.containerPointToLatLng([x, y]);
+            const startLatLng = canvasPointToLatLng(x, y);
             if (searchCenterLatLng.distanceTo(startLatLng) > searchRadiusMeters) continue;
 
             if (imgData[i1 + 3] < 255) continue;
@@ -756,9 +776,9 @@ function calculateMaxClimb() {
 
                 if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
 
-                    // CHECK WATER AT END POINT
+                    // CHECK WATER AT END POINT (if enabled)
                     const i2 = (y2 * w + x2) * 4;
-                    if (isWaterPixel(waterData[i2], waterData[i2 + 1], waterData[i2 + 2])) continue;
+                    if (waterData && isWaterPixel(waterData[i2], waterData[i2 + 1], waterData[i2 + 2])) continue;
 
                     if (imgData[i2 + 3] < 255) continue;
                     const h2 = (imgData[i2] * 256 + imgData[i2 + 1] + imgData[i2 + 2] / 256) - 32768;
@@ -768,7 +788,7 @@ function calculateMaxClimb() {
                         candidates.push({
                             diff: diff,
                             start: { x: x, y: y, h: h1, latlng: startLatLng },
-                            end: { x: x2, y: y2, h: h2, latlng: map.containerPointToLatLng([x2, y2]) }
+                            end: { x: x2, y: y2, h: h2, latlng: canvasPointToLatLng(x2, y2) }
                         });
                     }
                 }
@@ -884,6 +904,15 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     }
     updateUI();
 });
+
+const waterToggle = document.getElementById('water-analysis-toggle');
+if (waterToggle) {
+    waterToggle.checked = waterAnalysisEnabled;
+    waterToggle.addEventListener('change', (e) => {
+        waterAnalysisEnabled = e.target.checked;
+        localStorage.setItem('topo_water_analysis', waterAnalysisEnabled);
+    });
+}
 
 // Map Events
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
