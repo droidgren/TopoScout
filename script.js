@@ -33,7 +33,7 @@ const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPPDATERAD TILL MAPTERHORN
-const WORKER_URL = "https://lm.clackspark.workers.dev"; 
+const WORKER_URL = "https://lm.clackspark.workers.dev";
 
 // ==========================================
 // 2. DOM ELEMENT
@@ -109,7 +109,7 @@ const translations = {
         info_results_desc: "Resultaten visar ranking (Högst först), Höjd, Avstånd från centrum samt koordinater.",
         info_creator: "Skapare",
         lbl_version: "Version",
-		info_changelog_title: "Ändringslogg",
+        info_changelog_title: "Ändringslogg",
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
         btn_close: "Stäng",
         modal_api_title: "Ange API-nyckel för {service}",
@@ -124,7 +124,7 @@ const translations = {
         res_dist: "Avstånd",
         res_elev: "Höjd",
         res_climb: "Stigning",
-        layer_lm_map: "Lantmäteriet", 
+        layer_lm_map: "Lantmäteriet",
         layer_satellite: "Satellit",
         layer_debug: "Höjddata (Mapterhorn)"
     },
@@ -170,7 +170,7 @@ const translations = {
         info_results_desc: "Results show rank (Highest first), Elevation, Distance from center, and coordinates.",
         info_creator: "Creator",
         lbl_version: "Version",
-		info_changelog_title: "Changelog",
+        info_changelog_title: "Changelog",
         info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
         btn_close: "Close",
         modal_api_title: "Enter API Key for {service}",
@@ -185,7 +185,7 @@ const translations = {
         res_dist: "Distance",
         res_elev: "Elevation",
         res_climb: "Ascent",
-        layer_lm_map: "Lantmäteriet (Sweden)", 
+        layer_lm_map: "Lantmäteriet (Sweden)",
         layer_satellite: "Satellite",
         layer_debug: "Elevation Data (Mapterhorn)"
     }
@@ -201,9 +201,9 @@ const layers = {
     "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
     "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
     "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, { 
+    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, {
         attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
-        maxZoom: 17 
+        maxZoom: 17
     }),
     "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
     "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
@@ -234,8 +234,8 @@ let centerMarker = null;
 let isLocked = false;
 let lockedCenterCoords = null;
 let isControlsMinimized = false;
-let currentLayer = null; 
-let previousLayerValue = "opentopo"; 
+let currentLayer = null;
+let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
 
 // Ladda sparad position
@@ -244,13 +244,13 @@ const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
 const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
 let savedLayer = localStorage.getItem('topo_layer') || "opentopo";
 
-if(!layers[savedLayer]) {
+if (!layers[savedLayer]) {
     savedLayer = "opentopo";
 }
 
 // Skapa kartan
 const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
-L.control.zoom({position: 'bottomright'}).addTo(map);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 // ==========================================
 // 5. FUNKTIONER
@@ -258,8 +258,8 @@ L.control.zoom({position: 'bottomright'}).addTo(map);
 
 function isWaterPixel(r, g, b) {
     return Math.abs(r - WATER_COLOR.r) <= WATER_TOLERANCE &&
-           Math.abs(g - WATER_COLOR.g) <= WATER_TOLERANCE &&
-           Math.abs(b - WATER_COLOR.b) <= WATER_TOLERANCE;
+        Math.abs(g - WATER_COLOR.g) <= WATER_TOLERANCE &&
+        Math.abs(b - WATER_COLOR.b) <= WATER_TOLERANCE;
 }
 
 function updateLanguage() {
@@ -267,9 +267,9 @@ function updateLanguage() {
     const isEn = currentLang === 'en';
 
     const flagImg = document.getElementById('flag-icon');
-    if(flagImg) flagImg.src = isEn ? FLAG_GB : FLAG_SE;
+    if (flagImg) flagImg.src = isEn ? FLAG_GB : FLAG_SE;
 
-    if(document.getElementById('app-title')) {
+    if (document.getElementById('app-title')) {
         document.getElementById('app-title').textContent = t.title;
         document.title = t.title;
         document.getElementById('liveLabel').textContent = t.live_label;
@@ -283,13 +283,13 @@ function updateLanguage() {
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
         document.getElementById('climb-btn').textContent = t.btn_climb;
         document.getElementById('clear-btn').textContent = t.btn_clear;
-        
+
         document.getElementById('searchInput').placeholder = t.input_search_ph;
         document.getElementById('status').textContent = t.status_ready;
 
         document.getElementById('info-title').textContent = t.info_title;
         document.getElementById('info-desc').innerHTML = t.info_desc;
-        
+
         document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
         document.getElementById('info-help-radius').textContent = t.info_help_radius;
         document.getElementById('info-help-points').textContent = t.info_help_points;
@@ -299,13 +299,13 @@ function updateLanguage() {
         document.getElementById('info-section-climbs').textContent = t.info_section_climbs;
         document.getElementById('info-help-dist').textContent = t.info_help_dist;
         document.getElementById('info-help-climbs').textContent = t.info_help_climbs;
-        
+
         document.getElementById('info-results-desc').textContent = t.info_results_desc;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
         document.getElementById('app-version').textContent = APP_VERSION;
-	     if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
+        if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
         document.getElementById('info-privacy').textContent = t.info_privacy;
         document.getElementById('info-close').textContent = t.btn_close;
 
@@ -313,12 +313,12 @@ function updateLanguage() {
         document.getElementById('modal-cancel').textContent = t.btn_cancel;
         document.getElementById('api-key-input').placeholder = t.input_api_ph;
 
-        if(layerSelect) {
+        if (layerSelect) {
             for (let i = 0; i < layerSelect.options.length; i++) {
                 const val = layerSelect.options[i].value;
-                if(val === 'lm_map') layerSelect.options[i].text = t.layer_lm_map;
-                else if(val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
-                else if(val === 'debug') layerSelect.options[i].text = t.layer_debug;
+                if (val === 'lm_map') layerSelect.options[i].text = t.layer_lm_map;
+                else if (val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
+                else if (val === 'debug') layerSelect.options[i].text = t.layer_debug;
             }
         }
     }
@@ -336,16 +336,16 @@ function handleLayerChange(layerKey) {
     if (lockedServices[layerKey]) {
         const service = lockedServices[layerKey];
         const savedKey = localStorage.getItem(service.storageKey);
-        
+
         if (savedKey) {
             loadLockedLayer(layerKey, savedKey);
             switchLayerTo(layerKey);
-            if(editKeyBtn) editKeyBtn.style.display = 'block'; 
+            if (editKeyBtn) editKeyBtn.style.display = 'block';
         } else {
             showKeyModal(layerKey);
         }
     } else {
-        if(editKeyBtn) editKeyBtn.style.display = 'none';
+        if (editKeyBtn) editKeyBtn.style.display = 'none';
         switchLayerTo(layerKey);
     }
 }
@@ -353,7 +353,7 @@ function handleLayerChange(layerKey) {
 function switchLayerTo(layerKey) {
     if (currentLayer) map.removeLayer(currentLayer);
     currentLayer = layers[layerKey];
-    if(currentLayer) {
+    if (currentLayer) {
         map.addLayer(currentLayer);
         previousLayerValue = layerKey;
     }
@@ -371,11 +371,11 @@ function showKeyModal(layerKey) {
     const service = lockedServices[layerKey];
     if (!service) return;
     pendingServiceKey = layerKey;
-    
+
     const t = translations[currentLang];
     document.getElementById('modal-title').textContent = t.modal_api_title.replace('{service}', service.name);
     document.getElementById('modal-text').textContent = t.modal_api_text.replace('{service}', service.name);
-    
+
     const linkEl = document.getElementById('modal-link');
     linkEl.href = service.link;
     linkEl.textContent = service.link;
@@ -386,7 +386,7 @@ function showKeyModal(layerKey) {
 }
 
 function openCurrentKeyModal() {
-    if(layerSelect) {
+    if (layerSelect) {
         const currentVal = layerSelect.value;
         if (lockedServices[currentVal]) showKeyModal(currentVal);
     }
@@ -403,9 +403,9 @@ function saveApiKey() {
         localStorage.setItem(service.storageKey, key);
         loadLockedLayer(pendingServiceKey, key);
         switchLayerTo(pendingServiceKey);
-        
-        if(editKeyBtn) editKeyBtn.style.display = 'block';
-        if(layerSelect) layerSelect.value = pendingServiceKey;
+
+        if (editKeyBtn) editKeyBtn.style.display = 'block';
+        if (layerSelect) layerSelect.value = pendingServiceKey;
         document.getElementById('key-modal').style.display = 'none';
         pendingServiceKey = null;
     } else {
@@ -416,12 +416,12 @@ function saveApiKey() {
 function cancelApiKey() {
     document.getElementById('key-modal').style.display = 'none';
     pendingServiceKey = null;
-    
-    if(currentLayer === null) {
-        if(layerSelect) layerSelect.value = "opentopo";
+
+    if (currentLayer === null) {
+        if (layerSelect) layerSelect.value = "opentopo";
         handleLayerChange("opentopo");
     } else {
-        if(layerSelect) layerSelect.value = previousLayerValue;
+        if (layerSelect) layerSelect.value = previousLayerValue;
     }
 }
 
@@ -470,7 +470,7 @@ function locateUser() {
     );
 }
 
-window.clearResults = function() {
+window.clearResults = function () {
     markers.forEach(m => map.removeLayer(m));
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
@@ -478,7 +478,7 @@ window.clearResults = function() {
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
-window.copyCoords = function(lat, lng, btnElement) {
+window.copyCoords = function (lat, lng, btnElement) {
     navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
         const originalText = btnElement.innerText;
         btnElement.innerText = "✅";
@@ -489,41 +489,41 @@ window.copyCoords = function(lat, lng, btnElement) {
 function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
 
 function updateUI() {
-    if(!zoomLabel) return; 
+    if (!zoomLabel) return;
     zoomLabel.innerText = 'Zoom: ' + map.getZoom();
-    const searchCenter = getSearchCenter(); 
+    const searchCenter = getSearchCenter();
     const radiusKm = parseFloat(radiusInput.value) || 5;
-    
+
     if (searchCircle) map.removeLayer(searchCircle);
     if (centerMarker) map.removeLayer(centerMarker);
-    
-    centerMarker = L.circleMarker(searchCenter, { 
-        radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false 
+
+    centerMarker = L.circleMarker(searchCenter, {
+        radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false
     }).addTo(map);
 
     if (circleCheckbox.checked) {
-        searchCircle = L.circle(searchCenter, { 
-            color: isLocked ? '#e67e22' : '#007bff', fillColor: isLocked ? '#e67e22' : '#007bff', fillOpacity: 0.1, weight: 1, radius: radiusKm * 1000, interactive: false 
+        searchCircle = L.circle(searchCenter, {
+            color: '#007bff', fillColor: '#007bff', fillOpacity: isLocked ? 0 : 0.1, weight: 1, radius: radiusKm * 1000, interactive: false
         }).addTo(map);
     }
 }
 
 async function updateCenterElevation() {
-    if(!centerHeightDisplay) return;
+    if (!centerHeightDisplay) return;
     const center = map.getCenter();
-    if(scanBtn) scanBtn.disabled = true;
-    if(climbBtn) climbBtn.disabled = true;
-    centerHeightDisplay.textContent = "..."; 
-    
-    const zoom = Math.min(Math.floor(map.getZoom()), 14); 
+    if (scanBtn) scanBtn.disabled = true;
+    if (climbBtn) climbBtn.disabled = true;
+    centerHeightDisplay.textContent = "...";
+
+    const zoom = Math.min(Math.floor(map.getZoom()), 14);
     const point = map.project(center, zoom);
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
-    
+
     // UPPDATERAT: Eftersom Mapterhorn är 512x512 multiplicerar vi pixel-offset med 2
     const pixelX = Math.floor((point.x % 256) * 2);
     const pixelY = Math.floor((point.y % 256) * 2);
-    
+
     const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
 
     try {
@@ -532,19 +532,19 @@ async function updateCenterElevation() {
         img.src = url;
         img.onload = () => {
             spCtx.imageSmoothingEnabled = false; // UPPDATERAT: Stäng av smoothing
-            spCtx.clearRect(0,0,1,1);
+            spCtx.clearRect(0, 0, 1, 1);
             spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
             const pData = spCtx.getImageData(0, 0, 1, 1).data;
-            
+
             if (pData[3] === 0) { // UPPDATERAT: Hantera genomskinliga pixlar (ingen data)
                 centerHeightDisplay.textContent = "N/A";
             } else {
                 const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
                 centerHeightDisplay.textContent = Math.round(h) + " m";
             }
-            
-            if(scanBtn) scanBtn.disabled = false;
-            if(climbBtn) climbBtn.disabled = false;
+
+            if (scanBtn) scanBtn.disabled = false;
+            if (climbBtn) climbBtn.disabled = false;
         };
         img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
@@ -557,19 +557,19 @@ async function fetchAnalysisData() {
     canvas.height = size.y;
     waterCanvas.width = size.x;
     waterCanvas.height = size.y;
-    
-    ctx.imageSmoothingEnabled = false; 
+
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     waterCtx.imageSmoothingEnabled = false;
     waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
-    
+
     const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 14); 
+    const zoom = Math.min(Math.floor(map.getZoom()), 14);
     const nw = map.project(bounds.getNorthWest(), zoom);
     const se = map.project(bounds.getSouthEast(), zoom);
     const tileMin = nw.divideBy(256).floor();
     const tileMax = se.divideBy(256).floor();
-    
+
     const tilesToLoad = [];
     for (let x = tileMin.x; x <= tileMax.x; x++) {
         for (let y = tileMin.y; y <= tileMax.y; y++) {
@@ -587,10 +587,10 @@ async function fetchAnalysisData() {
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
-    if(scanBtn) scanBtn.disabled = true;
+    if (scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchAnalysisData(); 
+        await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             findPeaks();
@@ -606,10 +606,10 @@ async function analyzeTerrain() {
 async function findSteepestClimb() {
     const t = translations[currentLang];
     clearResults();
-    if(climbBtn) climbBtn.disabled = true;
+    if (climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
-        await fetchAnalysisData(); 
+        await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             calculateMaxClimb();
@@ -630,11 +630,11 @@ function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
             img.src = urlTemplate.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
             img.onload = () => {
                 const tilePos = new L.Point(t.x * 256, t.y * 256);
-                const offset = tilePos.subtract(nwPixelOrigin); 
+                const offset = tilePos.subtract(nwPixelOrigin);
                 targetCtx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
                 resolve();
             };
-            img.onerror = () => resolve(); 
+            img.onerror = () => resolve();
         });
     });
     return Promise.all(promises);
@@ -651,24 +651,24 @@ function findPeaks() {
     const searchCenterLatLng = getSearchCenter();
     const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
     let candidates = [];
-    for (let y = 0; y < h; y+=2) { 
-        for (let x = 0; x < w; x+=2) {
+    for (let y = 0; y < h; y += 2) {
+        for (let x = 0; x < w; x += 2) {
             const i = (y * w + x) * 4;
-            if (imgData[i+3] < 255) continue; 
-            
+            if (imgData[i + 3] < 255) continue;
+
             // KONTROLLERA VATTEN
-            if (isWaterPixel(waterData[i], waterData[i+1], waterData[i+2])) {
+            if (isWaterPixel(waterData[i], waterData[i + 1], waterData[i + 2])) {
                 continue; // Hoppa över om det är vatten
             }
 
-            const height = (imgData[i] * 256 + imgData[i+1] + imgData[i+2] / 256) - 32768;
+            const height = (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
             if (height > -50) candidates.push({ x, y, h: height });
         }
     }
     const validPeaks = [];
     for (let p of candidates) {
         const latlng = map.containerPointToLatLng([p.x, p.y]);
-        const dist = searchCenterLatLng.distanceTo(latlng); 
+        const dist = searchCenterLatLng.distanceTo(latlng);
         if (dist <= maxRadiusMeters) {
             p.dist = dist; p.lat = latlng.lat; p.lng = latlng.lng;
             validPeaks.push(p);
@@ -677,14 +677,14 @@ function findPeaks() {
     validPeaks.sort((a, b) => b.h - a.h);
     const finalPoints = [];
     const limit = parseInt(document.getElementById('numPoints').value) || 5;
-    const minPixelDist = 40; 
+    const minPixelDist = 40;
     for (let p of validPeaks) {
         if (finalPoints.length >= limit) break;
         let tooClose = false;
         for (let existing of finalPoints) {
             const dx = p.x - existing.x;
             const dy = p.y - existing.y;
-            if ((dx*dx + dy*dy) < (minPixelDist * minPixelDist)) { tooClose = true; break; }
+            if ((dx * dx + dy * dy) < (minPixelDist * minPixelDist)) { tooClose = true; break; }
         }
         if (!tooClose) finalPoints.push(p);
     }
@@ -693,9 +693,9 @@ function findPeaks() {
         const distKm = (p.dist / 1000).toFixed(2);
         const isHighest = (idx === 0);
         const markerOptions = isHighest ? { icon: goldIcon, zIndexOffset: 1000 } : {};
-        
+
         const popupContent = `
-            <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${t.res_rank} #${idx+1}</span>
+            <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${t.res_rank} #${idx + 1}</span>
             <span class="popup-height">${Math.round(p.h)} m</span>
             <span class="popup-meta">${t.res_dist}: ${distKm} km</span>
             <div class="coord-box">
@@ -714,14 +714,14 @@ function calculateMaxClimb() {
     const w = canvas.width;
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
-    
+
     // NYTT: Hämta data från vatten-canvasen
     const waterData = waterCtx.getImageData(0, 0, w, h).data;
 
     const searchCenterLatLng = getSearchCenter();
     const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
     const climbDistMeters = parseFloat(climbDistInput.value) || 200;
-    const maxResults = parseInt(numClimbsInput.value) || 1; 
+    const maxResults = parseInt(numClimbsInput.value) || 1;
 
     const p1 = map.latLngToContainerPoint(searchCenterLatLng);
     const p2 = map.latLngToContainerPoint(moveLatLng(searchCenterLatLng, climbDistMeters, 0));
@@ -737,34 +737,34 @@ function calculateMaxClimb() {
     const step = 4;
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
-            
+
             // KONTROLLERA VATTEN PÅ STARTPUNKTEN
             const i1 = (y * w + x) * 4;
-            if (isWaterPixel(waterData[i1], waterData[i1+1], waterData[i1+2])) continue;
+            if (isWaterPixel(waterData[i1], waterData[i1 + 1], waterData[i1 + 2])) continue;
 
             const startLatLng = map.containerPointToLatLng([x, y]);
             if (searchCenterLatLng.distanceTo(startLatLng) > searchRadiusMeters) continue;
 
-            if (imgData[i1+3] < 255) continue;
-            const h1 = (imgData[i1] * 256 + imgData[i1+1] + imgData[i1+2] / 256) - 32768;
+            if (imgData[i1 + 3] < 255) continue;
+            const h1 = (imgData[i1] * 256 + imgData[i1 + 1] + imgData[i1 + 2] / 256) - 32768;
 
-            const angles = 16; 
+            const angles = 16;
             for (let a = 0; a < angles; a++) {
                 const theta = (a / angles) * 2 * Math.PI;
                 const x2 = Math.round(x + climbDistPx * Math.cos(theta));
                 const y2 = Math.round(y + climbDistPx * Math.sin(theta));
 
                 if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
-                    
+
                     // KONTROLLERA VATTEN PÅ SLUTPUNKTEN
                     const i2 = (y2 * w + x2) * 4;
-                    if (isWaterPixel(waterData[i2], waterData[i2+1], waterData[i2+2])) continue;
+                    if (isWaterPixel(waterData[i2], waterData[i2 + 1], waterData[i2 + 2])) continue;
 
-                    if (imgData[i2+3] < 255) continue;
-                    const h2 = (imgData[i2] * 256 + imgData[i2+1] + imgData[i2+2] / 256) - 32768;
+                    if (imgData[i2 + 3] < 255) continue;
+                    const h2 = (imgData[i2] * 256 + imgData[i2 + 1] + imgData[i2 + 2] / 256) - 32768;
 
                     const diff = h2 - h1;
-                    if (diff > 1) { 
+                    if (diff > 1) {
                         candidates.push({
                             diff: diff,
                             start: { x: x, y: y, h: h1, latlng: startLatLng },
@@ -779,21 +779,21 @@ function calculateMaxClimb() {
     candidates.sort((a, b) => b.diff - a.diff);
 
     const finalResults = [];
-    const minPixelSeparation = 40; 
+    const minPixelSeparation = 40;
 
     for (let cand of candidates) {
         if (finalResults.length >= maxResults) break;
-        
+
         let tooClose = false;
         for (let existing of finalResults) {
             const dx = cand.start.x - existing.start.x;
             const dy = cand.start.y - existing.start.y;
-            if ((dx*dx + dy*dy) < (minPixelSeparation * minPixelSeparation)) {
+            if ((dx * dx + dy * dy) < (minPixelSeparation * minPixelSeparation)) {
                 tooClose = true;
                 break;
             }
         }
-        
+
         if (!tooClose) {
             finalResults.push(cand);
         }
@@ -803,9 +803,9 @@ function calculateMaxClimb() {
         finalResults.forEach((res, index) => {
             const rank = index + 1;
             const isWinner = (rank === 1);
-            
+
             const polyline = L.polyline([res.start.latlng, res.end.latlng], {
-                color: isWinner ? 'red' : '#ff7f50', 
+                color: isWinner ? 'red' : '#ff7f50',
                 weight: isWinner ? 5 : 3,
                 opacity: 0.8
             }).addTo(map);
@@ -844,7 +844,7 @@ function calculateMaxClimb() {
             const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
                 .bindPopup(endPopup);
             markers.push(endMarker);
-            
+
             if (isWinner) endMarker.openPopup();
         });
 
@@ -868,12 +868,12 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 // ==========================================
 
 // Event Listeners
-if(scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // LADE TILLBAKA DENNA Event Listener
-if(climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // LADE TILLBAKA DENNA Event Listener
-if(searchInput) searchInput.addEventListener("keypress", (e) => { if(e.key === "Enter") searchLocation(); });
-if(radiusInput) radiusInput.addEventListener('input', updateUI);
-if(circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
-if(lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
+if (scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // LADE TILLBAKA DENNA Event Listener
+if (climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // LADE TILLBAKA DENNA Event Listener
+if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
+if (radiusInput) radiusInput.addEventListener('input', updateUI);
+if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
+if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     isLocked = e.target.checked;
     if (isLocked) {
         lockedCenterCoords = map.getCenter();
@@ -898,7 +898,7 @@ map.on('moveend', () => { // Data sparas/hämtas vid slut av rörelse
 
 // Initiera
 updateLanguage();
-if(layerSelect) {
+if (layerSelect) {
     layerSelect.value = savedLayer;
 }
 handleLayerChange(savedLayer); // Nu är allt laddat, så detta fungerar!
