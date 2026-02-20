@@ -1,18 +1,18 @@
 // ==========================================
-// 1. KONFIGURATION & KONSTANTER
+// 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "1.1";
 
-// Vattenanalys (CartoDB Light No Labels)
+// Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
 const WATER_TOLERANCE = 25;
 const WATER_CHECK_URL = "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
 
-// Base64-flaggor
+// Base64 flags
 const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxMCI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjEwIiBmaWxsPSIjMDA2YWE3Ii8+PHJlY3QgeD0iNSIgd2lkdGg9IjIiIGhlaWdodD0iMTAiIGZpbGw9IiNmZWNjMDAiLz48cmVjdCB5PSI0IiB3aWR0aD0iMTYiIGhlaWdodD0iMiIgZmlsbD0iI2ZlY2MwMCIvPjwvc3ZnPg==";
 const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCAzMCI+PHBhdGggZmlsbD0iIzAxMjE2OSIgZD0iTTAgMGg2MHYzMEgwVjB6Ii8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEwIiBkPSJNMzAgMHYzME0wIDE1aDYwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0zMCAwdjMwTTAgMTVoNjAiLz48L3N2Zz4=";
 
-// Tjänster som kräver API-nycklar
+// Services requiring API keys
 const lockedServices = {
     'tracetrack': {
         name: 'Tracetrack Topo',
@@ -28,22 +28,22 @@ const lockedServices = {
     }
 };
 
-// Kart-URL:er
+// Map URLs
 const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPPDATERAD TILL MAPTERHORN
+const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev";
 
 // ==========================================
-// 2. DOM ELEMENT
+// 2. DOM ELEMENTS
 // ==========================================
 const canvas = document.getElementById('analysis-canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const spCanvas = document.getElementById('single-point-canvas');
 const spCtx = spCanvas.getContext('2d', { willReadFrequently: true });
 
-// Skapa en separat canvas för vattenanalys (visas ej i UI)
+// Create a separate canvas for water analysis (not shown in UI)
 const waterCanvas = document.createElement('canvas');
 const waterCtx = waterCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -64,7 +64,7 @@ const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
 
 // ==========================================
-// 3. SPRÅK & ÖVERSÄTTNINGAR
+// 3. LANGUAGE & TRANSLATIONS
 // ==========================================
 const translations = {
     sv: {
@@ -194,7 +194,7 @@ const translations = {
 let currentLang = localStorage.getItem('topo_lang') || 'en';
 
 // ==========================================
-// 4. KART- & VARIABELINITIERING
+// 4. MAP & VARIABLE INITIALIZATION
 // ==========================================
 
 const layers = {
@@ -210,7 +210,7 @@ const layers = {
     "debug": L.tileLayer(DATA_TILE_URL, { attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 })
 };
 
-// Ikoner
+// Icons
 const goldIcon = new L.Icon({
     iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -238,7 +238,7 @@ let currentLayer = null;
 let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
 
-// Ladda sparad position
+// Load saved position
 const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
 const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
 const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
@@ -248,12 +248,12 @@ if (!layers[savedLayer]) {
     savedLayer = "opentopo";
 }
 
-// Skapa kartan
+// Create the map
 const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 // ==========================================
-// 5. FUNKTIONER
+// 5. FUNCTIONS
 // ==========================================
 
 function isWaterPixel(r, g, b) {
@@ -520,7 +520,7 @@ async function updateCenterElevation() {
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
 
-    // UPPDATERAT: Eftersom Mapterhorn är 512x512 multiplicerar vi pixel-offset med 2
+    // UPDATED: Since Mapterhorn is 512x512 we multiply the pixel offset by 2
     const pixelX = Math.floor((point.x % 256) * 2);
     const pixelY = Math.floor((point.y % 256) * 2);
 
@@ -531,12 +531,12 @@ async function updateCenterElevation() {
         img.crossOrigin = "Anonymous";
         img.src = url;
         img.onload = () => {
-            spCtx.imageSmoothingEnabled = false; // UPPDATERAT: Stäng av smoothing
+            spCtx.imageSmoothingEnabled = false; // UPDATED: Disable smoothing
             spCtx.clearRect(0, 0, 1, 1);
             spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
             const pData = spCtx.getImageData(0, 0, 1, 1).data;
 
-            if (pData[3] === 0) { // UPPDATERAT: Hantera genomskinliga pixlar (ingen data)
+            if (pData[3] === 0) { // UPDATED: Handle transparent pixels (no data)
                 centerHeightDisplay.textContent = "N/A";
             } else {
                 const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
@@ -550,7 +550,7 @@ async function updateCenterElevation() {
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
 }
 
-// Uppdaterad funktion som hämtar både höjd- och vatten-tiles
+// Updated function that fetches both elevation and water tiles
 async function fetchAnalysisData() {
     const size = map.getSize();
     canvas.width = size.x;
@@ -577,7 +577,7 @@ async function fetchAnalysisData() {
         }
     }
 
-    // Ladda båda lagren parallellt
+    // Load both layers in parallel
     await Promise.all([
         loadAndDrawTiles(DATA_TILE_URL, ctx, tilesToLoad, nw),
         loadAndDrawTiles(WATER_CHECK_URL, waterCtx, tilesToLoad, nw)
@@ -621,7 +621,7 @@ async function findSteepestClimb() {
     }
 }
 
-// Generaliserad funktion
+// Generalized function
 function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
     const promises = tiles.map(t => {
         return new Promise((resolve) => {
@@ -645,7 +645,7 @@ function findPeaks() {
     const w = canvas.width;
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
-    // Hämta data från vatten-canvasen
+    // Get data from the water canvas
     const waterData = waterCtx.getImageData(0, 0, w, h).data;
 
     const searchCenterLatLng = getSearchCenter();
@@ -656,9 +656,9 @@ function findPeaks() {
             const i = (y * w + x) * 4;
             if (imgData[i + 3] < 255) continue;
 
-            // KONTROLLERA VATTEN
+            // CHECK WATER
             if (isWaterPixel(waterData[i], waterData[i + 1], waterData[i + 2])) {
-                continue; // Hoppa över om det är vatten
+                continue; // Skip if it is water
             }
 
             const height = (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
@@ -715,7 +715,7 @@ function calculateMaxClimb() {
     const h = canvas.height;
     const imgData = ctx.getImageData(0, 0, w, h).data;
 
-    // NYTT: Hämta data från vatten-canvasen
+    // NEW: Get data from the water canvas
     const waterData = waterCtx.getImageData(0, 0, w, h).data;
 
     const searchCenterLatLng = getSearchCenter();
@@ -738,7 +738,7 @@ function calculateMaxClimb() {
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
 
-            // KONTROLLERA VATTEN PÅ STARTPUNKTEN
+            // CHECK WATER AT START POINT
             const i1 = (y * w + x) * 4;
             if (isWaterPixel(waterData[i1], waterData[i1 + 1], waterData[i1 + 2])) continue;
 
@@ -756,7 +756,7 @@ function calculateMaxClimb() {
 
                 if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
 
-                    // KONTROLLERA VATTEN PÅ SLUTPUNKTEN
+                    // CHECK WATER AT END POINT
                     const i2 = (y2 * w + x2) * 4;
                     if (isWaterPixel(waterData[i2], waterData[i2 + 1], waterData[i2 + 2])) continue;
 
@@ -828,7 +828,7 @@ function calculateMaxClimb() {
                 .bindPopup(startPopup);
             markers.push(startMarker);
 
-            // TOPP POPUP
+            // PEAK POPUP
             const distEnd = searchCenter.distanceTo(res.end.latlng);
             const distKmEnd = (distEnd / 1000).toFixed(2);
             const endPopup = `
@@ -864,12 +864,12 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 }
 
 // ==========================================
-// 6. STARTA LOGIK (Event Listeners & Init)
+// 6. START LOGIC (Event Listeners & Init)
 // ==========================================
 
 // Event Listeners
-if (scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // LADE TILLBAKA DENNA Event Listener
-if (climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // LADE TILLBAKA DENNA Event Listener
+if (scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // ADDED BACK THIS Event Listener
+if (climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // ADDED BACK THIS Event Listener
 if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
 if (radiusInput) radiusInput.addEventListener('input', updateUI);
 if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
@@ -887,8 +887,8 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
 
 // Map Events
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
-map.on('move', () => { updateUI(); }); // UI (cirkel) uppdateras direkt
-map.on('moveend', () => { // Data sparas/hämtas vid slut av rörelse
+map.on('move', () => { updateUI(); }); // UI (circle) updates directly
+map.on('moveend', () => { // Data saved/fetched at end of movement
     const center = map.getCenter();
     localStorage.setItem('topo_lat', center.lat);
     localStorage.setItem('topo_lng', center.lng);
@@ -896,11 +896,11 @@ map.on('moveend', () => { // Data sparas/hämtas vid slut av rörelse
     updateCenterElevation();
 });
 
-// Initiera
+// Initialize
 updateLanguage();
 if (layerSelect) {
     layerSelect.value = savedLayer;
 }
-handleLayerChange(savedLayer); // Nu är allt laddat, så detta fungerar!
+handleLayerChange(savedLayer); // Now everything is loaded, so this works!
 updateUI();
 updateCenterElevation();
