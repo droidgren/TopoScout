@@ -236,17 +236,13 @@
 
     <div id="map"></div>
 
+    <div id="update-notification" class="notification-snackbar">
+        <span id="update-msg">A new version is available.</span>
+        <button id="update-btn">Update</button>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(registration => console.log('ServiceWorker registered'))
-                    .catch(error => console.log('ServiceWorker registration failed:', error));
-            });
-        }
-    </script>
 </body>
 
 </html>

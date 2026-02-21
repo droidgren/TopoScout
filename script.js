@@ -134,7 +134,9 @@ const translations = {
         debug_settings: "Felsökningsinställningar",
         lbl_water_analysis: "Vattenanalys (dölj vatten från resultat)",
         lbl_step_size: "Stigningssteg Upplösning (m):",
-        lbl_scan_angles: "Skanningsvinklar:"
+        lbl_scan_angles: "Skanningsvinklar:",
+        update_available: "En ny version finns tillgänglig.",
+        update_btn: "Uppdatera"
     },
     en: {
         title: "Elevation Finder",
@@ -203,7 +205,9 @@ const translations = {
         debug_settings: "Debug settings",
         lbl_water_analysis: "Water analysis (filter water from results)",
         lbl_step_size: "Climb Step Res. (m):",
-        lbl_scan_angles: "Scan Angles:"
+        lbl_scan_angles: "Scan Angles:",
+        update_available: "A new version is available.",
+        update_btn: "Update"
     }
 };
 
@@ -364,6 +368,13 @@ function updateLanguage() {
                 else if (val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
                 else if (val === 'debug') layerSelect.options[i].text = t.layer_debug;
             }
+        }
+
+        // Update notification text if visible
+        const updateSnackbar = document.getElementById('update-notification');
+        if (updateSnackbar) {
+            document.getElementById('update-msg').textContent = t.update_available;
+            document.getElementById('update-btn').textContent = t.update_btn;
         }
     }
 }
@@ -998,6 +1009,51 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 }
 
 // ==========================================
+// 5.1 SERVICE WORKER & UPDATES
+// ==========================================
+let newWorker;
+function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.register('./service-worker.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+            newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    showUpdateNotification();
+                }
+            });
+        });
+    });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        window.location.reload();
+        refreshing = true;
+    });
+}
+
+function showUpdateNotification() {
+    const t = translations[currentLang];
+    const snackbar = document.getElementById('update-notification');
+    const msg = document.getElementById('update-msg');
+    const btn = document.getElementById('update-btn');
+
+    if (snackbar && msg && btn) {
+        msg.textContent = t.update_available;
+        btn.textContent = t.update_btn;
+        snackbar.classList.add('show');
+
+        btn.onclick = () => {
+            if (newWorker) {
+                newWorker.postMessage({ action: 'skipWaiting' });
+            }
+        };
+    }
+}
+
+// ==========================================
 // 6. START LOGIC (Event Listeners & Init)
 // ==========================================
 
@@ -1059,6 +1115,7 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
 
 // Initialize
 updateLanguage();
+initServiceWorker();
 if (layerSelect) {
     layerSelect.value = savedLayer;
 }

@@ -566,3 +566,48 @@ details[open] summary {
     border-bottom: 1px solid #ddd;
     padding-bottom: 5px;
 }
+
+/* --- UPDATE NOTIFICATION --- */
+.notification-snackbar {
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%) translateY(150%);
+    background: rgba(33, 33, 33, 0.95);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 9999;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: max-content;
+    max-width: 90vw;
+}
+
+.notification-snackbar.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification-snackbar span {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.notification-snackbar button {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.notification-snackbar button:hover {
+    background-color: #1976D2;
+}
