@@ -1,6 +1,6 @@
 {
   "name": "Elevation Finder",
-  "short_name": "Elevation Finder",
+  "short_name": "Elevation Finder 1.4",
   "description": "Find highest points and calculate maximum ascent within a given area.",
   "start_url": "./index.html",
   "display": "standalone",
