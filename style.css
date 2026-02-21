@@ -512,6 +512,7 @@ select {
 }
 
 .coord-box {
+    margin-top: 6px;
     background: #f1f3f5;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -545,14 +546,14 @@ select {
     color: #d9534f;
     font-weight: 800;
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
 }
 
 .popup-meta {
     font-size: 11px;
     color: #666;
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 1px;
 }
 
 /* CHANGELOG ACCORDION */

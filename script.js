@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -113,7 +113,7 @@ const translations = {
         info_privacy: "Denna applikation är helt klientbaserad. Det innebär att den körs direkt i din webbläsare och ingen data eller sökningar sparas på någon server.",
         btn_close: "Stäng",
         modal_api_title: "Ange API-nyckel för {service}",
-        modal_api_text: "För att använda {service} behöver du en API-nyckel. Detta kan du skaffa kostnadsfritt genom att registrera dig på länken nedan.",
+        modal_api_text: "För att använda {service} behöver du en API-nyckel. Du kan skaffa en gratis genom att registrera dig på länken nedan.",
         input_api_ph: "Klistra in din nyckel här...",
         btn_save: "Spara",
         btn_cancel: "Avbryt",
@@ -122,13 +122,19 @@ const translations = {
         res_start: "Start",
         res_peak: "Topp",
         res_dist: "Avstånd",
+        res_dist_center: "Avstånd från centrum",
+        res_dist_start_end: "Sträcka Start→Mål",
         res_elev: "Höjd",
-        res_climb: "Stigning",
+        res_climb: "Total stigning",
+        res_vertical_drop: "Fallhöjd",
+        res_slope: "Lutning",
         layer_lm_map: "Lantmäteriet",
         layer_satellite: "Satellit",
         layer_debug: "Höjddata (Mapterhorn)",
         debug_settings: "Felsökningsinställningar",
-        lbl_water_analysis: "Vattenanalys (filtrera vatten från resultat)"
+        lbl_water_analysis: "Vattenanalys (dölj vatten från resultat)",
+        lbl_step_size: "Stigningssteg Upplösning (m):",
+        lbl_scan_angles: "Skanningsvinklar:"
     },
     en: {
         title: "Elevation Finder",
@@ -185,18 +191,26 @@ const translations = {
         res_start: "Start",
         res_peak: "Peak",
         res_dist: "Distance",
+        res_dist_center: "Distance from center",
+        res_dist_start_end: "Distance Start→End",
         res_elev: "Elevation",
-        res_climb: "Ascent",
+        res_climb: "Total Ascent",
+        res_vertical_drop: "Vertical drop",
+        res_slope: "Slope",
         layer_lm_map: "Lantmäteriet (Sweden)",
         layer_satellite: "Satellite",
         layer_debug: "Elevation Data (Mapterhorn)",
         debug_settings: "Debug settings",
-        lbl_water_analysis: "Water analysis (filter water from results)"
+        lbl_water_analysis: "Water analysis (filter water from results)",
+        lbl_step_size: "Climb Step Res. (m):",
+        lbl_scan_angles: "Scan Angles:"
     }
 };
 
 let currentLang = localStorage.getItem('topo_lang') || 'en';
 let waterAnalysisEnabled = localStorage.getItem('topo_water_analysis') === 'true';
+let climbStepRes = parseInt(localStorage.getItem('topo_step_size')) || 10;
+let climbScanAngles = parseInt(localStorage.getItem('topo_scan_angles')) || 32;
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
@@ -329,8 +343,14 @@ function updateLanguage() {
         document.getElementById('info-privacy').textContent = t.info_privacy;
         if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
+        if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
+        if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
+        const stepInput = document.getElementById('stepSizeInput');
+        if (stepInput) stepInput.value = climbStepRes;
+        const anglesInput = document.getElementById('scanAnglesInput');
+        if (anglesInput) anglesInput.value = climbScanAngles;
         document.getElementById('info-close').textContent = t.btn_close;
 
         document.getElementById('modal-save').textContent = t.btn_save;
@@ -785,6 +805,17 @@ function calculateMaxClimb() {
 
     let candidates = [];
 
+    // Optimize: Pre-calculate angle offsets so we aren't running Math.sin/cos millions of times
+    const angles = parseInt(document.getElementById('scanAnglesInput').value) || 32;
+    const angleOffsets = [];
+    for (let a = 0; a < angles; a++) {
+        const theta = (a / angles) * 2 * Math.PI;
+        angleOffsets.push({
+            dx: climbDistPx * Math.cos(theta),
+            dy: climbDistPx * Math.sin(theta)
+        });
+    }
+
     const step = 4;
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
@@ -799,11 +830,9 @@ function calculateMaxClimb() {
             if (imgData[i1 + 3] < 255) continue;
             const h1 = (imgData[i1] * 256 + imgData[i1 + 1] + imgData[i1 + 2] / 256) - 32768;
 
-            const angles = 16;
             for (let a = 0; a < angles; a++) {
-                const theta = (a / angles) * 2 * Math.PI;
-                const x2 = Math.round(x + climbDistPx * Math.cos(theta));
-                const y2 = Math.round(y + climbDistPx * Math.sin(theta));
+                const x2 = Math.round(x + angleOffsets[a].dx);
+                const y2 = Math.round(y + angleOffsets[a].dy);
 
                 if (x2 >= 0 && x2 < w && y2 >= 0 && y2 < h) {
 
@@ -814,10 +843,55 @@ function calculateMaxClimb() {
                     if (imgData[i2 + 3] < 255) continue;
                     const h2 = (imgData[i2] * 256 + imgData[i2 + 1] + imgData[i2 + 2] / 256) - 32768;
 
-                    const diff = h2 - h1;
-                    if (diff > 1) {
+                    // Calculate cumulative ascent along the path
+                    // We take steps based on user defined resolution (default 10m)
+                    const res = parseInt(document.getElementById('stepSizeInput').value) || 10;
+                    const numSteps = Math.max(1, Math.floor(climbDistMeters / res));
+                    let cumulativeAscent = 0;
+
+                    let validPath = true;
+
+                    // Sample all elevations along the path first
+                    const elevations = [h1];
+                    for (let s = 1; s <= numSteps; s++) {
+                        const fraction = s / numSteps;
+                        const sx = Math.round(x + (x2 - x) * fraction);
+                        const sy = Math.round(y + (y2 - y) * fraction);
+
+                        const si = (sy * w + sx) * 4;
+                        if (imgData[si + 3] < 255) {
+                            validPath = false;
+                            break;
+                        }
+
+                        const sh = (imgData[si] * 256 + imgData[si + 1] + imgData[si + 2] / 256) - 32768;
+                        elevations.push(sh);
+                    }
+
+                    if (!validPath) continue;
+
+                    // Apply 3-sample moving average to filter noise
+                    const smoothed = [];
+                    for (let i = 0; i < elevations.length; i++) {
+                        if (i === 0) {
+                            smoothed.push((elevations[0] + elevations[1]) / 2);
+                        } else if (i === elevations.length - 1) {
+                            smoothed.push((elevations[i - 1] + elevations[i]) / 2);
+                        } else {
+                            smoothed.push((elevations[i - 1] + elevations[i] + elevations[i + 1]) / 3);
+                        }
+                    }
+
+                    // Sum only positive elevation changes
+                    for (let i = 1; i < smoothed.length; i++) {
+                        if (smoothed[i] > smoothed[i - 1]) {
+                            cumulativeAscent += (smoothed[i] - smoothed[i - 1]);
+                        }
+                    }
+
+                    if (cumulativeAscent > 1) {
                         candidates.push({
-                            diff: diff,
+                            diff: cumulativeAscent,
                             start: { x: x, y: y, h: h1, latlng: startLatLng },
                             end: { x: x2, y: y2, h: h2, latlng: canvasPointToLatLng(x2, y2) }
                         });
@@ -862,14 +936,20 @@ function calculateMaxClimb() {
             }).addTo(map);
             polylines.push(polyline);
 
-            // START POPUP
+            // Compute shared climb stats
             const searchCenter = getSearchCenter();
+            const distStartEnd = res.start.latlng.distanceTo(res.end.latlng);
+            const distStartEndStr = distStartEnd >= 1000 ? (distStartEnd / 1000).toFixed(2) + ' km' : Math.round(distStartEnd) + ' m';
+            const verticalDrop = Math.round(res.end.h - res.start.h);
+            const slopePercent = distStartEnd > 0 ? ((verticalDrop / distStartEnd) * 100).toFixed(1) : 0;
+
+            // START POPUP
             const distStart = searchCenter.distanceTo(res.start.latlng);
             const distKmStart = (distStart / 1000).toFixed(2);
             const startPopup = `
                 <span class="popup-header">${t.res_rank} #${rank} (${t.res_start})</span>
                 <span class="popup-height">${t.res_elev}: ${Math.round(res.start.h)} m</span>
-                <span class="popup-meta">${t.res_dist}: ${distKmStart} km</span>
+                <span class="popup-meta">${t.res_dist_center}: ${distKmStart} km</span>
                 <div class="coord-box">
                     <span>${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}</span>
                     <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
@@ -884,9 +964,12 @@ function calculateMaxClimb() {
             const distKmEnd = (distEnd / 1000).toFixed(2);
             const endPopup = `
                 <span class="popup-header" style="${isWinner ? 'color:#b8860b' : ''}">${t.res_rank} #${rank} (${t.res_peak})</span>
-                <span class="popup-height">${t.res_elev}: ${Math.round(res.end.h)} m</span>
-                <span class="popup-meta">${t.res_climb}: +${Math.round(res.diff)} m</span>
-                <span class="popup-meta">${t.res_dist}: ${distKmEnd} km</span>
+                <span class="popup-height">${t.res_climb}: +${Math.round(res.diff)} m</span>
+                <span class="popup-meta">${t.res_elev}: ${Math.round(res.end.h)} m</span>
+                <span class="popup-meta">${t.res_vertical_drop}: ${verticalDrop >= 0 ? '+' : ''}${verticalDrop} m</span>
+                <span class="popup-meta">${t.res_dist_start_end}: ${distStartEndStr}</span>
+                <span class="popup-meta">${t.res_slope}: ${slopePercent}%</span>
+                <span class="popup-meta">${t.res_dist_center}: ${distKmEnd} km</span>
                 <div class="coord-box">
                     <span>${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}</span>
                     <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
@@ -942,6 +1025,24 @@ if (waterToggle) {
     waterToggle.addEventListener('change', (e) => {
         waterAnalysisEnabled = e.target.checked;
         localStorage.setItem('topo_water_analysis', waterAnalysisEnabled);
+    });
+}
+
+const stepInput = document.getElementById('stepSizeInput');
+if (stepInput) {
+    stepInput.value = climbStepRes;
+    stepInput.addEventListener('change', (e) => {
+        climbStepRes = parseInt(e.target.value) || 10;
+        localStorage.setItem('topo_step_size', climbStepRes);
+    });
+}
+
+const anglesInput = document.getElementById('scanAnglesInput');
+if (anglesInput) {
+    anglesInput.value = climbScanAngles;
+    anglesInput.addEventListener('change', (e) => {
+        climbScanAngles = parseInt(e.target.value) || 32;
+        localStorage.setItem('topo_scan_angles', climbScanAngles);
     });
 }
 

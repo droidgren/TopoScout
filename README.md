@@ -10,7 +10,8 @@ To access the webapp go here: https://droidgren.github.io/elevation_finder/
 
 * **Real-time Elevation:** Displays the elevation above sea level for the map center dynamically.
 * **Peak Finding:** Scans a user-defined radius to identify and rank the highest points in the area.
-* **Climb Analysis:** Calculates the steepest ascent over a specific distance (e.g., max elevation gain over 200m), useful for hikers and cyclists.
+* **Climb Analysis:** Calculates true cumulative elevation gain (Total Ascent) over a specific distance by sampling terrain in 10m steps.
+* **Detailed Stats:** Climb results include vertical drop, slope percentage, and straight-line distance.
 * **Multiple Map Layers:**
     * OpenTopoMap (Default)
     * OpenStreetMap
@@ -65,6 +66,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.
 * **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
 * **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
 * **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
