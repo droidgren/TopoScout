@@ -588,14 +588,16 @@ async function updateCenterElevation() {
     if (climbBtn) climbBtn.disabled = true;
     centerHeightDisplay.textContent = "...";
 
-    const zoom = Math.min(Math.floor(map.getZoom()), 14);
+    const zoom = Math.min(Math.floor(map.getZoom()), 15);
     const point = map.project(center, zoom);
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
 
-    // UPDATED: Since Mapterhorn is 512x512 we multiply the pixel offset by 2
-    const pixelX = Math.floor((point.x % 256) * 2);
-    const pixelY = Math.floor((point.y % 256) * 2);
+
+
+    // Correct Update: offset within the 256-unit tile grid, scaled to 512px tile
+    const pixelX = Math.floor((point.x - tileX * 256) * 2);
+    const pixelY = Math.floor((point.y - tileY * 256) * 2);
 
     const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
 
@@ -637,7 +639,7 @@ async function fetchAnalysisData() {
     waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
 
     const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 14);
+    const zoom = Math.min(Math.floor(map.getZoom()), 15);
     analysisZoom = zoom;
     const nw = map.project(bounds.getNorthWest(), zoom);
     analysisNwOrigin = nw;
