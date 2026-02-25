@@ -64,6 +64,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v1.5:</strong> Added PWA install button in the info modal and a mobile install prompt bar.</li>
                     <li><strong>v1.4:</strong> Improved 'Find Climbs' accuracy with cumulative ascent, noise filtering,
                         and higher scan resolution. Added detailed climb stats (Drop, Slope, Distance) and new debug
                         settings.</li>
@@ -82,6 +83,8 @@
                 style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
                 This application is fully client-side. No data saved on server.
             </p>
+
+            <button id="install-app-btn" onclick="triggerInstallPrompt()" style="display:none;">📲 Install as App</button>
 
             <details
                 style="text-align: left; background: #f0f0f0; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #777;">
@@ -239,6 +242,12 @@
     <div id="update-notification" class="notification-snackbar">
         <span id="update-msg">A new version is available.</span>
         <button id="update-btn">Update</button>
+    </div>
+
+    <div id="mobile-install-bar" class="notification-snackbar">
+        <span id="mobile-install-msg">Install Elevation Finder as an app!</span>
+        <button id="mobile-install-btn" onclick="triggerInstallPrompt()">Install</button>
+        <button id="mobile-install-dismiss" onclick="dismissInstallBar()">✕</button>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
