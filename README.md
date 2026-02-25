@@ -16,8 +16,10 @@ To access the webapp go here: https://droidgren.github.io/elevation_finder/
     * OpenTopoMap (Default)
     * OpenStreetMap
     * Satellite (ESRI)
+    * Lantmäteriet (Sweden)
     * Elevation Data (Debug view)
     * *Optional:* Tracetrack and Thunderforest (requires API keys).
+* **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
 * **Geolocation:** Quickly locate your current position.
 * **Address Search:** Integrated search using Nominatim (OSM).
 * **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser.
@@ -53,6 +55,7 @@ This project is ready to be hosted on GitHub Pages or any static web server (Apa
     * Click **Find Highest Points** to scan the visible area for peaks.
     * Click **Find Climbs** to identify the steepest sections.
 4.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
+5.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
 
 ## Technical Details
 
@@ -66,8 +69,10 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
 * **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.
 * **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
+* **v1.2.1:** Fixed incorrect results at zoom level 15+. Added toggleable water analysis in debug settings.
 * **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
 * **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
 * **v1.0:** Initial release.
