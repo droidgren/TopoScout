@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elevation-finder-v1.4.5';
+const CACHE_NAME = 'elevation-finder-v1.4.6';
 const ASSETS = [
     './',
     './index.html',
@@ -13,6 +13,20 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll(ASSETS);
         })
+    );
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    if (cacheName !== CACHE_NAME) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
     );
 });
 
