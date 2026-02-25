@@ -136,7 +136,10 @@ const translations = {
         lbl_step_size: "Stigningssteg Upplösning (m):",
         lbl_scan_angles: "Skanningsvinklar:",
         update_available: "En ny version finns tillgänglig.",
-        update_btn: "Uppdatera"
+        update_btn: "Uppdatera",
+        btn_install_app: "📲 Installera som app",
+        mobile_install_msg: "Installera Höjdsökaren som app!",
+        btn_install: "Installera"
     },
     en: {
         title: "Elevation Finder",
@@ -207,7 +210,10 @@ const translations = {
         lbl_step_size: "Climb Step Res. (m):",
         lbl_scan_angles: "Scan Angles:",
         update_available: "A new version is available.",
-        update_btn: "Update"
+        update_btn: "Update",
+        btn_install_app: "📲 Install as App",
+        mobile_install_msg: "Install Elevation Finder as an app!",
+        btn_install: "Install"
     }
 };
 
@@ -275,6 +281,7 @@ let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
 let analysisZoom = null;
 let analysisNwOrigin = null;
+let deferredInstallPrompt = null;
 
 // Load saved position
 const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
@@ -376,6 +383,14 @@ function updateLanguage() {
             document.getElementById('update-msg').textContent = t.update_available;
             document.getElementById('update-btn').textContent = t.update_btn;
         }
+
+        // Install button and mobile install bar
+        const installBtn = document.getElementById('install-app-btn');
+        if (installBtn) installBtn.textContent = t.btn_install_app;
+        const installMsg = document.getElementById('mobile-install-msg');
+        if (installMsg) installMsg.textContent = t.mobile_install_msg;
+        const mobileInstallBtn = document.getElementById('mobile-install-btn');
+        if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
     }
 }
 
@@ -1054,6 +1069,50 @@ function showUpdateNotification() {
         };
     }
 }
+
+function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (window.innerWidth <= 600 && 'ontouchstart' in window);
+}
+
+function triggerInstallPrompt() {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(() => {
+        deferredInstallPrompt = null;
+        const installBtn = document.getElementById('install-app-btn');
+        if (installBtn) installBtn.style.display = 'none';
+        const mobileBar = document.getElementById('mobile-install-bar');
+        if (mobileBar) mobileBar.classList.remove('show');
+    });
+}
+
+function dismissInstallBar() {
+    localStorage.setItem('topo_install_dismissed', '1');
+    const mobileBar = document.getElementById('mobile-install-bar');
+    if (mobileBar) mobileBar.classList.remove('show');
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const installBtn = document.getElementById('install-app-btn');
+    if (installBtn) installBtn.style.display = 'block';
+    if (isMobileDevice() && !localStorage.getItem('topo_install_dismissed')) {
+        setTimeout(() => {
+            const mobileBar = document.getElementById('mobile-install-bar');
+            if (mobileBar) mobileBar.classList.add('show');
+        }, 1500);
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    const installBtn = document.getElementById('install-app-btn');
+    if (installBtn) installBtn.style.display = 'none';
+    const mobileBar = document.getElementById('mobile-install-bar');
+    if (mobileBar) mobileBar.classList.remove('show');
+});
 
 // ==========================================
 // 6. START LOGIC (Event Listeners & Init)
