@@ -16,8 +16,10 @@ To access the webapp go here: https://droidgren.github.io/elevation_finder/
     * OpenTopoMap (Default)
     * OpenStreetMap
     * Satellite (ESRI)
+    * Lantmäteriet (Sweden)
     * Elevation Data (Debug view)
     * *Optional:* Tracetrack and Thunderforest (requires API keys).
+* **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
 * **Geolocation:** Quickly locate your current position.
 * **Address Search:** Integrated search using Nominatim (OSM).
 * **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser.
@@ -53,21 +55,41 @@ This project is ready to be hosted on GitHub Pages or any static web server (Apa
     * Click **Find Highest Points** to scan the visible area for peaks.
     * Click **Find Climbs** to identify the steepest sections.
 4.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
+5.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
 
 ## Technical Details
 
 This application uses **Leaflet.js** for map rendering. Elevation data is fetched using high-resolution 512x512 WebP terrain tiles from **Mapterhorn**. 
 
-### How it works
-1.  The application loads invisible elevation tiles onto an HTML5 Canvas element corresponding to the current map view.
-2.  When an analysis is triggered, the script reads pixel data (R, G, B) from the canvas.
-3.  Elevation is decoded using the Terrarium formula: `(R * 256 + G + B / 256) - 32768`.
-4.  The algorithm iterates through the pixel data to find local maxima (peaks) or maximum differentials (climbs) based on the user's parameters.
+### Shared foundation
+1.  Elevation tiles are silently rendered onto a hidden HTML5 Canvas element that covers the current map view.
+2.  When an analysis is triggered, the script reads raw pixel data (R, G, B, A) from that canvas.
+3.  Each pixel's elevation (in metres) is decoded using the **Terrarium formula**: `(R × 256 + G + B / 256) − 32768`.
+4.  If **Water Analysis** is enabled, a second canvas is populated with OpenStreetMap water tiles; pixels that match a water colour are excluded from results.
+
+### Find Highest Points
+1.  Every second pixel (2-pixel step) within the canvas is decoded to an elevation value.
+2.  Only pixels that fall inside the user-defined **search radius** (measured from the map centre) are kept as candidates.
+3.  Candidates are sorted by elevation in descending order.
+4.  A **minimum separation filter** (40 px ≈ a few hundred metres depending on zoom) removes points that are too close together, ensuring spatially diverse results.
+5.  The top **N** results (as set by *Num Points*) are placed as numbered markers on the map.
+
+### Find Climbs
+1.  Candidate **start points** are sampled on a 4-pixel grid across the visible canvas, filtered to those within the search radius.
+2.  For each start point, **N evenly-spaced angles** are scanned (default 32, covering the full 360°). An end point is projected at exactly the user-defined **Measure Dist** distance in each direction.
+3.  Each start→end path is walked in steps of **climbStepRes** metres (default 10 m). The elevation at every step is read from the canvas using the Terrarium formula.
+4.  A **3-sample moving average** is applied to the elevation profile to suppress tile-level noise.
+5.  **Cumulative ascent** is calculated by summing only the positive elevation differences between consecutive smoothed samples — downhill sections are ignored.
+6.  Candidates with cumulative ascent > 1 m are sorted in descending order.
+7.  The same 40-px **minimum separation filter** is applied to avoid duplicate nearby results.
+8.  The top **N** climbs (as set by *Num Climbs*) are drawn as polylines on the map, with start and peak markers showing elevation, total ascent, slope %, and straight-line distance.
 
 ## Changelog
 
+* **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
 * **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.
 * **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
+* **v1.2.1:** Fixed incorrect results at zoom level 15+. Added toggleable water analysis in debug settings.
 * **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
 * **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
 * **v1.0:** Initial release.
