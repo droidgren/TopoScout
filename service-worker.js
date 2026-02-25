@@ -1,11 +1,13 @@
-const CACHE_NAME = 'elevation-finder-v1.5';
+const CACHE_NAME = 'elevation-finder-v1.6';
 const ASSETS = [
     './',
     './index.html',
     './style.css',
     './script.js',
     './manifest.json',
-    './icon.svg'
+    './icon.svg',
+    './lang/en.js',
+    './lang/sv.js'
 ];
 
 self.addEventListener('install', (event) => {
