@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elevation-finder-v1.4.6';
+const CACHE_NAME = 'elevation-finder-v1.5';
 const ASSETS = [
     './',
     './index.html',
