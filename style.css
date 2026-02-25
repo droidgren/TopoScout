@@ -611,3 +611,37 @@ details[open] summary {
 .notification-snackbar button:hover {
     background-color: #1976D2;
 }
+
+/* --- INSTALL BUTTON --- */
+#install-app-btn {
+    display: none;
+    width: 100%;
+    background-color: #2196F3;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    margin: 10px 0;
+}
+
+#install-app-btn:hover {
+    background-color: #1976D2;
+}
+
+/* --- MOBILE INSTALL BAR dismiss button --- */
+#mobile-install-dismiss {
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    padding: 2px 6px !important;
+    font-size: 15px !important;
+    border-radius: 50% !important;
+    line-height: 1;
+}
+
+#mobile-install-dismiss:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: white !important;
+}
