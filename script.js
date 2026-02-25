@@ -1115,6 +1115,13 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
     updateCenterElevation();
 });
 
+// Minimize controls on mobile when clicking the map
+map.on('click', () => {
+    if (window.innerWidth <= 600 && !isControlsMinimized) {
+        toggleControls();
+    }
+});
+
 // Initialize
 updateLanguage();
 initServiceWorker();
