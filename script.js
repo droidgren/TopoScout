@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.6";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -189,17 +189,8 @@ function updateLanguage() {
         document.getElementById('info-title').textContent = t.info_title;
         document.getElementById('info-desc').innerHTML = t.info_desc;
 
-        document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
-        document.getElementById('info-help-radius').textContent = t.info_help_radius;
-        document.getElementById('info-help-points').textContent = t.info_help_points;
-        document.getElementById('info-help-show-radius').textContent = t.info_help_show_radius;
-        document.getElementById('info-help-lock-radius').textContent = t.info_help_lock_radius;
-
-        document.getElementById('info-section-climbs').textContent = t.info_section_climbs;
-        document.getElementById('info-help-dist').textContent = t.info_help_dist;
-        document.getElementById('info-help-climbs').textContent = t.info_help_climbs;
-
-        document.getElementById('info-results-desc').textContent = t.info_results_desc;
+        const tutBtn = document.getElementById('start-tutorial-btn');
+        if (tutBtn) tutBtn.textContent = t.btn_tutorial;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
@@ -969,6 +960,133 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ==========================================
+// 5b. TUTORIAL ENGINE
+// ==========================================
+
+let tutorialStep = 0;
+let _tutorialOverlayClickHandler = null;
+
+const tutorialSteps = [
+    { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
+    { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
+    { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
+    { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
+    { targetSelector: '#radiusInput', titleKey: 'tutorial_radius_title', textKey: 'tutorial_radius_text' },
+    { targetSelector: '#numPoints', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text' },
+    { targetSelector: '#scan-btn', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
+    { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
+    { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
+];
+
+function startTutorial() {
+    // Expand controls panel so UI elements are visible
+    if (controls && controls.classList.contains('minimized')) {
+        toggleControls();
+    }
+    tutorialStep = 0;
+    const overlay = document.getElementById('tutorial-overlay');
+    overlay.style.display = 'block';
+    overlay.style.pointerEvents = 'auto';
+    renderTutorialStep();
+
+    // Dismiss on backdrop click (outside tooltip)
+    if (_tutorialOverlayClickHandler) {
+        overlay.removeEventListener('click', _tutorialOverlayClickHandler);
+    }
+    _tutorialOverlayClickHandler = function(e) {
+        if (e.target === overlay) finishTutorial();
+    };
+    overlay.addEventListener('click', _tutorialOverlayClickHandler);
+}
+
+function renderTutorialStep() {
+    const t = translations[currentLang];
+    const step = tutorialSteps[tutorialStep];
+    const overlay = document.getElementById('tutorial-overlay');
+    const spotlight = document.getElementById('tutorial-spotlight');
+    const tooltip = document.getElementById('tutorial-tooltip');
+    const titleEl = document.getElementById('tutorial-title');
+    const textEl = document.getElementById('tutorial-text');
+    const prevBtn = document.getElementById('tutorial-prev');
+    const nextBtn = document.getElementById('tutorial-next');
+    const progressEl = document.getElementById('tutorial-progress');
+
+    titleEl.textContent = t[step.titleKey] || '';
+    textEl.textContent = t[step.textKey] || '';
+    progressEl.textContent = (tutorialStep + 1) + ' / ' + tutorialSteps.length;
+
+    prevBtn.textContent = t.tutorial_btn_prev || 'Back';
+    nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? (t.tutorial_btn_finish || 'Finish') : (t.tutorial_btn_next || 'Next');
+    prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
+
+    const PAD = 8;
+    if (step.targetSelector) {
+        const el = document.querySelector(step.targetSelector);
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            spotlight.style.display = 'block';
+            spotlight.style.left = (rect.left - PAD) + 'px';
+            spotlight.style.top = (rect.top - PAD) + 'px';
+            spotlight.style.width = (rect.width + PAD * 2) + 'px';
+            spotlight.style.height = (rect.height + PAD * 2) + 'px';
+
+            // Position tooltip below or above the element
+            const tooltipHeight = 180;
+            const spaceBelow = window.innerHeight - rect.bottom;
+            tooltip.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 340)) + 'px';
+            if (spaceBelow >= tooltipHeight + 20) {
+                tooltip.style.top = (rect.bottom + 14) + 'px';
+            } else {
+                tooltip.style.top = Math.max(10, rect.top - tooltipHeight - 14) + 'px';
+            }
+        } else {
+            // Fallback to centered if element not found
+            centerTutorialTooltip(spotlight, tooltip);
+        }
+    } else {
+        // No target - center the tooltip, hide spotlight
+        centerTutorialTooltip(spotlight, tooltip);
+    }
+}
+
+function centerTutorialTooltip(spotlight, tooltip) {
+    spotlight.style.display = 'none';
+    tooltip.style.left = '50%';
+    tooltip.style.top = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+}
+
+function tutorialNext() {
+    if (tutorialStep < tutorialSteps.length - 1) {
+        // Reset transform before repositioning
+        document.getElementById('tutorial-tooltip').style.transform = '';
+        tutorialStep++;
+        renderTutorialStep();
+    } else {
+        finishTutorial();
+    }
+}
+
+function tutorialPrev() {
+    if (tutorialStep > 0) {
+        document.getElementById('tutorial-tooltip').style.transform = '';
+        tutorialStep--;
+        renderTutorialStep();
+    }
+}
+
+function finishTutorial() {
+    localStorage.setItem('topo_tutorial_done', '1');
+    const overlay = document.getElementById('tutorial-overlay');
+    if (_tutorialOverlayClickHandler) {
+        overlay.removeEventListener('click', _tutorialOverlayClickHandler);
+        _tutorialOverlayClickHandler = null;
+    }
+    overlay.style.display = 'none';
+    overlay.style.pointerEvents = 'none';
+}
+
+// ==========================================
 // 6. START LOGIC (Event Listeners & Init)
 // ==========================================
 
@@ -1044,3 +1162,8 @@ if (layerSelect) {
 handleLayerChange(savedLayer); // Now everything is loaded, so this works!
 updateUI();
 updateCenterElevation();
+
+// Auto-start tutorial for new visitors
+if (!localStorage.getItem('topo_tutorial_done')) {
+    setTimeout(() => startTutorial(), 1000);
+}
