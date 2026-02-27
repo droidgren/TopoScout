@@ -82,7 +82,7 @@ const LANG_EN = {
     tutorial_nav_title: "Map Navigation",
     tutorial_nav_text: "Drag the map to explore, use the search bar to find locations by name or coordinates, and tap the GPS button to jump to your current position.",
     tutorial_peaks_title: "Find Highest Points",
-    tutorial_peaks_text: "Set the search radius and number of points, then tap 'Find Highest Points' to scan the area. Use 'Show Radius' to toggle the blue circle and 'Lock Radius' to pin the search area.",
+    tutorial_peaks_text: "Set the search radius and number of points, then tap 'Find Highest Points' to scan the area. Use 'Show Radius' to toggle the blue circle and 'Lock Radius' to pin the search area. 💡 Tip: Zoom in to level 15 or higher for the most accurate elevation results.",
     tutorial_climbs_title: "Find Climbs",
     tutorial_climbs_text: "Set the measure distance and number of climbs, then tap 'Find Climbs' to identify the steepest ascents in the area.",
     tutorial_results_title: "Results & More",
