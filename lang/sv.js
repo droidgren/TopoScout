@@ -82,7 +82,7 @@ const LANG_SV = {
     tutorial_nav_title: "Kartnavigering",
     tutorial_nav_text: "Dra kartan för att utforska, använd sökfältet för att hitta platser efter namn eller koordinater, och tryck på GPS-knappen för att hoppa till din nuvarande position.",
     tutorial_peaks_title: "Hitta högsta punkter",
-    tutorial_peaks_text: "Ställ in sökradien och antal punkter, tryck sedan på 'Hitta högsta punkter' för att skanna området. Använd 'Visa radie' för att växla den blå cirkeln och 'Lås radie' för att låsa sökområdet.",
+    tutorial_peaks_text: "Ställ in sökradien och antal punkter, tryck sedan på 'Hitta högsta punkter' för att skanna området. Använd 'Visa radie' för att växla den blå cirkeln och 'Lås radie' för att låsa sökområdet. 💡 Tips: Zooma in till nivå 15 eller högre för de noggrannaste höjdresultaten.",
     tutorial_climbs_title: "Hitta stigningar",
     tutorial_climbs_text: "Ställ in mätsträckan och antal stigningar, tryck sedan på 'Hitta stigningar' för att identifiera de brantaste stigningarna i området.",
     tutorial_results_title: "Resultat & Mer",

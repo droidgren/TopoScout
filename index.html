@@ -124,7 +124,7 @@
 
         <div id="controls-content">
 
-            <div style="margin-bottom: 10px;">
+            <div id="layer-section" style="margin-bottom: 10px;">
                 <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Map Layer:</span>
                 <div class="select-container">
                     <select id="layerSelect" onchange="handleLayerChange(this.value)">
@@ -141,7 +141,7 @@
                 </div>
             </div>
 
-            <div class="search-group">
+            <div id="nav-section" class="search-group">
                 <input type="text" id="searchInput" placeholder="Search location">
                 <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
                 <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
@@ -149,59 +149,63 @@
 
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
 
-            <div class="control-row">
-                <span id="lbl-radius" class="control-label">Search Radius (km):</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('radiusInput', -0.5)">-</button>
-                    <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
-                    <button class="num-btn" onclick="adjustNumber('radiusInput', 0.5)">+</button>
+            <div id="peaks-section">
+                <div class="control-row">
+                    <span id="lbl-radius" class="control-label">Search Radius (km):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('radiusInput', -0.5)">-</button>
+                        <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
+                        <button class="num-btn" onclick="adjustNumber('radiusInput', 0.5)">+</button>
+                    </div>
                 </div>
+
+                <div class="control-row">
+                    <span id="lbl-points" class="control-label">Num Points:</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('numPoints', -1)">-</button>
+                        <input type="number" id="numPoints" value="3" min="1" max="50">
+                        <button class="num-btn" onclick="adjustNumber('numPoints', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="show-circle" checked>
+                        <label id="lbl-show-circle" for="show-circle">Show Radius</label>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="lock-circle">
+                        <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
+                    </div>
+                </div>
+
+                <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
             </div>
-
-            <div class="control-row">
-                <span id="lbl-points" class="control-label">Num Points:</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('numPoints', -1)">-</button>
-                    <input type="number" id="numPoints" value="3" min="1" max="50">
-                    <button class="num-btn" onclick="adjustNumber('numPoints', 1)">+</button>
-                </div>
-            </div>
-
-            <div class="checkbox-group">
-                <div class="checkbox-row">
-                    <input type="checkbox" id="show-circle" checked>
-                    <label id="lbl-show-circle" for="show-circle">Show Radius</label>
-                </div>
-
-                <div class="checkbox-row">
-                    <input type="checkbox" id="lock-circle">
-                    <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
-                </div>
-            </div>
-
-            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
 
             <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
 
-            <div class="control-row">
-                <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
-                    <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
-                    <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+            <div id="climbs-section">
+                <div class="control-row">
+                    <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
+                        <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
+                        <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="control-row">
-                <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
-                    <input type="number" id="numClimbsInput" value="1" min="1" max="10">
-                    <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
+                <div class="control-row">
+                    <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
+                        <input type="number" id="numClimbsInput" value="1" min="1" max="10">
+                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
+                    </div>
                 </div>
-            </div>
 
-            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+                <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+            </div>
 
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
 
@@ -210,6 +214,7 @@
                 <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
             </div>
         </div>
+        <div id="controls-tutorial-mask"></div>
     </div>
 
     <canvas id="analysis-canvas"></canvas>
@@ -228,7 +233,9 @@
         <button id="mobile-install-dismiss" onclick="dismissInstallBar()">✕</button>
     </div>
 
-    <div id="tutorial-overlay" class="tutorial-overlay">
+    <div id="tutorial-overlay" class="tutorial-overlay"></div>
+
+    <div id="tutorial-card-wrap" class="tutorial-card-wrap">
         <div class="tutorial-card">
             <button class="tutorial-skip" id="tutorial-skip" onclick="closeTutorial()">Skip</button>
             <div class="tutorial-step-indicator" id="tutorial-step-indicator">Step 1 of 5</div>

@@ -351,23 +351,57 @@ function closeInfo() { document.getElementById('info-modal').style.display = 'no
 // ==========================================
 let tutorialCurrentStep = 0;
 const TUTORIAL_STEPS = [
-    { titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
-    { titleKey: 'tutorial_nav_title', textKey: 'tutorial_nav_text' },
-    { titleKey: 'tutorial_peaks_title', textKey: 'tutorial_peaks_text' },
-    { titleKey: 'tutorial_climbs_title', textKey: 'tutorial_climbs_text' },
-    { titleKey: 'tutorial_results_title', textKey: 'tutorial_results_text' }
+    {
+        titleKey: 'tutorial_welcome_title',
+        textKey: 'tutorial_welcome_text',
+        highlightSelectors: [],
+        cardPos: 'center'
+    },
+    {
+        titleKey: 'tutorial_nav_title',
+        textKey: 'tutorial_nav_text',
+        highlightSelectors: ['#nav-section'],
+        cardPos: 'bottom'
+    },
+    {
+        titleKey: 'tutorial_peaks_title',
+        textKey: 'tutorial_peaks_text',
+        highlightSelectors: ['#peaks-section'],
+        cardPos: 'bottom'
+    },
+    {
+        titleKey: 'tutorial_climbs_title',
+        textKey: 'tutorial_climbs_text',
+        highlightSelectors: ['#climbs-section'],
+        cardPos: 'bottom'
+    },
+    {
+        titleKey: 'tutorial_results_title',
+        textKey: 'tutorial_results_text',
+        highlightSelectors: ['#layer-section'],
+        cardPos: 'bottom'
+    }
 ];
 
 function startTutorial() {
     closeInfo();
     tutorialCurrentStep = 0;
     updateTutorialStep();
-    document.getElementById('tutorial-overlay').style.display = 'flex';
+    document.getElementById('tutorial-overlay').style.display = 'block';
+    document.getElementById('tutorial-card-wrap').style.display = 'flex';
 }
 
 function closeTutorial() {
     document.getElementById('tutorial-overlay').style.display = 'none';
+    document.getElementById('tutorial-card-wrap').style.display = 'none';
+    clearTutorialHighlights();
     localStorage.setItem('topo_tutorial_seen', 'true');
+}
+
+function clearTutorialHighlights() {
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+    document.getElementById('controls-tutorial-mask').style.display = 'none';
+    document.getElementById('controls').classList.remove('tutorial-active');
 }
 
 function updateTutorialStep() {
@@ -386,6 +420,21 @@ function updateTutorialStep() {
     nextBtn.textContent = tutorialCurrentStep === total - 1 ? t.tutorial_done : t.tutorial_next;
     document.getElementById('tutorial-skip').textContent = t.tutorial_skip;
     backBtn.textContent = t.tutorial_back;
+
+    // Card position (center vs bottom to avoid overlapping highlighted controls)
+    const cardWrap = document.getElementById('tutorial-card-wrap');
+    if (cardWrap) cardWrap.dataset.cardPos = step.cardPos || 'center';
+
+    // Apply spotlight highlights
+    clearTutorialHighlights();
+    if (step.highlightSelectors && step.highlightSelectors.length > 0) {
+        document.getElementById('controls').classList.add('tutorial-active');
+        document.getElementById('controls-tutorial-mask').style.display = 'block';
+        step.highlightSelectors.forEach(sel => {
+            const el = document.querySelector(sel);
+            if (el) el.classList.add('tutorial-highlight');
+        });
+    }
 }
 
 function tutorialNext() {
