@@ -179,11 +179,11 @@
                 </div>
             </div>
 
-            <div id="scan-section">
-                <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
+            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
 
-                <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
+            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
 
+            <div id="climb-section">
                 <div class="control-row">
                     <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
                     <div class="number-input-group">
@@ -201,9 +201,9 @@
                         <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
                     </div>
                 </div>
-            </div>
 
-            <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+                <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+            </div>
 
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
 
