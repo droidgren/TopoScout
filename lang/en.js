@@ -89,7 +89,7 @@ const LANG_EN = {
     tutorial_search_title: "Search & Location",
     tutorial_search_text: "Search for any place by name or coordinates. Use the GPS button to jump to your current location.",
     tutorial_tips_title: "💡 Tips for Best Results",
-    tutorial_tips_text: "• Zoom in to level 14–15 for the most accurate results.\n• Use a smaller search radius when zoomed in.\n• Enable 'Water analysis' in debug settings to filter out lakes and rivers.\n• Lock the radius before scanning to keep the search area fixed.",
+    tutorial_tips_text: "• Zoom in to level 14–15 for the most accurate results.\n• Use a smaller search radius when zoomed in.\n• Lock the radius before scanning to keep the search area fixed.",
     tutorial_btn_next: "Next",
     tutorial_btn_prev: "Back",
     tutorial_btn_finish: "Finish",
