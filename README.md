@@ -86,6 +86,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.6:** Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.
 * **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
 * **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.
 * **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
