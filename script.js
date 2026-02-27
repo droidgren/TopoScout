@@ -972,7 +972,7 @@ const tutorialSteps = [
     { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
     { targetSelector: '#radiusInput', titleKey: 'tutorial_radius_title', textKey: 'tutorial_radius_text' },
     { targetSelector: '#numPoints', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text' },
-    { targetSelector: '#scan-btn', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
+    { targetSelector: ['#scan-btn', '#climbDistInput', '#numClimbsInput'], titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
     { targetSelector: '#climb-btn', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
@@ -1021,9 +1021,18 @@ function renderTutorialStep() {
 
     const PAD = 8;
     if (step.targetSelector) {
-        const el = document.querySelector(step.targetSelector);
-        if (el) {
-            const rect = el.getBoundingClientRect();
+        const selectors = Array.isArray(step.targetSelector) ? step.targetSelector : [step.targetSelector];
+        const els = selectors.map(s => document.querySelector(s)).filter(Boolean);
+        if (els.length > 0) {
+            const rects = els.map(e => e.getBoundingClientRect());
+            const rect = {
+                top: Math.min(...rects.map(r => r.top)),
+                left: Math.min(...rects.map(r => r.left)),
+                bottom: Math.max(...rects.map(r => r.bottom)),
+                right: Math.max(...rects.map(r => r.right)),
+            };
+            rect.width = rect.right - rect.left;
+            rect.height = rect.bottom - rect.top;
             spotlight.style.display = 'block';
             spotlight.style.left = (rect.left - PAD) + 'px';
             spotlight.style.top = (rect.top - PAD) + 'px';
