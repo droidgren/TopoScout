@@ -968,6 +968,9 @@ let _tutorialOverlayClickHandler = null;
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
+    { targetSelector: '.circle-btn:not(.info-btn)', titleKey: 'tutorial_language_title', textKey: 'tutorial_language_text' },
+    { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
+    { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
     { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
@@ -1050,7 +1053,11 @@ function renderTutorialStep() {
 }
 
 function centerTutorialTooltip(spotlight, tooltip) {
-    spotlight.style.display = 'none';
+    spotlight.style.display = 'block';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
+    spotlight.style.left = (window.innerWidth / 2) + 'px';
+    spotlight.style.top = (window.innerHeight / 2) + 'px';
     tooltip.style.left = '50%';
     tooltip.style.top = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
