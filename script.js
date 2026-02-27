@@ -189,17 +189,8 @@ function updateLanguage() {
         document.getElementById('info-title').textContent = t.info_title;
         document.getElementById('info-desc').innerHTML = t.info_desc;
 
-        document.getElementById('info-section-peaks').textContent = t.info_section_peaks;
-        document.getElementById('info-help-radius').textContent = t.info_help_radius;
-        document.getElementById('info-help-points').textContent = t.info_help_points;
-        document.getElementById('info-help-show-radius').textContent = t.info_help_show_radius;
-        document.getElementById('info-help-lock-radius').textContent = t.info_help_lock_radius;
-
-        document.getElementById('info-section-climbs').textContent = t.info_section_climbs;
-        document.getElementById('info-help-dist').textContent = t.info_help_dist;
-        document.getElementById('info-help-climbs').textContent = t.info_help_climbs;
-
-        document.getElementById('info-results-desc').textContent = t.info_results_desc;
+        const tutorialBtn = document.getElementById('btn-start-tutorial');
+        if (tutorialBtn) tutorialBtn.textContent = t.btn_start_tutorial;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
@@ -245,6 +236,9 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
+
+        // Update tutorial overlay text
+        updateTutorialStep();
     }
 }
 
@@ -351,6 +345,64 @@ function cancelApiKey() {
 
 function showInfo() { document.getElementById('info-modal').style.display = 'flex'; }
 function closeInfo() { document.getElementById('info-modal').style.display = 'none'; }
+
+// ==========================================
+// TUTORIAL
+// ==========================================
+let tutorialCurrentStep = 0;
+const TUTORIAL_STEPS = [
+    { titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
+    { titleKey: 'tutorial_nav_title', textKey: 'tutorial_nav_text' },
+    { titleKey: 'tutorial_peaks_title', textKey: 'tutorial_peaks_text' },
+    { titleKey: 'tutorial_climbs_title', textKey: 'tutorial_climbs_text' },
+    { titleKey: 'tutorial_results_title', textKey: 'tutorial_results_text' }
+];
+
+function startTutorial() {
+    closeInfo();
+    tutorialCurrentStep = 0;
+    updateTutorialStep();
+    document.getElementById('tutorial-overlay').style.display = 'flex';
+}
+
+function closeTutorial() {
+    document.getElementById('tutorial-overlay').style.display = 'none';
+    localStorage.setItem('topo_tutorial_seen', 'true');
+}
+
+function updateTutorialStep() {
+    const t = translations[currentLang];
+    const total = TUTORIAL_STEPS.length;
+    const step = TUTORIAL_STEPS[tutorialCurrentStep];
+    const indicator = document.getElementById('tutorial-step-indicator');
+    if (!indicator) return;
+    indicator.textContent =
+        t.tutorial_step.replace('{current}', tutorialCurrentStep + 1).replace('{total}', total);
+    document.getElementById('tutorial-title').textContent = t[step.titleKey];
+    document.getElementById('tutorial-text').textContent = t[step.textKey];
+    const backBtn = document.getElementById('tutorial-back');
+    const nextBtn = document.getElementById('tutorial-next');
+    backBtn.style.visibility = tutorialCurrentStep === 0 ? 'hidden' : 'visible';
+    nextBtn.textContent = tutorialCurrentStep === total - 1 ? t.tutorial_done : t.tutorial_next;
+    document.getElementById('tutorial-skip').textContent = t.tutorial_skip;
+    backBtn.textContent = t.tutorial_back;
+}
+
+function tutorialNext() {
+    if (tutorialCurrentStep < TUTORIAL_STEPS.length - 1) {
+        tutorialCurrentStep++;
+        updateTutorialStep();
+    } else {
+        closeTutorial();
+    }
+}
+
+function tutorialBack() {
+    if (tutorialCurrentStep > 0) {
+        tutorialCurrentStep--;
+        updateTutorialStep();
+    }
+}
 
 function toggleControls() {
     const btn = document.querySelector('.toggle-btn');
@@ -1044,3 +1096,6 @@ if (layerSelect) {
 handleLayerChange(savedLayer); // Now everything is loaded, so this works!
 updateUI();
 updateCenterElevation();
+if (!localStorage.getItem('topo_tutorial_seen')) {
+    startTutorial();
+}
