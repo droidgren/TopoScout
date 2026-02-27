@@ -179,25 +179,27 @@
                 </div>
             </div>
 
-            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
+            <div id="scan-section">
+                <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
 
-            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
+                <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
 
-            <div class="control-row">
-                <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
-                    <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
-                    <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+                <div class="control-row">
+                    <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
+                        <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
+                        <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="control-row">
-                <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
-                    <input type="number" id="numClimbsInput" value="1" min="1" max="10">
-                    <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
+                <div class="control-row">
+                    <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
+                        <input type="number" id="numClimbsInput" value="1" min="1" max="10">
+                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
+                    </div>
                 </div>
             </div>
 
