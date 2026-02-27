@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.6";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -970,11 +970,11 @@ const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
     { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
     { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
+    { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
     { targetSelector: '#radiusInput', titleKey: 'tutorial_radius_title', textKey: 'tutorial_radius_text' },
     { targetSelector: '#numPoints', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text' },
     { targetSelector: '#scan-btn', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
     { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
-    { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
