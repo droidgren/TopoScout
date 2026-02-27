@@ -70,5 +70,21 @@ const LANG_EN = {
     update_btn: "Update",
     btn_install_app: "📲 Install as App",
     mobile_install_msg: "Install Elevation Finder as an app!",
-    btn_install: "Install"
+    btn_install: "Install",
+    btn_start_tutorial: "📖 Start Tutorial",
+    tutorial_step: "Step {current} of {total}",
+    tutorial_skip: "Skip",
+    tutorial_back: "Back",
+    tutorial_next: "Next",
+    tutorial_done: "Got it!",
+    tutorial_welcome_title: "Welcome to Elevation Finder!",
+    tutorial_welcome_text: "This tool helps you find the highest points and steepest climbs on any terrain. Let's take a quick tour!",
+    tutorial_nav_title: "Map Navigation",
+    tutorial_nav_text: "Drag the map to explore, use the search bar to find locations by name or coordinates, and tap the GPS button to jump to your current position.",
+    tutorial_peaks_title: "Find Highest Points",
+    tutorial_peaks_text: "Set the search radius and number of points, then tap 'Find Highest Points' to scan the area. Use 'Show Radius' to toggle the blue circle and 'Lock Radius' to pin the search area.",
+    tutorial_climbs_title: "Find Climbs",
+    tutorial_climbs_text: "Set the measure distance and number of climbs, then tap 'Find Climbs' to identify the steepest ascents in the area.",
+    tutorial_results_title: "Results & More",
+    tutorial_results_text: "Results appear as ranked markers on the map showing elevation, distance, and coordinates. Switch map layers from the dropdown and explore debug settings in the info panel."
 };

@@ -70,5 +70,21 @@ const LANG_SV = {
     update_btn: "Uppdatera",
     btn_install_app: "📲 Installera som app",
     mobile_install_msg: "Installera Höjdsökaren som app!",
-    btn_install: "Installera"
+    btn_install: "Installera",
+    btn_start_tutorial: "📖 Starta guiden",
+    tutorial_step: "Steg {current} av {total}",
+    tutorial_skip: "Hoppa över",
+    tutorial_back: "Tillbaka",
+    tutorial_next: "Nästa",
+    tutorial_done: "Uppfattat!",
+    tutorial_welcome_title: "Välkommen till Höjdsökaren!",
+    tutorial_welcome_text: "Det här verktyget hjälper dig hitta de högsta punkterna och brantaste stigningarna i vilken terräng som helst. Låt oss ta en snabb rundtur!",
+    tutorial_nav_title: "Kartnavigering",
+    tutorial_nav_text: "Dra kartan för att utforska, använd sökfältet för att hitta platser efter namn eller koordinater, och tryck på GPS-knappen för att hoppa till din nuvarande position.",
+    tutorial_peaks_title: "Hitta högsta punkter",
+    tutorial_peaks_text: "Ställ in sökradien och antal punkter, tryck sedan på 'Hitta högsta punkter' för att skanna området. Använd 'Visa radie' för att växla den blå cirkeln och 'Lås radie' för att låsa sökområdet.",
+    tutorial_climbs_title: "Hitta stigningar",
+    tutorial_climbs_text: "Ställ in mätsträckan och antal stigningar, tryck sedan på 'Hitta stigningar' för att identifiera de brantaste stigningarna i området.",
+    tutorial_results_title: "Resultat & Mer",
+    tutorial_results_text: "Resultaten visas som rankade markörer på kartan med höjd, avstånd och koordinater. Byt kartlager från rullgardinsmenyn och utforska felsökningsinställningar i infopanelen."
 };
