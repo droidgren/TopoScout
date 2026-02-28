@@ -52,6 +52,7 @@ const crosshair = document.getElementById('crosshair');
 const centerHeightDisplay = document.getElementById('center-h');
 const scanBtn = document.getElementById('scan-btn');
 const climbBtn = document.getElementById('climb-btn');
+const slopeBtn = document.getElementById('slope-btn');
 const zoomLabel = document.getElementById('zoom-level');
 const radiusInput = document.getElementById('radiusInput');
 const climbDistInput = document.getElementById('climbDistInput');
@@ -125,6 +126,8 @@ const redIcon = new L.Icon({
 
 let markers = [];
 let polylines = [];
+let slopeOverlay = null;
+let slopeLegend = null;
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -201,6 +204,10 @@ function updateLanguage() {
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
+        if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
+        if (document.getElementById('lbl-slope-custom')) document.getElementById('lbl-slope-custom').textContent = t.lbl_slope_custom;
+        if (document.getElementById('lbl-slope-min')) document.getElementById('lbl-slope-min').textContent = t.lbl_slope_min;
+        if (document.getElementById('lbl-slope-max')) document.getElementById('lbl-slope-max').textContent = t.lbl_slope_max;
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
@@ -390,6 +397,8 @@ window.clearResults = function () {
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
     polylines = [];
+    if (slopeOverlay) { map.removeLayer(slopeOverlay); slopeOverlay = null; }
+    if (slopeLegend) { map.removeControl(slopeLegend); slopeLegend = null; }
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
@@ -446,6 +455,7 @@ async function updateCenterElevation() {
     const center = map.getCenter();
     if (scanBtn) scanBtn.disabled = true;
     if (climbBtn) climbBtn.disabled = true;
+    if (slopeBtn) slopeBtn.disabled = true;
     centerHeightDisplay.textContent = "...";
 
     const zoom = Math.min(Math.floor(map.getZoom()), 15);
@@ -480,6 +490,7 @@ async function updateCenterElevation() {
 
             if (scanBtn) scanBtn.disabled = false;
             if (climbBtn) climbBtn.disabled = false;
+            if (slopeBtn) slopeBtn.disabled = false;
         };
         img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
@@ -557,6 +568,145 @@ async function findSteepestClimb() {
         statusDiv.textContent = t.status_error + err.message;
         updateCenterElevation();
     }
+}
+
+window.generateSlopeMap = async function () {
+    const t = translations[currentLang];
+    clearResults();
+    if (slopeBtn) slopeBtn.disabled = true;
+    statusDiv.textContent = t.status_loading;
+    try {
+        await fetchAnalysisData();
+        statusDiv.textContent = t.status_calc;
+        requestAnimationFrame(() => {
+            _renderSlopeMap();
+            updateCenterElevation();
+        });
+    } catch (err) {
+        statusDiv.textContent = t.status_error + err.message;
+        updateCenterElevation();
+    }
+};
+
+function _renderSlopeMap() {
+    const t = translations[currentLang];
+    const w = canvas.width;
+    const h = canvas.height;
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+
+    const searchCenterLatLng = getSearchCenter();
+    const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+
+    // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
+    const lat = searchCenterLatLng.lat;
+    const metersPerPixelAtZoom = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, analysisZoom);
+    // Mapterhorn tiles are 512px but represent 256 tile units, so pixel size is halved
+    const cellSize = metersPerPixelAtZoom / 2;
+
+    // Slope classes
+    const slopeClasses = [
+        { min: 25, max: 30, color: [0x4C, 0xAF, 0x50] },
+        { min: 30, max: 35, color: [0xFF, 0xEB, 0x3B] },
+        { min: 35, max: 40, color: [0xFF, 0x98, 0x00] },
+        { min: 40, max: 45, color: [0xF5, 0x7C, 0x00] },
+        { min: 45, max: 50, color: [0xF4, 0x43, 0x36] },
+        { min: 50, max: Infinity, color: [0xB7, 0x1C, 0x1C] }
+    ];
+
+    const customToggle = document.getElementById('slope-custom-toggle');
+    const useCustom = customToggle && customToggle.checked;
+    let customMin = useCustom ? (parseFloat(document.getElementById('slopeCustomMin').value) || 30) : null;
+    let customMax = useCustom ? (parseFloat(document.getElementById('slopeCustomMax').value) || 40) : null;
+    if (useCustom && customMin > customMax) { const tmp = customMin; customMin = customMax; customMax = tmp; }
+
+    // Create output canvas
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w;
+    outCanvas.height = h;
+    const outCtx = outCanvas.getContext('2d');
+    const outImgData = outCtx.createImageData(w, h);
+    const outData = outImgData.data;
+
+    function getElevation(x, y) {
+        const i = (y * w + x) * 4;
+        if (imgData[i + 3] < 255) return null;
+        return (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
+    }
+
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const latlng = canvasPointToLatLng(x, y);
+            if (searchCenterLatLng.distanceTo(latlng) > searchRadiusMeters) continue;
+
+            const eLeft = getElevation(x - 1, y);
+            const eRight = getElevation(x + 1, y);
+            const eUp = getElevation(x, y - 1);
+            const eDown = getElevation(x, y + 1);
+            if (eLeft === null || eRight === null || eUp === null || eDown === null) continue;
+
+            const dzDx = (eRight - eLeft) / (2 * cellSize);
+            const dzDy = (eDown - eUp) / (2 * cellSize);
+            const slopeRad = Math.atan(Math.sqrt(dzDx * dzDx + dzDy * dzDy));
+            const slopeDeg = slopeRad * (180 / Math.PI);
+
+            let color = null;
+            for (const cls of slopeClasses) {
+                if (slopeDeg >= cls.min && slopeDeg < cls.max) {
+                    color = cls.color;
+                    break;
+                }
+            }
+
+            // Custom interval overrides standard classes
+            if (useCustom && slopeDeg >= customMin && slopeDeg < customMax) {
+                color = [0x9C, 0x27, 0xB0];
+            }
+
+            if (color) {
+                const oi = (y * w + x) * 4;
+                outData[oi] = color[0];
+                outData[oi + 1] = color[1];
+                outData[oi + 2] = color[2];
+                outData[oi + 3] = 140;
+            }
+        }
+    }
+
+    outCtx.putImageData(outImgData, 0, 0);
+    const dataUrl = outCanvas.toDataURL();
+
+    const nwLatLng = canvasPointToLatLng(0, 0);
+    const seLatLng = canvasPointToLatLng(w, h);
+    const bounds = L.latLngBounds(nwLatLng, seLatLng);
+
+    slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.7 }).addTo(map);
+
+    // Build legend
+    const legendItems = [
+        { label: '25–30°', color: '#4CAF50' },
+        { label: '30–35°', color: '#FFEB3B' },
+        { label: '35–40°', color: '#FF9800' },
+        { label: '40–45°', color: '#F57C00' },
+        { label: '45–50°', color: '#F44336' },
+        { label: '50°+',   color: '#B71C1C' }
+    ];
+    if (useCustom) {
+        legendItems.push({ label: `${t.slope_legend_custom} ${customMin}–${customMax}°`, color: '#9C27B0' });
+    }
+
+    slopeLegend = L.control({ position: 'bottomleft' });
+    slopeLegend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'slope-legend');
+        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
+        for (const item of legendItems) {
+            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
+        }
+        div.innerHTML = html;
+        return div;
+    };
+    slopeLegend.addTo(map);
+
+    statusDiv.textContent = t.status_slope_done;
 }
 
 // Generalized function
@@ -1125,6 +1275,16 @@ if (waterToggle) {
     waterToggle.addEventListener('change', (e) => {
         waterAnalysisEnabled = e.target.checked;
         localStorage.setItem('topo_water_analysis', waterAnalysisEnabled);
+    });
+}
+
+const slopeCustomToggle = document.getElementById('slope-custom-toggle');
+if (slopeCustomToggle) {
+    slopeCustomToggle.addEventListener('change', (e) => {
+        const minRow = document.getElementById('slope-custom-min-row');
+        const maxRow = document.getElementById('slope-custom-max-row');
+        if (minRow) minRow.style.display = e.target.checked ? '' : 'none';
+        if (maxRow) maxRow.style.display = e.target.checked ? '' : 'none';
     });
 }
 

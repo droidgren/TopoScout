@@ -325,6 +325,54 @@ button {
     cursor: not-allowed;
 }
 
+.slope-btn {
+    background-color: #8E24AA;
+    color: white;
+    padding: 12px;
+    font-size: 14px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.slope-btn:hover {
+    background-color: #6A1B9A;
+}
+
+.slope-btn:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+.slope-legend {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.slope-legend-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.slope-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.slope-legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.15);
+    display: inline-block;
+}
+
 .clear-btn {
     background-color: #6c757d;
     color: white;

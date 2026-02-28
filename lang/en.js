@@ -95,4 +95,13 @@ const LANG_EN = {
     tutorial_btn_next: "Next",
     tutorial_btn_prev: "Back",
     tutorial_btn_finish: "Finish",
+    btn_slope: "🗺️ Generate Slope Map",
+    lbl_slope_custom: "Custom Interval",
+    lbl_slope_min: "Min (°):",
+    lbl_slope_max: "Max (°):",
+    slope_legend_title: "Slope (°)",
+    slope_legend_custom: "Custom",
+    info_section_slope: "Slope Map",
+    info_help_slope: "Slope Map: Color-codes the terrain by slope steepness within the search radius.",
+    status_slope_done: "Slope map generated.",
 };
