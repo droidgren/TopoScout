@@ -968,12 +968,13 @@ let _tutorialOverlayClickHandler = null;
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
+    { targetSelector: '.circle-btn:not(.info-btn)', titleKey: 'tutorial_language_title', textKey: 'tutorial_language_text' },
+    { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
+    { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
     { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
-    { targetSelector: '#radiusInput', titleKey: 'tutorial_radius_title', textKey: 'tutorial_radius_text' },
-    { targetSelector: '#numPoints', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text' },
-    { targetSelector: '#scan-btn', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
+    { targetSelector: '#scan-controls-group', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
     { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
@@ -1031,14 +1032,20 @@ function renderTutorialStep() {
             spotlight.style.height = (rect.height + PAD * 2) + 'px';
 
             // Position tooltip below or above the element
-            const tooltipHeight = 180;
+            const margin = 10;
+            const tooltipW = tooltip.offsetWidth || 320;
+            const tooltipH = tooltip.offsetHeight || 200;
             const spaceBelow = window.innerHeight - rect.bottom;
-            tooltip.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 340)) + 'px';
-            if (spaceBelow >= tooltipHeight + 20) {
-                tooltip.style.top = (rect.bottom + 14) + 'px';
+            let leftPos = Math.max(margin, Math.min(rect.left, window.innerWidth - tooltipW - margin));
+            let topPos;
+            if (spaceBelow >= tooltipH + 20) {
+                topPos = rect.bottom + 14;
             } else {
-                tooltip.style.top = Math.max(10, rect.top - tooltipHeight - 14) + 'px';
+                topPos = rect.top - tooltipH - 14;
             }
+            topPos = Math.max(margin, Math.min(topPos, window.innerHeight - tooltipH - margin));
+            tooltip.style.left = leftPos + 'px';
+            tooltip.style.top = topPos + 'px';
         } else {
             // Fallback to centered if element not found
             centerTutorialTooltip(spotlight, tooltip);
@@ -1050,7 +1057,11 @@ function renderTutorialStep() {
 }
 
 function centerTutorialTooltip(spotlight, tooltip) {
-    spotlight.style.display = 'none';
+    spotlight.style.display = 'block';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
+    spotlight.style.left = (window.innerWidth / 2) + 'px';
+    spotlight.style.top = (window.innerHeight / 2) + 'px';
     tooltip.style.left = '50%';
     tooltip.style.top = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
