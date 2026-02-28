@@ -210,6 +210,37 @@
                 <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
             </div>
 
+            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
+
+            <div id="slope-section">
+                <div class="checkbox-group">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="slope-custom-toggle">
+                        <label id="lbl-slope-custom" for="slope-custom-toggle">Custom Interval</label>
+                    </div>
+                </div>
+
+                <div id="slope-custom-min-row" class="control-row" style="display:none;">
+                    <span id="lbl-slope-min" class="control-label">Min (°):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('slopeCustomMin', -1)">-</button>
+                        <input type="number" id="slopeCustomMin" value="30" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeCustomMin', 1)">+</button>
+                    </div>
+                </div>
+
+                <div id="slope-custom-max-row" class="control-row" style="display:none;">
+                    <span id="lbl-slope-max" class="control-label">Max (°):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('slopeCustomMax', -1)">-</button>
+                        <input type="number" id="slopeCustomMax" value="40" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeCustomMax', 1)">+</button>
+                    </div>
+                </div>
+
+                <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
+            </div>
+
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
 
             <div class="footer-row">
