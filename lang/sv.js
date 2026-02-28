@@ -85,7 +85,7 @@ const LANG_SV = {
     tutorial_layers_title: "Kartlager",
     tutorial_layers_text: "Byt mellan olika kartstilar: topografisk, satellit med mera. Vissa lager kräver en gratis API-nyckel.",
     tutorial_scan_title: "Sökradie, antal punkter & skanning",
-    tutorial_scan_text: "Ange sökradien (km) och hur många toppar du vill hitta. Klicka sedan på den här knappen för att skanna området och hitta de högsta höjdpunkterna.",
+    tutorial_scan_text: "Ange sökradien (km) och hur många toppar du vill hitta.\n• Visa radie: visar eller döljer den blå cirkeln på kartan.\n• Lås radie: fäster sökområdet vid nuvarande position.\nKlicka sedan på knappen för att skanna och hitta de högsta höjdpunkterna.",
     tutorial_climb_title: "Hitta stigningar",
     tutorial_climb_text: "Här hittar du de brantaste stigningarna. Ange avstånd och hur många stigningar du vill hitta.",
     tutorial_search_title: "Sök & Position",

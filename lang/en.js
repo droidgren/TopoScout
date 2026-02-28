@@ -85,7 +85,7 @@ const LANG_EN = {
     tutorial_layers_title: "Map Layers",
     tutorial_layers_text: "Switch between different map styles: topographic, satellite, and more. Some layers require a free API key.",
     tutorial_scan_title: "Search Radius, Points & Scan",
-    tutorial_scan_text: "Set the search radius (km) and how many highest peaks to find. Then click this button to scan the area and find the highest elevation points.",
+    tutorial_scan_text: "Set the search radius (km) and how many highest peaks to find.\n• Show Radius: toggles the blue circle on the map.\n• Lock Radius: pins the search area to the current position.\nThen click the button to scan and find the highest elevation points.",
     tutorial_climb_title: "Find Climbs",
     tutorial_climb_text: "This section lets you find the steepest ascents. Set the distance and how many climbs to find.",
     tutorial_search_title: "Search & Location",
