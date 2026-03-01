@@ -449,13 +449,15 @@ function updateUI() {
     }).addTo(map);
 
     // Show circle when checkbox is checked OR when a slope map is active
+    const radiusM = radiusKm * 1000;
+    // New circle extends outside old generated area when its edge goes past the old boundary
     const outsideSlopeArea = slopeMapCenter !== null &&
-        searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius;
-    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+        (searchCenter.distanceTo(slopeMapCenter) + radiusM) > slopeMapRadius;
+    const showCircle = circleCheckbox.checked || outsideSlopeArea;
     if (showCircle) {
-        const fillOpacity = isLocked ? 0 : (outsideSlopeArea ? 0.2 : 0.1);
+        const fillOpacity = isLocked ? 0 : (outsideSlopeArea ? 0.6 : 0.1);
         searchCircle = L.circle(searchCenter, {
-            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusKm * 1000, interactive: false
+            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusM, interactive: false
         }).addTo(map);
     }
 }
