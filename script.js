@@ -450,12 +450,13 @@ function updateUI() {
 
     // Show circle when checkbox is checked OR when a slope map is active
     const radiusM = radiusKm * 1000;
-    // New circle extends outside old generated area when its edge goes past the old boundary
-    const outsideSlopeArea = slopeMapCenter !== null &&
-        (searchCenter.distanceTo(slopeMapCenter) + radiusM) > slopeMapRadius;
-    const showCircle = circleCheckbox.checked || outsideSlopeArea;
+    // Circle is completely outside the generated slope area when there is no overlap at all
+    const completelyOutsideSlopeArea = slopeMapCenter !== null &&
+        searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius + radiusM;
+    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
     if (showCircle) {
-        const fillOpacity = isLocked ? 0 : (outsideSlopeArea ? 0.6 : 0.1);
+        // No fill when slope map is active and circle overlaps generated area; fill 0.1 when fully outside
+        const fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
         searchCircle = L.circle(searchCenter, {
             color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusM, interactive: false
         }).addTo(map);
