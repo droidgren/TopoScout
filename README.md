@@ -19,6 +19,7 @@ To access the webapp go here: https://droidgren.github.io/elevation_finder/
     * Lantmäteriet (Sweden)
     * Elevation Data (Debug view)
     * *Optional:* Tracetrack and Thunderforest (requires API keys).
+* **Slope Map:** Generates a color-coded overlay within the search radius, visualizing terrain steepness by slope angle, with adjustable opacity and angle filters.
 * **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
 * **Geolocation:** Quickly locate your current position.
 * **Address Search:** Integrated search using Nominatim (OSM).
@@ -86,6 +87,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.7:** Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.
 * **v1.6:** Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.
 * **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
 * **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.

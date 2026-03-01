@@ -52,6 +52,7 @@ const crosshair = document.getElementById('crosshair');
 const centerHeightDisplay = document.getElementById('center-h');
 const scanBtn = document.getElementById('scan-btn');
 const climbBtn = document.getElementById('climb-btn');
+const slopeBtn = document.getElementById('slope-btn');
 const zoomLabel = document.getElementById('zoom-level');
 const radiusInput = document.getElementById('radiusInput');
 const climbDistInput = document.getElementById('climbDistInput');
@@ -72,9 +73,9 @@ const translations = {
 };
 
 let currentLang = localStorage.getItem('topo_lang') || 'en';
-let waterAnalysisEnabled = localStorage.getItem('topo_water_analysis') === 'true';
-let climbStepRes = parseInt(localStorage.getItem('topo_step_size')) || 10;
-let climbScanAngles = parseInt(localStorage.getItem('topo_scan_angles')) || 32;
+let waterAnalysisEnabled = false;
+let climbStepRes = 10;
+let climbScanAngles = 32;
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
@@ -125,6 +126,10 @@ const redIcon = new L.Icon({
 
 let markers = [];
 let polylines = [];
+let slopeOverlay = null;
+let slopeLegend = null;
+let slopeMapCenter = null;
+let slopeMapRadius = 0;
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -201,6 +206,11 @@ function updateLanguage() {
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
+        if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
+        if (document.getElementById('lbl-slope-filter')) document.getElementById('lbl-slope-filter').textContent = t.lbl_slope_filter;
+        if (document.getElementById('lbl-slope-min')) document.getElementById('lbl-slope-min').textContent = t.lbl_slope_min;
+        if (document.getElementById('lbl-slope-max')) document.getElementById('lbl-slope-max').textContent = t.lbl_slope_max;
+        if (document.getElementById('lbl-slope-opacity')) document.getElementById('lbl-slope-opacity').textContent = t.lbl_slope_opacity;
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
@@ -390,6 +400,10 @@ window.clearResults = function () {
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
     polylines = [];
+    if (slopeOverlay) { map.removeLayer(slopeOverlay); slopeOverlay = null; }
+    if (slopeLegend) { map.removeControl(slopeLegend); slopeLegend = null; }
+    slopeMapCenter = null;
+    slopeMapRadius = 0;
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
@@ -434,9 +448,17 @@ function updateUI() {
         radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false
     }).addTo(map);
 
-    if (circleCheckbox.checked) {
+    // Show circle when checkbox is checked OR when a slope map is active
+    const radiusM = radiusKm * 1000;
+    // Circle is completely outside the generated slope area when there is no overlap at all
+    const completelyOutsideSlopeArea = slopeMapCenter !== null &&
+        searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius + radiusM;
+    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+    if (showCircle) {
+        // No fill when slope map is active and circle overlaps generated area; fill 0.1 when fully outside
+        const fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
         searchCircle = L.circle(searchCenter, {
-            color: '#007bff', fillColor: '#007bff', fillOpacity: isLocked ? 0 : 0.1, weight: 1, radius: radiusKm * 1000, interactive: false
+            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusM, interactive: false
         }).addTo(map);
     }
 }
@@ -446,6 +468,7 @@ async function updateCenterElevation() {
     const center = map.getCenter();
     if (scanBtn) scanBtn.disabled = true;
     if (climbBtn) climbBtn.disabled = true;
+    if (slopeBtn) slopeBtn.disabled = true;
     centerHeightDisplay.textContent = "...";
 
     const zoom = Math.min(Math.floor(map.getZoom()), 15);
@@ -480,6 +503,7 @@ async function updateCenterElevation() {
 
             if (scanBtn) scanBtn.disabled = false;
             if (climbBtn) climbBtn.disabled = false;
+            if (slopeBtn) slopeBtn.disabled = false;
         };
         img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
     } catch (err) { centerHeightDisplay.textContent = "N/A"; }
@@ -557,6 +581,151 @@ async function findSteepestClimb() {
         statusDiv.textContent = t.status_error + err.message;
         updateCenterElevation();
     }
+}
+
+window.generateSlopeMap = async function () {
+    const t = translations[currentLang];
+    clearResults();
+    if (slopeBtn) slopeBtn.disabled = true;
+    statusDiv.textContent = t.status_loading;
+    try {
+        await fetchAnalysisData();
+        statusDiv.textContent = t.status_calc;
+        requestAnimationFrame(() => {
+            _renderSlopeMap();
+            updateCenterElevation();
+        });
+    } catch (err) {
+        statusDiv.textContent = t.status_error + err.message;
+        updateCenterElevation();
+    }
+};
+
+function _renderSlopeMap() {
+    const t = translations[currentLang];
+    const w = canvas.width;
+    const h = canvas.height;
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+
+    const searchCenterLatLng = getSearchCenter();
+    const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+
+    // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
+    const lat = searchCenterLatLng.lat;
+    const metersPerPixelAtZoom = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, analysisZoom);
+    // Mapterhorn tiles are 512px but represent 256 tile units, so pixel size is halved
+    const cellSize = metersPerPixelAtZoom / 2;
+
+    // Slope classes
+    const slopeClasses = [
+        { min: 0,  max: 10,       color: [0xFF, 0xFF, 0xFF] },
+        { min: 10, max: 30,       color: [0x24, 0x74, 0x00] },
+        { min: 30, max: 35,       color: [0xFF, 0xFF, 0x00] },
+        { min: 35, max: 40,       color: [0xFF, 0xA9, 0x00] },
+        { min: 40, max: 45,       color: [0xFF, 0x55, 0x00] },
+        { min: 45, max: 50,       color: [0xE6, 0x00, 0x00] },
+        { min: 50, max: Infinity, color: [0x74, 0x00, 0x00] }
+    ];
+
+    const filterToggle = document.getElementById('slope-filter-toggle');
+    const useFilter = filterToggle && filterToggle.checked;
+    let filterMin = useFilter ? (parseFloat(document.getElementById('slopeFilterMin').value) || 0) : null;
+    let filterMax = useFilter ? (parseFloat(document.getElementById('slopeFilterMax').value) || 50) : null;
+    if (useFilter && filterMin > filterMax) { const tmp = filterMin; filterMin = filterMax; filterMax = tmp; }
+
+    // Read opacity from slider (10-100 → 0.1-1.0)
+    const opacitySlider = document.getElementById('slopeOpacity');
+    const overlayOpacity = opacitySlider ? (parseInt(opacitySlider.value) || 60) / 100 : 0.6;
+
+    // Create output canvas
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w;
+    outCanvas.height = h;
+    const outCtx = outCanvas.getContext('2d');
+    const outImgData = outCtx.createImageData(w, h);
+    const outData = outImgData.data;
+
+    function getElevation(x, y) {
+        const i = (y * w + x) * 4;
+        if (imgData[i + 3] < 255) return null;
+        return (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
+    }
+
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const latlng = canvasPointToLatLng(x, y);
+            if (searchCenterLatLng.distanceTo(latlng) > searchRadiusMeters) continue;
+
+            const eLeft = getElevation(x - 1, y);
+            const eRight = getElevation(x + 1, y);
+            const eUp = getElevation(x, y - 1);
+            const eDown = getElevation(x, y + 1);
+            if (eLeft === null || eRight === null || eUp === null || eDown === null) continue;
+
+            const dzDx = (eRight - eLeft) / (2 * cellSize);
+            const dzDy = (eDown - eUp) / (2 * cellSize);
+            const slopeRad = Math.atan(Math.sqrt(dzDx * dzDx + dzDy * dzDy));
+            const slopeDeg = slopeRad * (180 / Math.PI);
+
+            // Apply filter: skip pixel if outside filter range
+            if (useFilter && (slopeDeg < filterMin || slopeDeg >= filterMax)) continue;
+
+            let color = null;
+            for (const cls of slopeClasses) {
+                if (slopeDeg >= cls.min && slopeDeg < cls.max) {
+                    color = cls.color;
+                    break;
+                }
+            }
+
+            if (color) {
+                const oi = (y * w + x) * 4;
+                outData[oi] = color[0];
+                outData[oi + 1] = color[1];
+                outData[oi + 2] = color[2];
+                outData[oi + 3] = 255;
+            }
+        }
+    }
+
+    outCtx.putImageData(outImgData, 0, 0);
+    const dataUrl = outCanvas.toDataURL();
+
+    const nwLatLng = canvasPointToLatLng(0, 0);
+    const seLatLng = canvasPointToLatLng(w, h);
+    const bounds = L.latLngBounds(nwLatLng, seLatLng);
+
+    slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
+
+    // Build legend
+    const legendItems = [
+        { label: '0–9°',   color: '#FFFFFF' },
+        { label: '10–29°', color: '#247400' },
+        { label: '30–34°', color: '#ffff00' },
+        { label: '35–39°', color: '#ffa900' },
+        { label: '40–44°', color: '#ff5500' },
+        { label: '45–49°', color: '#e60000' },
+        { label: '50°+',   color: '#740000' }
+    ];
+
+    slopeLegend = L.control({ position: 'bottomleft' });
+    slopeLegend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'slope-legend');
+        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
+        for (const item of legendItems) {
+            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
+        }
+        div.innerHTML = html;
+        return div;
+    };
+    slopeLegend.addTo(map);
+
+    // Store generated area so the radius circle can be shown as overlay
+    slopeMapCenter = searchCenterLatLng;
+    slopeMapRadius = searchRadiusMeters;
+    updateUI();
+
+    statusDiv.textContent = t.status_slope_done;
 }
 
 // Generalized function
@@ -976,6 +1145,7 @@ const tutorialSteps = [
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
     { targetSelector: '#scan-controls-group', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
     { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
+    { targetSelector: '#slope-section', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
@@ -1124,7 +1294,26 @@ if (waterToggle) {
     waterToggle.checked = waterAnalysisEnabled;
     waterToggle.addEventListener('change', (e) => {
         waterAnalysisEnabled = e.target.checked;
-        localStorage.setItem('topo_water_analysis', waterAnalysisEnabled);
+    });
+}
+
+const slopeFilterToggle = document.getElementById('slope-filter-toggle');
+if (slopeFilterToggle) {
+    slopeFilterToggle.addEventListener('change', (e) => {
+        const minRow = document.getElementById('slope-filter-min-row');
+        const maxRow = document.getElementById('slope-filter-max-row');
+        if (minRow) minRow.style.display = e.target.checked ? '' : 'none';
+        if (maxRow) maxRow.style.display = e.target.checked ? '' : 'none';
+    });
+}
+
+const slopeOpacitySlider = document.getElementById('slopeOpacity');
+const slopeOpacityVal = document.getElementById('slopeOpacityVal');
+if (slopeOpacitySlider) {
+    slopeOpacitySlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        if (slopeOpacityVal) slopeOpacityVal.textContent = val + '%';
+        if (slopeOverlay) slopeOverlay.setOpacity(val / 100);
     });
 }
 
@@ -1133,7 +1322,6 @@ if (stepInput) {
     stepInput.value = climbStepRes;
     stepInput.addEventListener('change', (e) => {
         climbStepRes = parseInt(e.target.value) || 10;
-        localStorage.setItem('topo_step_size', climbStepRes);
     });
 }
 
@@ -1142,7 +1330,6 @@ if (anglesInput) {
     anglesInput.value = climbScanAngles;
     anglesInput.addEventListener('change', (e) => {
         climbScanAngles = parseInt(e.target.value) || 32;
-        localStorage.setItem('topo_scan_angles', climbScanAngles);
     });
 }
 
