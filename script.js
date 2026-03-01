@@ -205,9 +205,10 @@ function updateLanguage() {
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
         if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
-        if (document.getElementById('lbl-slope-custom')) document.getElementById('lbl-slope-custom').textContent = t.lbl_slope_custom;
+        if (document.getElementById('lbl-slope-filter')) document.getElementById('lbl-slope-filter').textContent = t.lbl_slope_filter;
         if (document.getElementById('lbl-slope-min')) document.getElementById('lbl-slope-min').textContent = t.lbl_slope_min;
         if (document.getElementById('lbl-slope-max')) document.getElementById('lbl-slope-max').textContent = t.lbl_slope_max;
+        if (document.getElementById('lbl-slope-opacity')) document.getElementById('lbl-slope-opacity').textContent = t.lbl_slope_opacity;
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
@@ -533,9 +534,20 @@ async function fetchAnalysisData() {
     await Promise.all(tilePromises);
 }
 
+function activateLockRadius() {
+    if (!isLocked) {
+        isLocked = true;
+        lockedCenterCoords = map.getCenter();
+        if (lockCheckbox) lockCheckbox.checked = true;
+        if (crosshair) crosshair.style.display = 'block';
+        updateUI();
+    }
+}
+
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
+    activateLockRadius();
     if (scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -555,6 +567,7 @@ async function analyzeTerrain() {
 async function findSteepestClimb() {
     const t = translations[currentLang];
     clearResults();
+    activateLockRadius();
     if (climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -573,6 +586,7 @@ async function findSteepestClimb() {
 window.generateSlopeMap = async function () {
     const t = translations[currentLang];
     clearResults();
+    activateLockRadius();
     if (slopeBtn) slopeBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -605,19 +619,24 @@ function _renderSlopeMap() {
 
     // Slope classes
     const slopeClasses = [
-        { min: 25, max: 30, color: [0x4C, 0xAF, 0x50] },
-        { min: 30, max: 35, color: [0xFF, 0xEB, 0x3B] },
-        { min: 35, max: 40, color: [0xFF, 0x98, 0x00] },
-        { min: 40, max: 45, color: [0xF5, 0x7C, 0x00] },
-        { min: 45, max: 50, color: [0xF4, 0x43, 0x36] },
-        { min: 50, max: Infinity, color: [0xB7, 0x1C, 0x1C] }
+        { min: 0,  max: 10,       color: [0xFF, 0xFF, 0xFF] },
+        { min: 10, max: 30,       color: [0x24, 0x74, 0x00] },
+        { min: 30, max: 35,       color: [0xFF, 0xFF, 0x00] },
+        { min: 35, max: 40,       color: [0xFF, 0xA9, 0x00] },
+        { min: 40, max: 45,       color: [0xFF, 0x55, 0x00] },
+        { min: 45, max: 50,       color: [0xE6, 0x00, 0x00] },
+        { min: 50, max: Infinity, color: [0x74, 0x00, 0x00] }
     ];
 
-    const customToggle = document.getElementById('slope-custom-toggle');
-    const useCustom = customToggle && customToggle.checked;
-    let customMin = useCustom ? (parseFloat(document.getElementById('slopeCustomMin').value) || 30) : null;
-    let customMax = useCustom ? (parseFloat(document.getElementById('slopeCustomMax').value) || 40) : null;
-    if (useCustom && customMin > customMax) { const tmp = customMin; customMin = customMax; customMax = tmp; }
+    const filterToggle = document.getElementById('slope-filter-toggle');
+    const useFilter = filterToggle && filterToggle.checked;
+    let filterMin = useFilter ? (parseFloat(document.getElementById('slopeFilterMin').value) || 0) : null;
+    let filterMax = useFilter ? (parseFloat(document.getElementById('slopeFilterMax').value) || 50) : null;
+    if (useFilter && filterMin > filterMax) { const tmp = filterMin; filterMin = filterMax; filterMax = tmp; }
+
+    // Read opacity from slider (10-100 → 0.1-1.0)
+    const opacitySlider = document.getElementById('slopeOpacity');
+    const overlayOpacity = opacitySlider ? (parseInt(opacitySlider.value) || 70) / 100 : 0.7;
 
     // Create output canvas
     const outCanvas = document.createElement('canvas');
@@ -649,6 +668,9 @@ function _renderSlopeMap() {
             const slopeRad = Math.atan(Math.sqrt(dzDx * dzDx + dzDy * dzDy));
             const slopeDeg = slopeRad * (180 / Math.PI);
 
+            // Apply filter: skip pixel if outside filter range
+            if (useFilter && (slopeDeg < filterMin || slopeDeg >= filterMax)) continue;
+
             let color = null;
             for (const cls of slopeClasses) {
                 if (slopeDeg >= cls.min && slopeDeg < cls.max) {
@@ -657,17 +679,12 @@ function _renderSlopeMap() {
                 }
             }
 
-            // Custom interval overrides standard classes
-            if (useCustom && slopeDeg >= customMin && slopeDeg < customMax) {
-                color = [0x9C, 0x27, 0xB0];
-            }
-
             if (color) {
                 const oi = (y * w + x) * 4;
                 outData[oi] = color[0];
                 outData[oi + 1] = color[1];
                 outData[oi + 2] = color[2];
-                outData[oi + 3] = 140;
+                outData[oi + 3] = 255;
             }
         }
     }
@@ -679,20 +696,18 @@ function _renderSlopeMap() {
     const seLatLng = canvasPointToLatLng(w, h);
     const bounds = L.latLngBounds(nwLatLng, seLatLng);
 
-    slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.7 }).addTo(map);
+    slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
 
     // Build legend
     const legendItems = [
-        { label: '25–30°', color: '#4CAF50' },
-        { label: '30–35°', color: '#FFEB3B' },
-        { label: '35–40°', color: '#FF9800' },
-        { label: '40–45°', color: '#F57C00' },
-        { label: '45–50°', color: '#F44336' },
-        { label: '50°+',   color: '#B71C1C' }
+        { label: '0–9°',   color: '#FFFFFF' },
+        { label: '10–29°', color: '#247400' },
+        { label: '30–34°', color: '#ffff00' },
+        { label: '35–39°', color: '#ffa900' },
+        { label: '40–44°', color: '#ff5500' },
+        { label: '45–49°', color: '#e60000' },
+        { label: '50°+',   color: '#740000' }
     ];
-    if (useCustom) {
-        legendItems.push({ label: `${t.slope_legend_custom} ${customMin}–${customMax}°`, color: '#9C27B0' });
-    }
 
     slopeLegend = L.control({ position: 'bottomleft' });
     slopeLegend.onAdd = function () {
@@ -1278,13 +1293,23 @@ if (waterToggle) {
     });
 }
 
-const slopeCustomToggle = document.getElementById('slope-custom-toggle');
-if (slopeCustomToggle) {
-    slopeCustomToggle.addEventListener('change', (e) => {
-        const minRow = document.getElementById('slope-custom-min-row');
-        const maxRow = document.getElementById('slope-custom-max-row');
+const slopeFilterToggle = document.getElementById('slope-filter-toggle');
+if (slopeFilterToggle) {
+    slopeFilterToggle.addEventListener('change', (e) => {
+        const minRow = document.getElementById('slope-filter-min-row');
+        const maxRow = document.getElementById('slope-filter-max-row');
         if (minRow) minRow.style.display = e.target.checked ? '' : 'none';
         if (maxRow) maxRow.style.display = e.target.checked ? '' : 'none';
+    });
+}
+
+const slopeOpacitySlider = document.getElementById('slopeOpacity');
+const slopeOpacityVal = document.getElementById('slopeOpacityVal');
+if (slopeOpacitySlider) {
+    slopeOpacitySlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        if (slopeOpacityVal) slopeOpacityVal.textContent = val + '%';
+        if (slopeOverlay) slopeOverlay.setOpacity(val / 100);
     });
 }
 

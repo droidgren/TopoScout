@@ -215,27 +215,33 @@
             <div id="slope-section">
                 <div class="checkbox-group">
                     <div class="checkbox-row">
-                        <input type="checkbox" id="slope-custom-toggle">
-                        <label id="lbl-slope-custom" for="slope-custom-toggle">Custom Interval</label>
+                        <input type="checkbox" id="slope-filter-toggle">
+                        <label id="lbl-slope-filter" for="slope-filter-toggle">Filter Slopes</label>
                     </div>
                 </div>
 
-                <div id="slope-custom-min-row" class="control-row" style="display:none;">
+                <div id="slope-filter-min-row" class="control-row" style="display:none;">
                     <span id="lbl-slope-min" class="control-label">Min (°):</span>
                     <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('slopeCustomMin', -1)">-</button>
-                        <input type="number" id="slopeCustomMin" value="30" min="0" max="90" step="1">
-                        <button class="num-btn" onclick="adjustNumber('slopeCustomMin', 1)">+</button>
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', -1)">-</button>
+                        <input type="number" id="slopeFilterMin" value="0" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', 1)">+</button>
                     </div>
                 </div>
 
-                <div id="slope-custom-max-row" class="control-row" style="display:none;">
+                <div id="slope-filter-max-row" class="control-row" style="display:none;">
                     <span id="lbl-slope-max" class="control-label">Max (°):</span>
                     <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('slopeCustomMax', -1)">-</button>
-                        <input type="number" id="slopeCustomMax" value="40" min="0" max="90" step="1">
-                        <button class="num-btn" onclick="adjustNumber('slopeCustomMax', 1)">+</button>
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', -1)">-</button>
+                        <input type="number" id="slopeFilterMax" value="50" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', 1)">+</button>
                     </div>
+                </div>
+
+                <div class="control-row">
+                    <span id="lbl-slope-opacity" class="control-label">Opacity:</span>
+                    <input type="range" id="slopeOpacity" min="10" max="100" value="70" step="5" style="flex:1; margin: 0 6px;">
+                    <span id="slopeOpacityVal" style="min-width:35px;text-align:right;font-size:13px;">70%</span>
                 </div>
 
                 <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
