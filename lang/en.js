@@ -88,6 +88,8 @@ const LANG_EN = {
     tutorial_scan_text: "Set the search radius (km) and how many highest peaks to find.\n• Show Radius: toggles the blue circle on the map.\n• Lock Radius: pins the search area to the current position.\nThen click the button to scan and find the highest elevation points.",
     tutorial_climb_title: "Find Climbs",
     tutorial_climb_text: "This section lets you find the steepest ascents. Set the distance and how many climbs to find.",
+    tutorial_slope_title: "Slope Map",
+    tutorial_slope_text: "Generate a color-coded slope map within the search radius. Use the opacity slider and filter settings to highlight specific slope angles.",
     tutorial_search_title: "Search & Location",
     tutorial_search_text: "Search for any place by name or coordinates. Use the GPS button to jump to your current location.",
     tutorial_tips_title: "💡 Tips for Best Results",

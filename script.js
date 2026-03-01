@@ -1145,6 +1145,7 @@ const tutorialSteps = [
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
     { targetSelector: '#scan-controls-group', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
     { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
+    { targetSelector: '#slope-section', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
