@@ -24,8 +24,7 @@
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
 
-            <p id="info-desc">This tool helps you analyze terrain to find highest points and calculate maximum ascent
-                within a given area.<br>The application works on mobile devices, but is best experienced on larger
+            <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, and visualize slope steepness within a given area.<br>The application works on mobile devices, but is best experienced on larger
                 screens.</p>
 
             <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;">🎓 Start Tutorial</button>
@@ -36,7 +35,7 @@
                     target="_blank">droidgren.github.io</a></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">1.4</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">1.7</span>
             </p>
 
             <details
@@ -44,6 +43,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v1.7:</strong> Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.</li>
                     <li><strong>v1.6:</strong> Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.</li>
                     <li><strong>v1.5:</strong> Added PWA install button in the info modal and a mobile install prompt bar.</li>
                     <li><strong>v1.4:</strong> Improved 'Find Climbs' accuracy with cumulative ascent, noise filtering,
@@ -208,6 +208,43 @@
                 </div>
 
                 <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+            </div>
+
+            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
+
+            <div id="slope-section">
+                <div class="checkbox-group">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="slope-filter-toggle">
+                        <label id="lbl-slope-filter" for="slope-filter-toggle">Filter Slopes</label>
+                    </div>
+                </div>
+
+                <div id="slope-filter-min-row" class="control-row" style="display:none;">
+                    <span id="lbl-slope-min" class="control-label">Min (°):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', -1)">-</button>
+                        <input type="number" id="slopeFilterMin" value="0" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', 1)">+</button>
+                    </div>
+                </div>
+
+                <div id="slope-filter-max-row" class="control-row" style="display:none;">
+                    <span id="lbl-slope-max" class="control-label">Max (°):</span>
+                    <div class="number-input-group">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', -1)">-</button>
+                        <input type="number" id="slopeFilterMax" value="50" min="0" max="90" step="1">
+                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <span id="lbl-slope-opacity" class="control-label">Opacity:</span>
+                    <input type="range" id="slopeOpacity" min="10" max="100" value="60" step="5" style="flex:1; margin: 0 6px;">
+                    <span id="slopeOpacityVal" style="min-width:35px;text-align:right;font-size:13px;">60%</span>
+                </div>
+
+                <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
             </div>
 
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
