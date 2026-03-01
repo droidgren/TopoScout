@@ -73,9 +73,9 @@ const translations = {
 };
 
 let currentLang = localStorage.getItem('topo_lang') || 'en';
-let waterAnalysisEnabled = localStorage.getItem('topo_water_analysis') === 'true';
-let climbStepRes = parseInt(localStorage.getItem('topo_step_size')) || 10;
-let climbScanAngles = parseInt(localStorage.getItem('topo_scan_angles')) || 32;
+let waterAnalysisEnabled = false;
+let climbStepRes = 10;
+let climbScanAngles = 32;
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
@@ -128,6 +128,8 @@ let markers = [];
 let polylines = [];
 let slopeOverlay = null;
 let slopeLegend = null;
+let slopeMapCenter = null;
+let slopeMapRadius = 0;
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -400,6 +402,8 @@ window.clearResults = function () {
     polylines = [];
     if (slopeOverlay) { map.removeLayer(slopeOverlay); slopeOverlay = null; }
     if (slopeLegend) { map.removeControl(slopeLegend); slopeLegend = null; }
+    slopeMapCenter = null;
+    slopeMapRadius = 0;
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
@@ -444,9 +448,14 @@ function updateUI() {
         radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false
     }).addTo(map);
 
-    if (circleCheckbox.checked) {
+    // Show circle when checkbox is checked OR when a slope map is active
+    const outsideSlopeArea = slopeMapCenter !== null &&
+        searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius;
+    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+    if (showCircle) {
+        const fillOpacity = isLocked ? 0 : (outsideSlopeArea ? 0.2 : 0.1);
         searchCircle = L.circle(searchCenter, {
-            color: '#007bff', fillColor: '#007bff', fillOpacity: isLocked ? 0 : 0.1, weight: 1, radius: radiusKm * 1000, interactive: false
+            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusKm * 1000, interactive: false
         }).addTo(map);
     }
 }
@@ -534,20 +543,9 @@ async function fetchAnalysisData() {
     await Promise.all(tilePromises);
 }
 
-function activateLockRadius() {
-    if (!isLocked) {
-        isLocked = true;
-        lockedCenterCoords = map.getCenter();
-        if (lockCheckbox) lockCheckbox.checked = true;
-        if (crosshair) crosshair.style.display = 'block';
-        updateUI();
-    }
-}
-
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
-    activateLockRadius();
     if (scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -567,7 +565,6 @@ async function analyzeTerrain() {
 async function findSteepestClimb() {
     const t = translations[currentLang];
     clearResults();
-    activateLockRadius();
     if (climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -586,7 +583,6 @@ async function findSteepestClimb() {
 window.generateSlopeMap = async function () {
     const t = translations[currentLang];
     clearResults();
-    activateLockRadius();
     if (slopeBtn) slopeBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
@@ -636,7 +632,7 @@ function _renderSlopeMap() {
 
     // Read opacity from slider (10-100 → 0.1-1.0)
     const opacitySlider = document.getElementById('slopeOpacity');
-    const overlayOpacity = opacitySlider ? (parseInt(opacitySlider.value) || 70) / 100 : 0.7;
+    const overlayOpacity = opacitySlider ? (parseInt(opacitySlider.value) || 60) / 100 : 0.6;
 
     // Create output canvas
     const outCanvas = document.createElement('canvas');
@@ -720,6 +716,11 @@ function _renderSlopeMap() {
         return div;
     };
     slopeLegend.addTo(map);
+
+    // Store generated area so the radius circle can be shown as overlay
+    slopeMapCenter = searchCenterLatLng;
+    slopeMapRadius = searchRadiusMeters;
+    updateUI();
 
     statusDiv.textContent = t.status_slope_done;
 }
@@ -1289,7 +1290,6 @@ if (waterToggle) {
     waterToggle.checked = waterAnalysisEnabled;
     waterToggle.addEventListener('change', (e) => {
         waterAnalysisEnabled = e.target.checked;
-        localStorage.setItem('topo_water_analysis', waterAnalysisEnabled);
     });
 }
 
@@ -1318,7 +1318,6 @@ if (stepInput) {
     stepInput.value = climbStepRes;
     stepInput.addEventListener('change', (e) => {
         climbStepRes = parseInt(e.target.value) || 10;
-        localStorage.setItem('topo_step_size', climbStepRes);
     });
 }
 
@@ -1327,7 +1326,6 @@ if (anglesInput) {
     anglesInput.value = climbScanAngles;
     anglesInput.addEventListener('change', (e) => {
         climbScanAngles = parseInt(e.target.value) || 32;
-        localStorage.setItem('topo_scan_angles', climbScanAngles);
     });
 }
 
