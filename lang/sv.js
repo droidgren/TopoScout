@@ -88,6 +88,8 @@ const LANG_SV = {
     tutorial_scan_text: "Ange sökradien (km) och hur många toppar du vill hitta.\n• Visa radie: visar eller döljer den blå cirkeln på kartan.\n• Lås radie: fäster sökområdet vid nuvarande position.\nKlicka sedan på knappen för att skanna och hitta de högsta höjdpunkterna.",
     tutorial_climb_title: "Hitta stigningar",
     tutorial_climb_text: "Här hittar du de brantaste stigningarna. Ange avstånd och hur många stigningar du vill hitta.",
+    tutorial_slope_title: "Lutningskarta",
+    tutorial_slope_text: "Generera en färgkodad lutningskarta inom sökradien. Använd opacitetsreglaget och filterinställningarna för att markera specifika lutningsvinklar.",
     tutorial_search_title: "Sök & Position",
     tutorial_search_text: "Sök efter valfri plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din position.",
     tutorial_tips_title: "💡 Tips för bästa resultat",
