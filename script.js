@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.7";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -629,8 +629,8 @@ function _renderSlopeMap() {
 
     const filterToggle = document.getElementById('slope-filter-toggle');
     const useFilter = filterToggle && filterToggle.checked;
-    let filterMin = useFilter ? (parseFloat(document.getElementById('slopeFilterMin').value) || 0) : null;
-    let filterMax = useFilter ? (parseFloat(document.getElementById('slopeFilterMax').value) || 50) : null;
+    let filterMin = useFilter ? (parseFloat(document.getElementById('slopeFilterMin').value) || 10) : null;
+    let filterMax = useFilter ? (parseFloat(document.getElementById('slopeFilterMax').value) || 100) : null;
     if (useFilter && filterMin > filterMax) { const tmp = filterMin; filterMin = filterMax; filterMax = tmp; }
 
     // Read opacity from slider (10-100 → 0.1-1.0)
