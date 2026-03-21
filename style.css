@@ -15,17 +15,16 @@ body {
     position: absolute;
     top: 20px;
     right: 20px;
+    z-index: 2000;
+    width: 300px;
     background: rgba(255, 255, 255, 0.5);
     padding: 15px;
-    z-index: 2000;
     border-radius: 12px;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
     gap: 10px;
-    width: 300px;
     backdrop-filter: blur(5px);
-    transition: max-height 0.3s ease;
     max-height: 90vh;
     overflow-y: auto;
 }
@@ -118,9 +117,7 @@ h3 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 5px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
+    margin-top: 4px;
 }
 
 /* MODAL (COMMON DESIGN) */
@@ -345,6 +342,150 @@ button {
     cursor: not-allowed;
 }
 
+/* --- COLLAPSIBLE SECTIONS --- */
+.section-group {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 6px;
+    margin-top: 4px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.section-header:hover {
+    opacity: 0.75;
+}
+
+.section-header span:first-child {
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+}
+
+.section-toggle {
+    font-size: 16px;
+    color: #555;
+    line-height: 1;
+    opacity: 0.45;
+}
+
+.section-content {
+    display: none;
+    padding-top: 6px;
+}
+
+.gpx-btn {
+    background-color: #00897B;
+    color: white;
+    padding: 12px;
+    font-size: 14px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.gpx-btn:hover {
+    background-color: #00695C;
+}
+
+.gpx-clear-btn {
+    display: none;
+    background-color: #78909C;
+    color: white;
+    padding: 8px;
+    font-size: 13px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.gpx-clear-btn:hover {
+    background-color: #546E7A;
+}
+
+.gpx-track-info {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #444;
+}
+
+.gpx-track-info span {
+    font-weight: 600;
+}
+
+.gpx-km-label {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #666;
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #333;
+    white-space: nowrap;
+    line-height: normal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.gpx-elev-label {
+    background: rgba(255, 255, 255, 0.92);
+    border: 2px solid #D32F2F;
+    border-radius: 5px;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #B71C1C;
+    white-space: nowrap;
+    line-height: normal;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.gpx-elev-label.min-elev {
+    border-color: #1565C0;
+    color: #0D47A1;
+}
+
+.gpx-waypoint-label {
+    background: rgba(255, 255, 255, 0.92);
+    border: 2px solid #2E7D32;
+    border-radius: 5px;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #1B5E20;
+    white-space: nowrap;
+    line-height: normal;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.gpx-start-end-label {
+    background: rgba(40, 40, 40, 0.88);
+    border: 2px solid #fff;
+    border-radius: 5px;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    line-height: normal;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
 .slope-legend {
     background: rgba(255, 255, 255, 0.9);
     padding: 8px 12px;
@@ -502,6 +643,20 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 100%;
 }
 
+.layer-row {
+    margin-bottom: 0;
+    gap: 8px;
+}
+
+.layer-row .select-container {
+    width: auto;
+    flex: 0 0 200px;
+}
+
+.layer-row #layerSelect {
+    min-width: 0;
+}
+
 select {
     flex-grow: 1;
     padding: 8px;
@@ -539,10 +694,8 @@ select {
 }
 
 .zoom-badge {
-    background: #e9ecef;
     color: #495057;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 0;
     font-size: 11px;
     font-weight: bold;
     font-family: monospace;

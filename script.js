@@ -130,6 +130,8 @@ let slopeOverlay = null;
 let slopeLegend = null;
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
+let gpxLayer = null;
+let gpxTrackData = null; // stores parsed GPX stats for info panel
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -211,6 +213,21 @@ function updateLanguage() {
         if (document.getElementById('lbl-slope-min')) document.getElementById('lbl-slope-min').textContent = t.lbl_slope_min;
         if (document.getElementById('lbl-slope-max')) document.getElementById('lbl-slope-max').textContent = t.lbl_slope_max;
         if (document.getElementById('lbl-slope-opacity')) document.getElementById('lbl-slope-opacity').textContent = t.lbl_slope_opacity;
+        if (document.getElementById('section-points-title')) document.getElementById('section-points-title').textContent = t.section_points_title;
+        if (document.getElementById('section-climbs-title')) document.getElementById('section-climbs-title').textContent = t.section_climbs_title;
+        if (document.getElementById('section-slope-title')) document.getElementById('section-slope-title').textContent = t.section_slope_title;
+        if (document.getElementById('section-routes-title')) document.getElementById('section-routes-title').textContent = t.section_routes_title;
+        if (document.getElementById('gpx-btn')) document.getElementById('gpx-btn').textContent = t.btn_gpx;
+        if (document.getElementById('gpx-clear-btn')) document.getElementById('gpx-clear-btn').textContent = t.btn_gpx_clear;
+        if (document.getElementById('lbl-track-color')) document.getElementById('lbl-track-color').textContent = t.lbl_track_color;
+        if (document.getElementById('lbl-track-width')) document.getElementById('lbl-track-width').textContent = t.lbl_track_width;
+        if (document.getElementById('lbl-km-labels')) document.getElementById('lbl-km-labels').textContent = t.lbl_km_labels;
+        if (document.getElementById('lbl-color-slope')) document.getElementById('lbl-color-slope').textContent = t.lbl_color_slope;
+        if (document.getElementById('lbl-show-waypoints')) document.getElementById('lbl-show-waypoints').textContent = t.lbl_show_waypoints;
+        if (document.getElementById('lbl-show-minmax')) document.getElementById('lbl-show-minmax').textContent = t.lbl_show_minmax;
+        if (document.getElementById('opt-unit-km')) document.getElementById('opt-unit-km').textContent = t.unit_km;
+        if (document.getElementById('opt-unit-mi')) document.getElementById('opt-unit-mi').textContent = t.unit_mi;
+        updateGpxTrackInfo();
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
@@ -365,6 +382,16 @@ function toggleControls() {
     }
 };
 
+window.toggleSection = function (sectionId) {
+    const content = document.getElementById(sectionId);
+    if (!content) return;
+    const header = content.previousElementSibling;
+    const toggle = header ? header.querySelector('.section-toggle') : null;
+    const isHidden = content.style.display === 'none' || content.style.display === '';
+    content.style.display = isHidden ? 'block' : 'none';
+    if (toggle) toggle.textContent = isHidden ? '➖' : '➕';
+};
+
 async function searchLocation() {
     const t = translations[currentLang];
     const query = searchInput.value.trim();
@@ -406,6 +433,457 @@ window.clearResults = function () {
     slopeMapRadius = 0;
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
+
+window.clearGpxRoute = function () {
+    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+    gpxTrackData = null;
+    const clearBtn = document.getElementById('gpx-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const infoDiv = document.getElementById('gpx-track-info');
+    if (infoDiv) { infoDiv.style.display = 'none'; infoDiv.innerHTML = ''; }
+    statusDiv.textContent = translations[currentLang].status_gpx_cleared;
+};
+
+function getGpxTrackColor() {
+    const el = document.getElementById('gpxTrackColor');
+    return el ? el.value : '#000000';
+}
+
+function getGpxTrackWidth() {
+    const el = document.getElementById('gpxTrackWidth');
+    return el ? parseInt(el.value) : 4;
+}
+
+function getGpxShowKmLabels() {
+    const el = document.getElementById('gpxShowKmLabels');
+    return el ? el.checked : false;
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = x => x * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function computeTrackStats(allSegments) {
+    let totalLength = 0, gain = 0, loss = 0;
+    let minElev = Infinity, maxElev = -Infinity;
+    let hasElevation = false;
+
+    for (const seg of allSegments) {
+        for (let i = 0; i < seg.length; i++) {
+            const p = seg[i];
+            if (p.ele !== null) {
+                hasElevation = true;
+                if (p.ele < minElev) minElev = p.ele;
+                if (p.ele > maxElev) maxElev = p.ele;
+            }
+            if (i > 0) {
+                totalLength += haversineDistance(seg[i - 1].lat, seg[i - 1].lon, p.lat, p.lon);
+                if (seg[i - 1].ele !== null && p.ele !== null) {
+                    const diff = p.ele - seg[i - 1].ele;
+                    if (diff > 0) gain += diff;
+                    else loss += Math.abs(diff);
+                }
+            }
+        }
+    }
+    return {
+        length: totalLength,
+        gain, loss,
+        minElev: hasElevation ? minElev : null,
+        maxElev: hasElevation ? maxElev : null
+    };
+}
+
+function updateGpxTrackInfo() {
+    const infoDiv = document.getElementById('gpx-track-info');
+    if (!infoDiv || !gpxTrackData) return;
+    const t = translations[currentLang];
+    const d = gpxTrackData;
+    const unit = getDistanceUnit();
+    let lengthStr;
+    if (unit === 'mi') {
+        const miles = d.length / 1609.344;
+        lengthStr = miles >= 1 ? miles.toFixed(2) + ' mi' : (d.length * 3.28084).toFixed(0) + ' ft';
+    } else {
+        lengthStr = d.length >= 1000 ? (d.length / 1000).toFixed(2) + ' km' : Math.round(d.length) + ' m';
+    }
+    let html = `<span>${t.gpx_info_length}:</span> ${lengthStr}`;
+    if (d.gain > 0 || d.loss > 0) {
+        html += `<br><span>${t.gpx_info_gain}:</span> +${Math.round(d.gain)} m`;
+        html += `<br><span>${t.gpx_info_loss}:</span> -${Math.round(d.loss)} m`;
+    }
+    if (d.minElev !== null) {
+        html += `<br><span>${t.gpx_info_min_elev}:</span> ${Math.round(d.minElev)} m`;
+        html += `<br><span>${t.gpx_info_max_elev}:</span> ${Math.round(d.maxElev)} m`;
+    }
+    infoDiv.innerHTML = html;
+    infoDiv.style.display = 'block';
+}
+
+function getDistanceUnit() {
+    const el = document.getElementById('distanceUnit');
+    return el ? el.value : 'km';
+}
+
+function computeVisibleTrackLength(allSegments) {
+    const bounds = map.getBounds();
+    let visible = 0;
+    for (const seg of allSegments) {
+        for (let i = 1; i < seg.length; i++) {
+            const p1 = L.latLng(seg[i - 1].lat, seg[i - 1].lon);
+            const p2 = L.latLng(seg[i].lat, seg[i].lon);
+            if (bounds.contains(p1) || bounds.contains(p2)) {
+                visible += haversineDistance(seg[i - 1].lat, seg[i - 1].lon, seg[i].lat, seg[i].lon);
+            }
+        }
+    }
+    return visible;
+}
+
+function computeDynamicStep(totalLengthMeters, visibleLengthMeters) {
+    const unit = getDistanceUnit();
+    const unitMeters = unit === 'mi' ? 1609.344 : 1000;
+    const refLength = visibleLengthMeters > 0 ? visibleLengthMeters : totalLengthMeters;
+    const refUnits = refLength / unitMeters;
+    const TARGET_LABELS = 17;
+    const niceSteps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    let rawStep = refUnits / TARGET_LABELS;
+    if (rawStep < 0.1) rawStep = 0.1;
+    let step = niceSteps[niceSteps.length - 1];
+    for (const s of niceSteps) {
+        if (s >= rawStep) { step = s; break; }
+    }
+    // Ensure minimum step of 1 whole unit when total track is long
+    if (totalLengthMeters / unitMeters > 20 && step < 1) step = 1;
+    return { step, unitMeters, unitLabel: unit === 'mi' ? 'mi' : 'km' };
+}
+
+function buildKmLabels(allSegments) {
+    const labels = [];
+    // compute total length first
+    let totalLength = 0;
+    for (const seg of allSegments) {
+        for (let i = 1; i < seg.length; i++) {
+            totalLength += haversineDistance(seg[i - 1].lat, seg[i - 1].lon, seg[i].lat, seg[i].lon);
+        }
+    }
+    const visibleLength = computeVisibleTrackLength(allSegments);
+    const { step, unitMeters, unitLabel } = computeDynamicStep(totalLength, visibleLength);
+    let cumDist = 0;
+    let nextMark = step;
+    for (const seg of allSegments) {
+        for (let i = 1; i < seg.length; i++) {
+            const d = haversineDistance(seg[i - 1].lat, seg[i - 1].lon, seg[i].lat, seg[i].lon);
+            const prevCum = cumDist;
+            cumDist += d;
+            while (cumDist >= nextMark * unitMeters) {
+                const frac = (nextMark * unitMeters - prevCum) / d;
+                const lat = seg[i - 1].lat + frac * (seg[i].lat - seg[i - 1].lat);
+                const lon = seg[i - 1].lon + frac * (seg[i].lon - seg[i - 1].lon);
+                const displayVal = Number.isInteger(nextMark) ? nextMark : nextMark.toFixed(1);
+                const icon = L.divIcon({ className: 'gpx-km-label', html: `${displayVal} ${unitLabel}`, iconSize: null });
+                labels.push(L.marker([lat, lon], { icon, interactive: false }));
+                nextMark += step;
+            }
+        }
+    }
+    return labels;
+}
+
+function getGpxColorBySlope() {
+    const el = document.getElementById('gpxColorBySlope');
+    return el ? el.checked : false;
+}
+
+function slopeToColor(slopeDeg, baseColor) {
+    const s = Math.min(Math.abs(slopeDeg), 20);
+    const t = s / 20; // 0 at flat, 1 at 20°+
+    // Parse base color from hex
+    const bc = parseInt(baseColor.replace('#', ''), 16);
+    const br = (bc >> 16) & 255, bg = (bc >> 8) & 255, bb = bc & 255;
+    let r, g, b;
+    if (slopeDeg >= 0) {
+        // Uphill: track color → yellow → red
+        if (t <= 0.5) {
+            const f = t / 0.5;
+            r = br + f * (255 - br);
+            g = bg + f * (200 - bg);
+            b = bb + f * (0 - bb);
+        } else {
+            const f = (t - 0.5) / 0.5;
+            r = 255 + f * (220 - 255);
+            g = 200 + f * (30 - 200);
+            b = 0 + f * (30 - 0);
+        }
+    } else {
+        // Downhill: track color → green → blue
+        if (t <= 0.5) {
+            const f = t / 0.5;
+            r = br + f * (0 - br);
+            g = bg + f * (180 - bg);
+            b = bb + f * (60 - bb);
+        } else {
+            const f = (t - 0.5) / 0.5;
+            r = 0 + f * (30 - 0);
+            g = 180 + f * (80 - 180);
+            b = 60 + f * (220 - 60);
+        }
+    }
+    return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+}
+
+function buildSlopeColoredTrack(seg, weight, baseColor) {
+    const lines = [];
+    for (let i = 1; i < seg.length; i++) {
+        const p0 = seg[i - 1], p1 = seg[i];
+        const dist = haversineDistance(p0.lat, p0.lon, p1.lat, p1.lon);
+        let slopeDeg = 0;
+        if (dist > 0 && p0.ele !== null && p1.ele !== null) {
+            slopeDeg = Math.atan2(p1.ele - p0.ele, dist) * (180 / Math.PI);
+        }
+        lines.push(L.polyline([[p0.lat, p0.lon], [p1.lat, p1.lon]], {
+            color: slopeToColor(slopeDeg, baseColor), weight, opacity: 0.9
+        }));
+    }
+    return lines;
+}
+
+function findMinMaxElevPoints(allSegments) {
+    let minPt = null, maxPt = null;
+    let minElev = Infinity, maxElev = -Infinity;
+    for (const seg of allSegments) {
+        for (const p of seg) {
+            if (p.ele === null) continue;
+            if (p.ele < minElev) { minElev = p.ele; minPt = p; }
+            if (p.ele > maxElev) { maxElev = p.ele; maxPt = p; }
+        }
+    }
+    return { minPt, maxPt };
+}
+
+function getTrackEndpoints(allSegments) {
+    let startPt = null, endPt = null;
+    for (const seg of allSegments) {
+        if (seg.length > 0) {
+            if (!startPt) startPt = seg[0];
+            endPt = seg[seg.length - 1];
+        }
+    }
+    return { startPt, endPt };
+}
+
+function getGpxShowWaypoints() {
+    const el = document.getElementById('gpxShowWaypoints');
+    return el ? el.checked : true;
+}
+
+function getGpxShowMinMax() {
+    const el = document.getElementById('gpxShowMinMax');
+    return el ? el.checked : true;
+}
+
+function rebuildGpxLayer() {
+    // re-render with current settings; requires stored parse data
+    if (!gpxTrackData) return;
+    const wasFitted = !gpxLayer;
+    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+
+    const color = getGpxTrackColor();
+    const weight = getGpxTrackWidth();
+    const showKm = getGpxShowKmLabels();
+    const colorBySlope = getGpxColorBySlope();
+    const showWaypoints = getGpxShowWaypoints();
+    const showMinMax = getGpxShowMinMax();
+    const mapLayers = [];
+    const t = translations[currentLang];
+
+    for (const seg of gpxTrackData.segments) {
+        if (seg.length < 2) continue;
+        if (colorBySlope) {
+            mapLayers.push(...buildSlopeColoredTrack(seg, weight, color));
+        } else {
+            const coords = seg.map(p => [p.lat, p.lon]);
+            mapLayers.push(L.polyline(coords, { color, weight, opacity: 0.85 }));
+        }
+    }
+
+    if (showWaypoints) {
+        for (const wp of gpxTrackData.waypoints) {
+            const label = wp.name || '•';
+            const icon = L.divIcon({ className: 'gpx-waypoint-label', html: label, iconSize: null });
+            mapLayers.push(L.marker([wp.lat, wp.lon], { icon, interactive: false }));
+        }
+    }
+
+    // Start / End markers
+    const { startPt, endPt } = getTrackEndpoints(gpxTrackData.segments);
+    const OVERLAP_THRESHOLD = 50; // meters
+    const startEndOverlap = startPt && endPt &&
+        haversineDistance(startPt.lat, startPt.lon, endPt.lat, endPt.lon) < OVERLAP_THRESHOLD;
+
+    if (startEndOverlap) {
+        const label = `⏵ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
+        const icon = L.divIcon({ className: 'gpx-start-end-label', html: label, iconSize: null });
+        mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+    } else {
+        if (startPt) {
+            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `▶ ${t.gpx_start || 'Start'}`, iconSize: null });
+            mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+        }
+        if (endPt) {
+            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `⏹ ${t.gpx_end || 'End'}`, iconSize: null });
+            mapLayers.push(L.marker([endPt.lat, endPt.lon], { icon, interactive: false }));
+        }
+    }
+
+    // Min / Max elevation labels
+    if (showMinMax) {
+        const { minPt, maxPt } = findMinMaxElevPoints(gpxTrackData.segments);
+        if (maxPt) {
+            const icon = L.divIcon({ className: 'gpx-elev-label', html: `▲ ${Math.round(maxPt.ele)} m`, iconSize: null });
+            mapLayers.push(L.marker([maxPt.lat, maxPt.lon], { icon, interactive: false }));
+        }
+        if (minPt) {
+            const icon = L.divIcon({ className: 'gpx-elev-label min-elev', html: `▼ ${Math.round(minPt.ele)} m`, iconSize: null });
+            mapLayers.push(L.marker([minPt.lat, minPt.lon], { icon, interactive: false }));
+        }
+    }
+
+    if (showKm) {
+        const kmLabels = buildKmLabels(gpxTrackData.segments);
+        mapLayers.push(...kmLabels);
+    }
+
+    if (mapLayers.length > 0) {
+        gpxLayer = L.layerGroup(mapLayers).addTo(map);
+    }
+}
+
+document.getElementById('gpx-file-input').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const t = translations[currentLang];
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(evt.target.result, 'application/xml');
+            if (doc.querySelector('parsererror')) {
+                statusDiv.textContent = t.status_gpx_error;
+                return;
+            }
+
+            // Remove previous GPX layer
+            if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+
+            const allSegments = [];
+            const waypoints = [];
+            let totalPoints = 0;
+
+            // Parse tracks
+            doc.querySelectorAll('trk').forEach(trk => {
+                trk.querySelectorAll('trkseg').forEach(seg => {
+                    const pts = [];
+                    seg.querySelectorAll('trkpt').forEach(pt => {
+                        const lat = parseFloat(pt.getAttribute('lat'));
+                        const lon = parseFloat(pt.getAttribute('lon'));
+                        const eleEl = pt.querySelector('ele');
+                        const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+                        if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
+                    });
+                    if (pts.length > 0) {
+                        allSegments.push(pts);
+                        totalPoints += pts.length;
+                    }
+                });
+            });
+
+            // Parse routes
+            doc.querySelectorAll('rte').forEach(rte => {
+                const pts = [];
+                rte.querySelectorAll('rtept').forEach(pt => {
+                    const lat = parseFloat(pt.getAttribute('lat'));
+                    const lon = parseFloat(pt.getAttribute('lon'));
+                    const eleEl = pt.querySelector('ele');
+                    const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+                    if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
+                });
+                if (pts.length > 0) {
+                    allSegments.push(pts);
+                    totalPoints += pts.length;
+                }
+            });
+
+            // Parse waypoints
+            doc.querySelectorAll('wpt').forEach(pt => {
+                const lat = parseFloat(pt.getAttribute('lat'));
+                const lon = parseFloat(pt.getAttribute('lon'));
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    const nameEl = pt.querySelector('name');
+                    const name = nameEl ? nameEl.textContent : '';
+                    waypoints.push({ lat, lon, name });
+                    totalPoints++;
+                }
+            });
+
+            if (allSegments.length === 0 && waypoints.length === 0) {
+                statusDiv.textContent = t.status_gpx_empty;
+                return;
+            }
+
+            // Compute statistics
+            const stats = computeTrackStats(allSegments);
+            gpxTrackData = { segments: allSegments, waypoints, ...stats };
+
+            // Build and display layers
+            rebuildGpxLayer();
+            updateGpxTrackInfo();
+
+            // Fit map
+            if (gpxLayer) {
+                const allCoords = [];
+                allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
+                waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
+                if (allCoords.length > 0) {
+                    map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
+                }
+            }
+
+            const clearBtn = document.getElementById('gpx-clear-btn');
+            if (clearBtn) clearBtn.style.display = 'block';
+
+            statusDiv.textContent = t.status_gpx_loaded.replace('{n}', totalPoints);
+        } catch (err) {
+            statusDiv.textContent = t.status_gpx_error;
+        }
+    };
+    reader.onerror = function () {
+        statusDiv.textContent = translations[currentLang].status_gpx_error;
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+});
+
+// Live-update track when settings change
+document.getElementById('gpxTrackColor').addEventListener('input', function () { rebuildGpxLayer(); });
+document.getElementById('gpxTrackWidth').addEventListener('input', function () {
+    document.getElementById('gpxTrackWidthVal').textContent = this.value;
+    rebuildGpxLayer();
+});
+document.getElementById('gpxShowKmLabels').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('gpxColorBySlope').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('gpxShowWaypoints').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('gpxShowMinMax').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('distanceUnit').addEventListener('change', function () {
+    localStorage.setItem('topo_distance_unit', this.value);
+    rebuildGpxLayer();
+    updateGpxTrackInfo();
+});
 
 window.copyCoords = function (lat, lng, btnElement) {
     navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
@@ -609,6 +1087,7 @@ function _renderSlopeMap() {
 
     const searchCenterLatLng = getSearchCenter();
     const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+    const useRadius = circleCheckbox && circleCheckbox.checked;
 
     // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
     const lat = searchCenterLatLng.lat;
@@ -653,8 +1132,10 @@ function _renderSlopeMap() {
 
     for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
-            const latlng = canvasPointToLatLng(x, y);
-            if (searchCenterLatLng.distanceTo(latlng) > searchRadiusMeters) continue;
+            if (useRadius) {
+                const latlng = canvasPointToLatLng(x, y);
+                if (searchCenterLatLng.distanceTo(latlng) > searchRadiusMeters) continue;
+            }
 
             const eLeft = getElevation(x - 1, y);
             const eRight = getElevation(x + 1, y);
@@ -1334,7 +1815,7 @@ if (anglesInput) {
 }
 
 // Map Events
-map.on('zoomend', () => { updateUI(); updateCenterElevation(); });
+map.on('zoomend', () => { updateUI(); updateCenterElevation(); rebuildGpxLayer(); });
 map.on('move', () => { updateUI(); }); // UI (circle) updates directly
 map.on('moveend', () => { // Data saved/fetched at end of movement
     const center = map.getCenter();
@@ -1356,6 +1837,11 @@ updateLanguage();
 initServiceWorker();
 if (layerSelect) {
     layerSelect.value = savedLayer;
+}
+const savedUnit = localStorage.getItem('topo_distance_unit');
+if (savedUnit) {
+    const unitSel = document.getElementById('distanceUnit');
+    if (unitSel) unitSel.value = savedUnit;
 }
 handleLayerChange(savedLayer); // Now everything is loaded, so this works!
 updateUI();
