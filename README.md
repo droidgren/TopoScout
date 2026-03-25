@@ -20,6 +20,7 @@ To access the webapp go here: https://droidgren.github.io/elevation_finder/
     * Elevation Data (Debug view)
     * *Optional:* Tracetrack and Thunderforest (requires API keys).
 * **Slope Map:** Generates a color-coded overlay within the search radius, visualizing terrain steepness by slope angle, with adjustable opacity and angle filters.
+* **GPX Route Overlay:** Upload GPX files to display routes on the map with customizable track color, width, distance labels (km/mi), slope-based coloring, waypoints, and min/max elevation markers. Includes track stats: length, elevation gain/loss, and min/max elevation.
 * **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
 * **Geolocation:** Quickly locate your current position.
 * **Address Search:** Integrated search using Nominatim (OSM).
@@ -55,8 +56,9 @@ This project is ready to be hosted on GitHub Pages or any static web server (Apa
 3.  **Analysis:**
     * Click **Find Highest Points** to scan the visible area for peaks.
     * Click **Find Climbs** to identify the steepest sections.
-4.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
-5.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
+4.  **GPX Routes:** Expand the **Add Routes** section to load a GPX file. Customize track color, width, and toggle distance labels, slope coloring, waypoints, and min/max elevation markers.
+5.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
+6.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
 
 ## Technical Details
 
@@ -87,6 +89,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.8:** Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.
 * **v1.7:** Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.
 * **v1.6:** Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.
 * **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
