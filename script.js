@@ -915,7 +915,9 @@ window.adjustNumber = function (inputId, amount) {
 
 function updateUI() {
     if (!zoomLabel) return;
-    zoomLabel.innerText = 'Zoom: ' + map.getZoom();
+    const zoom = map.getZoom();
+    const displayZoom = Number.isInteger(zoom) ? zoom.toString() : zoom.toFixed(1);
+    zoomLabel.innerText = 'Zoom: ' + displayZoom;
     const searchCenter = getSearchCenter();
     const radiusKm = parseFloat(radiusInput.value) || 5;
 
