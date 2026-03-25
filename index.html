@@ -35,7 +35,7 @@
                     target="_blank">droidgren.github.io</a></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">1.7</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">1.8</span>
             </p>
 
             <details
@@ -43,6 +43,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v1.8:</strong> Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.</li>
                     <li><strong>v1.7:</strong> Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.</li>
                     <li><strong>v1.6:</strong> Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.</li>
                     <li><strong>v1.5:</strong> Added PWA install button in the info modal and a mobile install prompt bar.</li>
@@ -127,9 +128,11 @@
 
         <div id="controls-content">
 
+            <!-- Common settings (not collapsible) -->
             <div style="margin-bottom: 10px;">
-                <span id="lbl-layers" class="control-label" style="display:block; margin-bottom:3px;">Map Layer:</span>
-                <div class="select-container">
+                <div class="control-row layer-row">
+                    <span id="lbl-layers" class="control-label">Map Layer:</span>
+                    <div class="select-container">
                     <select id="layerSelect" onchange="handleLayerChange(this.value)">
                         <option value="opentopo" selected>OpenTopo</option>
                         <option value="tracetrack">Tracetrack Topo</option>
@@ -141,6 +144,7 @@
                     </select>
                     <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API"
                         style="display:none;">🔑</button>
+                    </div>
                 </div>
             </div>
 
@@ -150,109 +154,167 @@
                 <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
             </div>
 
-            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 5px 0;">
-
-            <div id="scan-controls-group">
-            <div class="control-row">
-                <span id="lbl-radius" class="control-label">Search Radius (km):</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('radiusInput', -0.5)">-</button>
-                    <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
-                    <button class="num-btn" onclick="adjustNumber('radiusInput', 0.5)">+</button>
-                </div>
-            </div>
-
-            <div class="control-row">
-                <span id="lbl-points" class="control-label">Num Points:</span>
-                <div class="number-input-group">
-                    <button class="num-btn" onclick="adjustNumber('numPoints', -1)">-</button>
-                    <input type="number" id="numPoints" value="3" min="1" max="50">
-                    <button class="num-btn" onclick="adjustNumber('numPoints', 1)">+</button>
-                </div>
-            </div>
-
-            <div class="checkbox-group">
-                <div class="checkbox-row">
-                    <input type="checkbox" id="show-circle" checked>
-                    <label id="lbl-show-circle" for="show-circle">Show Radius</label>
-                </div>
-
-                <div class="checkbox-row">
-                    <input type="checkbox" id="lock-circle">
-                    <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
-                </div>
-            </div>
-
-            <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
-            </div>
-
-            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
-
-            <div id="climb-section">
-                <div class="control-row">
-                    <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
+            <div id="radius-controls">
+                <div class="control-row" style="margin-top: 5px;">
+                    <span id="lbl-radius" class="control-label">Search Radius (km):</span>
                     <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
-                        <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
-                        <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+                        <button class="num-btn" onclick="adjustNumber('radiusInput', -0.5)">-</button>
+                        <input type="number" id="radiusInput" value="1" min="0.5" max="100" step="0.5">
+                        <button class="num-btn" onclick="adjustNumber('radiusInput', 0.5)">+</button>
                     </div>
                 </div>
 
-                <div class="control-row">
-                    <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
-                    <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
-                        <input type="number" id="numClimbsInput" value="1" min="1" max="10">
-                        <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
-                    </div>
-                </div>
-
-                <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
-            </div>
-
-            <hr style="border:0; border-top:1px solid #eee; width:100%; margin: 10px 0;">
-
-            <div id="slope-section">
                 <div class="checkbox-group">
                     <div class="checkbox-row">
-                        <input type="checkbox" id="slope-filter-toggle">
-                        <label id="lbl-slope-filter" for="slope-filter-toggle">Filter Slopes</label>
+                        <input type="checkbox" id="show-circle" checked>
+                        <label id="lbl-show-circle" for="show-circle">Show Radius</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="lock-circle">
+                        <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
                     </div>
                 </div>
+            </div>
 
-                <div id="slope-filter-min-row" class="control-row" style="display:none;">
-                    <span id="lbl-slope-min" class="control-label">Min (°):</span>
-                    <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', -1)">-</button>
-                        <input type="number" id="slopeFilterMin" value="10" min="0" max="90" step="1">
-                        <button class="num-btn" onclick="adjustNumber('slopeFilterMin', 1)">+</button>
+            <!-- Find Highest Points (collapsible) -->
+            <div id="group-points" class="section-group">
+                <div class="section-header" onclick="toggleSection('section-points')">
+                    <span id="section-points-title">📍 Find Highest Points</span>
+                    <span class="section-toggle">➕</span>
+                </div>
+                <div id="section-points" class="section-content">
+                    <div class="control-row">
+                        <span id="lbl-points" class="control-label">Num Points:</span>
+                        <div class="number-input-group">
+                            <button class="num-btn" onclick="adjustNumber('numPoints', -1)">-</button>
+                            <input type="number" id="numPoints" value="3" min="1" max="50">
+                            <button class="num-btn" onclick="adjustNumber('numPoints', 1)">+</button>
+                        </div>
                     </div>
+                    <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
                 </div>
+            </div>
 
-                <div id="slope-filter-max-row" class="control-row" style="display:none;">
-                    <span id="lbl-slope-max" class="control-label">Max (°):</span>
-                    <div class="number-input-group">
-                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', -1)">-</button>
-                        <input type="number" id="slopeFilterMax" value="100" min="0" max="100" step="1">
-                        <button class="num-btn" onclick="adjustNumber('slopeFilterMax', 1)">+</button>
+            <!-- Find Climbs (collapsible) -->
+            <div id="group-climbs" class="section-group">
+                <div class="section-header" onclick="toggleSection('section-climbs')">
+                    <span id="section-climbs-title">📈 Find Climbs</span>
+                    <span class="section-toggle">➕</span>
+                </div>
+                <div id="section-climbs" class="section-content">
+                    <div class="control-row">
+                        <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
+                        <div class="number-input-group">
+                            <button class="num-btn" onclick="adjustNumber('climbDistInput', -10)">-</button>
+                            <input type="number" id="climbDistInput" value="200" min="50" max="5000" step="10">
+                            <button class="num-btn" onclick="adjustNumber('climbDistInput', 10)">+</button>
+                        </div>
                     </div>
+                    <div class="control-row">
+                        <span id="lbl-num-climbs" class="control-label">Num Climbs:</span>
+                        <div class="number-input-group">
+                            <button class="num-btn" onclick="adjustNumber('numClimbsInput', -1)">-</button>
+                            <input type="number" id="numClimbsInput" value="1" min="1" max="10">
+                            <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
+                        </div>
+                    </div>
+                    <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
                 </div>
+            </div>
 
-                <div class="control-row">
-                    <span id="lbl-slope-opacity" class="control-label">Opacity:</span>
-                    <input type="range" id="slopeOpacity" min="10" max="100" value="60" step="5" style="flex:1; margin: 0 6px;">
-                    <span id="slopeOpacityVal" style="min-width:35px;text-align:right;font-size:13px;">60%</span>
+            <!-- Generate Slope Map (collapsible) -->
+            <div id="group-slope" class="section-group">
+                <div class="section-header" onclick="toggleSection('section-slope')">
+                    <span id="section-slope-title">🗺️ Generate Slope Map</span>
+                    <span class="section-toggle">➕</span>
                 </div>
+                <div id="section-slope" class="section-content">
+                    <div class="checkbox-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="slope-filter-toggle">
+                            <label id="lbl-slope-filter" for="slope-filter-toggle">Filter Slopes</label>
+                        </div>
+                    </div>
+                    <div id="slope-filter-min-row" class="control-row" style="display:none;">
+                        <span id="lbl-slope-min" class="control-label">Min (°):</span>
+                        <div class="number-input-group">
+                            <button class="num-btn" onclick="adjustNumber('slopeFilterMin', -1)">-</button>
+                            <input type="number" id="slopeFilterMin" value="10" min="0" max="90" step="1">
+                            <button class="num-btn" onclick="adjustNumber('slopeFilterMin', 1)">+</button>
+                        </div>
+                    </div>
+                    <div id="slope-filter-max-row" class="control-row" style="display:none;">
+                        <span id="lbl-slope-max" class="control-label">Max (°):</span>
+                        <div class="number-input-group">
+                            <button class="num-btn" onclick="adjustNumber('slopeFilterMax', -1)">-</button>
+                            <input type="number" id="slopeFilterMax" value="100" min="0" max="100" step="1">
+                            <button class="num-btn" onclick="adjustNumber('slopeFilterMax', 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span id="lbl-slope-opacity" class="control-label">Opacity:</span>
+                        <input type="range" id="slopeOpacity" min="10" max="100" value="60" step="5" style="flex:1; margin: 0 6px;">
+                        <span id="slopeOpacityVal" style="min-width:35px;text-align:right;font-size:13px;">60%</span>
+                    </div>
+                    <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
+                </div>
+            </div>
 
-                <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
+            <!-- Add Routes (collapsible) -->
+            <div id="group-routes" class="section-group">
+                <div class="section-header" onclick="toggleSection('section-routes')">
+                    <span id="section-routes-title">📂 Add Routes</span>
+                    <span class="section-toggle">➕</span>
+                </div>
+                <div id="section-routes" class="section-content">
+                    <div class="control-row">
+                        <span id="lbl-track-color" class="control-label">Track Color:</span>
+                        <input type="color" id="gpxTrackColor" value="#000000" style="width:36px;height:28px;border:1px solid #ccc;border-radius:4px;cursor:pointer;padding:1px;">
+                    </div>
+                    <div class="control-row">
+                        <span id="lbl-track-width" class="control-label">Track Width:</span>
+                        <input type="range" id="gpxTrackWidth" min="1" max="10" value="4" step="1" style="flex:1; margin: 0 6px;">
+                        <span id="gpxTrackWidthVal" style="min-width:25px;text-align:right;font-size:13px;">4</span>
+                    </div>
+                    <div class="checkbox-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxShowKmLabels">
+                            <label id="lbl-km-labels" for="gpxShowKmLabels">Show Distance labels</label>
+                        </div>
+                        <select id="distanceUnit" style="width:auto; max-width:min-content; padding:2px 4px; border:1px solid #ccc; border-radius:6px; font-size:12px;">
+                            <option value="km" id="opt-unit-km">Kilometers</option>
+                            <option value="mi" id="opt-unit-mi">Miles</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxShowWaypoints" checked>
+                            <label id="lbl-show-waypoints" for="gpxShowWaypoints">Show Waypoints</label>
+                        </div>
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxShowMinMax" checked>
+                            <label id="lbl-show-minmax" for="gpxShowMinMax">Show Max/Min Height</label>
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxColorBySlope">
+                            <label id="lbl-color-slope" for="gpxColorBySlope">Color by slope</label>
+                        </div>
+                    </div>
+                    <input type="file" id="gpx-file-input" accept=".gpx" style="display:none;">
+                    <button id="gpx-btn" class="gpx-btn" onclick="document.getElementById('gpx-file-input').click()">📂 Load GPX Route</button>
+                    <div id="gpx-track-info" class="gpx-track-info" style="display:none;"></div>
+                    <button id="gpx-clear-btn" class="gpx-clear-btn" onclick="clearGpxRoute()" style="display:none;">✕ Clear Route</button>
+                </div>
             </div>
 
             <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
 
-            <div class="footer-row">
-                <div id="status">Ready.</div>
-                <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
-            </div>
+        <div class="footer-row">
+            <div id="status">Ready.</div>
+            <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
         </div>
     </div>
 
