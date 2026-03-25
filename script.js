@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.7";
+const APP_VERSION = "1.8";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -1624,9 +1624,11 @@ const tutorialSteps = [
     { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
     { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
-    { targetSelector: '#scan-controls-group', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
-    { targetSelector: '#climb-section', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text' },
-    { targetSelector: '#slope-section', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text' },
+    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
+    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandSection: 'section-points' },
+    { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandSection: 'section-climbs' },
+    { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandSection: 'section-slope' },
+    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandSection: 'section-routes' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
@@ -1670,6 +1672,14 @@ function renderTutorialStep() {
     prevBtn.textContent = t.tutorial_btn_prev || 'Back';
     nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? (t.tutorial_btn_finish || 'Finish') : (t.tutorial_btn_next || 'Next');
     prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
+
+    // Expand the section if the step requires it
+    if (step.expandSection) {
+        const sectionContent = document.getElementById(step.expandSection);
+        if (sectionContent && (sectionContent.style.display === 'none' || sectionContent.style.display === '')) {
+            toggleSection(step.expandSection);
+        }
+    }
 
     const PAD = 8;
     if (step.targetSelector) {
