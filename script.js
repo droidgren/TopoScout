@@ -550,7 +550,8 @@ function computeDynamicStep(totalLengthMeters, visibleLengthMeters) {
     const unitMeters = unit === 'mi' ? 1609.344 : 1000;
     const refLength = visibleLengthMeters > 0 ? visibleLengthMeters : totalLengthMeters;
     const refUnits = refLength / unitMeters;
-    const TARGET_LABELS = 17;
+    const vw = window.innerWidth || 1024;
+    const TARGET_LABELS = vw < 600 ? 6 : vw < 900 ? 10 : 17;
     const niceSteps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
     let rawStep = refUnits / TARGET_LABELS;
     if (rawStep < 0.1) rawStep = 0.1;
