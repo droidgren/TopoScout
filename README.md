@@ -89,6 +89,7 @@ This application uses **Leaflet.js** for map rendering. Elevation data is fetche
 
 ## Changelog
 
+* **v1.8.1:** Added map rotation with Ctrl+drag and two-finger touch support, compass indicator with reset-north button.
 * **v1.8:** Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.
 * **v1.7:** Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.
 * **v1.6:** Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.
