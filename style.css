@@ -927,3 +927,26 @@ details[open] summary {
 #tutorial-prev:hover {
     background: #bdbdbd;
 }
+
+/* --- RESET NORTH COMPASS CONTROL --- */
+.reset-north-control {
+    display: none;
+}
+
+.reset-north-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: white !important;
+    cursor: pointer;
+}
+
+.reset-north-btn:hover {
+    background: #f4f4f4 !important;
+}
+
+.compass-icon {
+    transition: transform 0.15s ease;
+}

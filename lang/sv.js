@@ -97,7 +97,7 @@ const LANG_SV = {
     tutorial_search_title: "Sök & Position",
     tutorial_search_text: "Sök efter valfri plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din position.",
     tutorial_tips_title: "💡 Tips för bästa resultat",
-    tutorial_tips_text: "• Zooma in till nivå 14–15 för mest exakta resultat.\n• Använd en mindre sökradie vid hög zoomnivå.\n• Lås radien innan du skannar för att behålla sökområdet fixerat.",
+    tutorial_tips_text: "• Zooma in till nivå 14–15 för mest exakta resultat.\n• Använd en mindre sökradie vid hög zoomnivå.\n• Lås radien innan du skannar för att behålla sökområdet fixerat.\n• Rotera kartan genom att hålla Ctrl och dra, eller använd tvåfingerrotation på pekskärm. Tryck på kompassikonen för att återställa norr.",
     tutorial_btn_next: "Nästa",
     tutorial_btn_prev: "Tillbaka",
     tutorial_btn_finish: "Avsluta",

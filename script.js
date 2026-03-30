@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.8";
+const APP_VERSION = "1.8.1";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -155,8 +155,90 @@ if (!layers[savedLayer]) {
 }
 
 // Create the map
-const map = L.map('map', { zoomControl: false }).setView([savedLat, savedLng], savedZoom);
+const map = L.map('map', {
+    zoomControl: false,
+    boxZoom: false,
+    rotate: true,
+    touchRotate: true,
+    rotateControl: false,
+    bearing: 0
+}).setView([savedLat, savedLng], savedZoom);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// Reset-north compass control
+const ResetNorthControl = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd: function (map) {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control reset-north-control');
+        const btn = L.DomUtil.create('a', 'reset-north-btn', container);
+        btn.href = '#';
+        btn.title = 'Reset North';
+        btn.setAttribute('role', 'button');
+        btn.setAttribute('aria-label', 'Reset North');
+        btn.innerHTML = '<svg class="compass-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="12,2 15,14 12,12 9,14" fill="#e53935"/><polygon points="12,22 9,14 12,12 15,14" fill="#999"/></svg>';
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.on(btn, 'click', function (e) {
+            L.DomEvent.preventDefault(e);
+            map.setBearing(0);
+        });
+        this._btn = btn;
+        map.on('rotate', this._onRotate, this);
+        return container;
+    },
+    onRemove: function (map) {
+        map.off('rotate', this._onRotate, this);
+    },
+    _onRotate: function (e) {
+        const bearing = e.target.getBearing();
+        this._btn.querySelector('.compass-icon').style.transform = 'rotate(' + (-bearing) + 'deg)';
+        this._btn.closest('.reset-north-control').style.display = bearing === 0 ? 'none' : 'block';
+    }
+});
+new ResetNorthControl().addTo(map);
+
+// Ctrl+drag rotation handler (desktop)
+(function () {
+    const mapContainer = map.getContainer();
+    let rotating = false;
+    let startAngle = 0;
+    let startBearing = 0;
+
+    function getAngleFromCenter(e) {
+        const rect = mapContainer.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        return Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
+    }
+
+    mapContainer.addEventListener('mousedown', function (e) {
+        if (e.ctrlKey && e.button === 0) {
+            e.preventDefault();
+            rotating = true;
+            startAngle = getAngleFromCenter(e);
+            startBearing = map.getBearing();
+            mapContainer.style.cursor = 'grabbing';
+            map.dragging.disable();
+        }
+    });
+
+    window.addEventListener('mousemove', function (e) {
+        if (!rotating) return;
+        const delta = getAngleFromCenter(e) - startAngle;
+        map.setBearing(startBearing + delta);
+    });
+
+    window.addEventListener('mouseup', function (e) {
+        if (!rotating) return;
+        rotating = false;
+        mapContainer.style.cursor = '';
+        map.dragging.enable();
+    });
+
+    // Prevent context-menu when ctrl+clicking
+    mapContainer.addEventListener('contextmenu', function (e) {
+        if (e.ctrlKey) e.preventDefault();
+    });
+})();
 
 // ==========================================
 // 5. FUNCTIONS
