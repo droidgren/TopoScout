@@ -28,7 +28,7 @@ const LANG_EN = {
     status_no_data: "No data found.",
     input_search_ph: "Search location",
     info_title: "About Elevation Finder",
-    info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area. The app works on mobile devices, but is best experienced on larger screens",
+    info_desc: "This tool helps you analyze terrain to find highest points and calculate maximum ascent within a given area. The app works on mobile devices, but is best experienced on larger screens. Also check out <a href='https://droidgren.github.io/topo_gpx_viewer/' target='_blank'>Topo GPX Viewer</a> for more advanced GPX viewing features.",
     info_section_peaks: "Find Highest Points",
     info_help_radius: "Radius: Set the size of the search area.",
     info_help_points: "Points: How many peaks to find within the area.",
