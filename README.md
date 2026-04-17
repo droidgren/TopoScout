@@ -4,7 +4,10 @@ Topo Elevation Search is a client-side web application designed to analyze terra
 
 The application relies on global elevation tiles and runs entirely in the browser without sending user data or search queries to a backend server.
 
-To access the webapp go here: https://droidgren.github.io/elevation_finder/
+Live demo: [Topo Elevation Search](https://droidgren.github.io/elevation_finder/)
+
+Also check out [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer), a companion project focused on visualizing GPX tracks with elevation-aware map tools.
+Try it live here: [Topo GPX Viewer Demo](https://droidgren.github.io/topo_gpx_viewer/)
 
 ## Features
 
