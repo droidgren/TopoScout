@@ -816,7 +816,7 @@ function rebuildGpxLayer() {
         haversineDistance(startPt.lat, startPt.lon, endPt.lat, endPt.lon) < OVERLAP_THRESHOLD;
 
     if (startEndOverlap) {
-        const label = `⏵ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
+        const label = `▶ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
         const icon = L.divIcon({ className: 'gpx-start-end-label', html: label, iconSize: null });
         mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
     } else {
