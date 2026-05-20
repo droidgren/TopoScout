@@ -70,7 +70,6 @@ const LANG_SV = {
     update_available: "En ny version finns tillgänglig.",
     update_btn: "Uppdatera",
     btn_install_app: "📲 Installera som app",
-    btn_refresh_app: "🔄 Ladda om appen",
     mobile_install_msg: "Installera Höjdsökaren som app!",
     btn_install: "Installera",
     btn_tutorial: "🎓 Starta genomgång av funktioner",
