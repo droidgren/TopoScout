@@ -70,7 +70,6 @@ const LANG_EN = {
     update_available: "A new version is available.",
     update_btn: "Update",
     btn_install_app: "📲 Install as App",
-    btn_refresh_app: "🔄 Refresh App",
     mobile_install_msg: "Install Elevation Finder as an app!",
     btn_install: "Install",
     btn_tutorial: "🎓 Start Tutorial",

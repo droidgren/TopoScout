@@ -284,8 +284,6 @@ function updateLanguage() {
 
         const tutBtn = document.getElementById('start-tutorial-btn');
         if (tutBtn) tutBtn.textContent = t.btn_tutorial;
-        const refreshBtn = document.getElementById('refresh-app-btn');
-        if (refreshBtn) refreshBtn.textContent = t.btn_refresh_app;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
@@ -1678,24 +1676,6 @@ function dismissInstallBar() {
     localStorage.setItem('topo_install_dismissed', '1');
     const mobileBar = document.getElementById('mobile-install-bar');
     if (mobileBar) mobileBar.classList.remove('show');
-}
-
-async function forceAppRefresh() {
-    if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const registration of registrations) {
-            await registration.unregister();
-        }
-    }
-
-    if ('caches' in window) {
-        const cacheKeys = await caches.keys();
-        for (const cacheKey of cacheKeys) {
-            await caches.delete(cacheKey);
-        }
-    }
-
-    window.location.reload(true);
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
