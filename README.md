@@ -7,7 +7,6 @@ The application relies on global elevation tiles and runs entirely in the browse
 Live demo: [Topo Elevation Search](https://droidgren.github.io/elevation_finder/)
 
 Also check out [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer), a companion project focused on visualizing GPX tracks with elevation-aware map tools.
-Try it live here: [Topo GPX Viewer Demo](https://droidgren.github.io/topo_gpx_viewer/)
 
 ## Features
 
@@ -30,24 +29,6 @@ Try it live here: [Topo GPX Viewer Demo](https://droidgren.github.io/topo_gpx_vi
 * **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser.
 * **Bilingual Support:** Full support for English and Swedish.
 
-## Getting Started
-
-### Prerequisites
-
-No installation or backend server is required. This is a static HTML/JS application.
-
-### Running Locally
-
-1.  Clone the repository or download the files.
-2.  Ensure you have the following file structure:
-    * `index.html`
-    * `style.css`
-    * `script.js`
-3.  Open `index.html` in any modern web browser.
-
-### Hosting
-
-This project is ready to be hosted on GitHub Pages or any static web server (Apache, Nginx, Netlify, Vercel).
 
 ## Usage
 
