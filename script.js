@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.8.1";
+const APP_VERSION = "1.8.2";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -88,6 +88,10 @@ const layers = {
     "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, {
         attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
         maxZoom: 17
+    }),
+    "norges_map": L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+        attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
+        maxZoom: 20
     }),
     "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
     "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
@@ -280,6 +284,8 @@ function updateLanguage() {
 
         const tutBtn = document.getElementById('start-tutorial-btn');
         if (tutBtn) tutBtn.textContent = t.btn_tutorial;
+        const refreshBtn = document.getElementById('refresh-app-btn');
+        if (refreshBtn) refreshBtn.textContent = t.btn_refresh_app;
 
         document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
@@ -326,6 +332,7 @@ function updateLanguage() {
             for (let i = 0; i < layerSelect.options.length; i++) {
                 const val = layerSelect.options[i].value;
                 if (val === 'lm_map') layerSelect.options[i].text = t.layer_lm_map;
+                else if (val === 'norges_map') layerSelect.options[i].text = t.layer_norges_map;
                 else if (val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
                 else if (val === 'debug') layerSelect.options[i].text = t.layer_debug;
             }
@@ -1671,6 +1678,24 @@ function dismissInstallBar() {
     localStorage.setItem('topo_install_dismissed', '1');
     const mobileBar = document.getElementById('mobile-install-bar');
     if (mobileBar) mobileBar.classList.remove('show');
+}
+
+async function forceAppRefresh() {
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+            await registration.unregister();
+        }
+    }
+
+    if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        for (const cacheKey of cacheKeys) {
+            await caches.delete(cacheKey);
+        }
+    }
+
+    window.location.reload(true);
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
