@@ -32,6 +32,7 @@ const lockedServices = {
 const OPENTOPO_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const NORGES_MAP_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev";
 
@@ -89,9 +90,9 @@ const layers = {
         attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
         maxZoom: 17
     }),
-    "norges_map": L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+    "norges_map": L.tileLayer(NORGES_MAP_URL, {
         attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
-        maxZoom: 20
+        maxZoom: 18
     }),
     "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
     "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
