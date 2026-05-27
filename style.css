@@ -757,6 +757,30 @@ select {
     margin-bottom: 1px;
 }
 
+.maplibregl-popup.result-popup .maplibregl-popup-content {
+    padding: 14px 16px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-tip {
+    border-top-color: #fff;
+    border-bottom-color: #fff;
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-close-button {
+    color: #777;
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px 8px 0 0;
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-close-button:hover {
+    background: transparent;
+    color: #333;
+}
+
 /* CHANGELOG ACCORDION */
 details summary:hover {
     color: #007bff !important;
