@@ -303,6 +303,13 @@ function createCircleLayer(center, options = {}, isMarker = false) {
             }
             return this;
         },
+        setRadius(radius) {
+            this._options.radius = radius;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
         setOpacity(opacity) {
             this._options.opacity = opacity;
             if (this._map) {
@@ -448,16 +455,39 @@ function createControl(options = {}) {
 }
 
 function createMapAdapter(containerId, options) {
+    const initialTileLayer = options.initialTileLayer || null;
+    const initialStyle = initialTileLayer ? {
+        version: 8,
+        sources: {
+            basemap: {
+                type: 'raster',
+                tiles: getTileUrls(initialTileLayer.url),
+                tileSize: 256,
+                maxzoom: initialTileLayer.options.maxZoom || 19,
+                attribution: initialTileLayer.options.attribution || ''
+            }
+        },
+        layers: [{
+            id: 'basemap-layer',
+            type: 'raster',
+            source: 'basemap',
+            paint: {
+                'raster-opacity': initialTileLayer.options.opacity == null ? 1 : initialTileLayer.options.opacity
+            }
+        }]
+    } : {
+        version: 8,
+        sources: {},
+        layers: []
+    };
+
     const nativeMap = new maplibregl.Map({
         container: containerId,
         attributionControl: false,
-        style: {
-            version: 8,
-            sources: {},
-            layers: []
-        },
+        style: initialStyle,
         center: [options.center.lng, options.center.lat],
         zoom: options.zoom,
+        maxZoom: initialTileLayer ? (initialTileLayer.options.maxZoom || 19) : 19,
         bearing: options.bearing || 0,
         pitch: 0,
         dragRotate: true,
@@ -467,11 +497,17 @@ function createMapAdapter(containerId, options) {
         cooperativeGestures: false
     });
 
+    function hasUsableStyle() {
+        return Boolean(nativeMap.style && (nativeMap.style.stylesheet || nativeMap.style._loaded));
+    }
+
     const adapter = {
         _map: nativeMap,
         _eventHandlers: new Map(),
         _isLoaded: false,
+        _styleReady: false,
         _pendingTileLayer: null,
+        _pendingOverlayLayers: new Set(),
         _tileLayer: null,
         _controls: [],
         _overlayOrder: [],
@@ -487,7 +523,7 @@ function createMapAdapter(containerId, options) {
             if (!layer) return this;
             layer._map = this;
             if (layer.type === 'tile') {
-                if (!this._isLoaded) {
+                if (!this._styleReady) {
                     this._pendingTileLayer = layer;
                     return this;
                 }
@@ -510,6 +546,10 @@ function createMapAdapter(containerId, options) {
             }
             if (layer.type === 'group') {
                 layer.addTo(this);
+                return this;
+            }
+            if (!this._styleReady) {
+                this._pendingOverlayLayers.add(layer);
                 return this;
             }
             this._renderOverlay(layer);
@@ -537,6 +577,7 @@ function createMapAdapter(containerId, options) {
                 layer.remove();
                 return this;
             }
+            this._pendingOverlayLayers.delete(layer);
             ensureRemoved(nativeMap, layer);
             layer._map = null;
             return this;
@@ -563,64 +604,97 @@ function createMapAdapter(containerId, options) {
             this._tileLayer = layer;
         },
         _renderOverlay(layer) {
+            if (!this._styleReady) {
+                this._pendingOverlayLayers.add(layer);
+                return;
+            }
             if (!layer._id) {
                 layer._id = `overlay-${++mapOverlayId}`;
             }
             layer._ids = getOverlayIds(layer._id, layer.type);
-            ensureRemoved(nativeMap, layer);
 
             if (layer.type === 'circle') {
-                nativeMap.addSource(layer._ids.sourceId, {
-                    type: 'geojson',
-                    data: circleToPolygon(layer._center, layer._options.radius || 0)
-                });
-                nativeMap.addLayer({
-                    id: layer._ids.fillLayerId,
-                    type: 'fill',
-                    source: layer._ids.sourceId,
-                    paint: {
-                        'fill-color': layer._options.fillColor || layer._options.color || '#007bff',
-                        'fill-opacity': layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity
-                    }
-                });
-                nativeMap.addLayer({
-                    id: layer._ids.lineLayerId,
-                    type: 'line',
-                    source: layer._ids.sourceId,
-                    paint: {
-                        'line-color': layer._options.color || '#007bff',
-                        'line-width': layer._options.weight || 1,
-                        'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
-                    }
-                });
+                const source = nativeMap.getSource(layer._ids.sourceId);
+                const circleData = circleToPolygon(layer._center, layer._options.radius || 0);
+                if (source) {
+                    source.setData(circleData);
+                } else {
+                    nativeMap.addSource(layer._ids.sourceId, {
+                        type: 'geojson',
+                        data: circleData
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.fillLayerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.fillLayerId,
+                        type: 'fill',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'fill-color': layer._options.fillColor || layer._options.color || '#007bff',
+                            'fill-opacity': layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity
+                        }
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.lineLayerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.lineLayerId,
+                        type: 'line',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'line-color': layer._options.color || '#007bff',
+                            'line-width': layer._options.weight || 1,
+                            'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                        }
+                    });
+                }
+                nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-color', layer._options.fillColor || layer._options.color || '#007bff');
+                nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-opacity', layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity);
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-color', layer._options.color || '#007bff');
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-width', layer._options.weight || 1);
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-opacity', layer._options.opacity == null ? 1 : layer._options.opacity);
                 return;
             }
 
             if (layer.type === 'circleMarker') {
-                nativeMap.addSource(layer._ids.sourceId, {
-                    type: 'geojson',
-                    data: {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'Point',
-                            coordinates: [layer._center.lng, layer._center.lat]
+                const markerSource = nativeMap.getSource(layer._ids.sourceId);
+                const markerData = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [layer._center.lng, layer._center.lat]
+                    }
+                };
+                if (markerSource) {
+                    markerSource.setData(markerData);
+                } else {
+                    nativeMap.addSource(layer._ids.sourceId, {
+                        type: 'geojson',
+                        data: markerData
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.layerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.layerId,
+                        type: 'circle',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'circle-radius': layer._options.radius || 5,
+                            'circle-color': layer._options.fillColor || layer._options.color || '#fff',
+                            'circle-stroke-color': layer._options.color || '#000',
+                            'circle-stroke-width': layer._options.weight || 2,
+                            'circle-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                         }
-                    }
-                });
-                nativeMap.addLayer({
-                    id: layer._ids.layerId,
-                    type: 'circle',
-                    source: layer._ids.sourceId,
-                    paint: {
-                        'circle-radius': layer._options.radius || 5,
-                        'circle-color': layer._options.fillColor || layer._options.color || '#fff',
-                        'circle-stroke-color': layer._options.color || '#000',
-                        'circle-stroke-width': layer._options.weight || 2,
-                        'circle-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
-                    }
-                });
+                    });
+                }
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-radius', layer._options.radius || 5);
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-color', layer._options.fillColor || layer._options.color || '#fff');
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-stroke-color', layer._options.color || '#000');
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-stroke-width', layer._options.weight || 2);
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-opacity', layer._options.opacity == null ? 1 : layer._options.opacity);
                 return;
             }
+
+            ensureRemoved(nativeMap, layer);
 
             if (layer.type === 'polyline') {
                 nativeMap.addSource(layer._ids.sourceId, {
@@ -738,18 +812,56 @@ function createMapAdapter(containerId, options) {
         }
     };
 
-    nativeMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-    nativeMap.on('load', () => {
-        adapter._isLoaded = true;
+    function flushPendingStyleLayers() {
+        if (!adapter._styleReady) return;
         if (adapter._pendingTileLayer) {
             adapter._setTileLayer(adapter._pendingTileLayer);
             adapter._pendingTileLayer = null;
         }
-        nativeMap.fire('zoomend');
-    });
+        if (adapter._pendingOverlayLayers.size > 0) {
+            const pendingLayers = Array.from(adapter._pendingOverlayLayers);
+            adapter._pendingOverlayLayers.clear();
+            for (const layer of pendingLayers) {
+                if (layer && layer._map === adapter) {
+                    adapter._renderOverlay(layer);
+                }
+            }
+        }
+    }
+
+    function markStyleReady() {
+        if (!adapter._styleReady && hasUsableStyle()) {
+            adapter._styleReady = true;
+        }
+        if (!adapter._styleReady) {
+            return false;
+        }
+        flushPendingStyleLayers();
+        if (!adapter._isLoaded) {
+            adapter._isLoaded = true;
+            nativeMap.fire('zoomend');
+        }
+        return true;
+    }
+
+    function pollStyleReady() {
+        if (markStyleReady()) {
+            return;
+        }
+        window.setTimeout(pollStyleReady, 50);
+    }
+
+    nativeMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    nativeMap.on('load', markStyleReady);
+    nativeMap.on('styledata', markStyleReady);
     nativeMap.on('zoomend', () => {
         nativeMap.fire('moveend');
     });
+    window.requestAnimationFrame(() => {
+        nativeMap.resize();
+        markStyleReady();
+    });
+    pollStyleReady();
 
     return adapter;
 }
@@ -928,6 +1040,8 @@ if (!layers[savedLayer]) {
     savedLayer = "opentopo";
 }
 
+const initialMapLayer = layers.opentopo;
+
 // Create the map
 const map = L.map('map', {
     zoomControl: false,
@@ -935,7 +1049,8 @@ const map = L.map('map', {
     rotate: true,
     touchRotate: true,
     rotateControl: false,
-    bearing: 0
+    bearing: 0,
+    initialTileLayer: initialMapLayer
 }).setView([savedLat, savedLng], savedZoom);
 map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), 'bottom-right');
 
@@ -1753,6 +1868,84 @@ window.copyCoords = function (lat, lng, btnElement) {
 
 function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
 
+function toRgba(hexColor, opacity) {
+    const normalized = hexColor.replace('#', '');
+    const value = normalized.length === 3
+        ? normalized.split('').map((char) => char + char).join('')
+        : normalized;
+    const red = parseInt(value.slice(0, 2), 16);
+    const green = parseInt(value.slice(2, 4), 16);
+    const blue = parseInt(value.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
+
+function ensureSearchOverlay() {
+    const mapContainer = map.getContainer();
+    let overlay = document.getElementById('search-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'search-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.inset = '0';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '850';
+
+        const circleEl = document.createElement('div');
+        circleEl.style.position = 'absolute';
+        circleEl.style.transform = 'translate(-50%, -50%)';
+        circleEl.style.borderRadius = '50%';
+        circleEl.style.boxSizing = 'border-box';
+        circleEl.style.display = 'none';
+
+        const markerEl = document.createElement('div');
+        markerEl.style.position = 'absolute';
+        markerEl.style.transform = 'translate(-50%, -50%)';
+        markerEl.style.borderRadius = '50%';
+        markerEl.style.boxSizing = 'border-box';
+        markerEl.style.width = '8px';
+        markerEl.style.height = '8px';
+        markerEl.style.background = '#ffffff';
+        markerEl.style.display = 'none';
+
+        overlay.appendChild(circleEl);
+        overlay.appendChild(markerEl);
+        overlay._circle = circleEl;
+        overlay._marker = markerEl;
+        mapContainer.appendChild(overlay);
+    }
+    return overlay;
+}
+
+function updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity) {
+    const overlay = ensureSearchOverlay();
+    const point = map._map.project([searchCenter.lng, searchCenter.lat]);
+    const metersPerPixel = (156543.03392 * Math.cos(searchCenter.lat * Math.PI / 180)) / Math.pow(2, map.getZoom());
+    const radiusPx = metersPerPixel > 0 ? radiusM / metersPerPixel : 0;
+
+    const markerEl = overlay._marker;
+    markerEl.style.display = 'block';
+    markerEl.style.left = `${point.x}px`;
+    markerEl.style.top = `${point.y}px`;
+    markerEl.style.border = `2px solid ${markerColor}`;
+
+    const circleEl = overlay._circle;
+    if (showCircle) {
+        const sizePx = Math.max(radiusPx * 2, 2);
+        circleEl.style.display = 'block';
+        circleEl.style.left = `${point.x}px`;
+        circleEl.style.top = `${point.y}px`;
+        circleEl.style.width = `${sizePx}px`;
+        circleEl.style.height = `${sizePx}px`;
+        circleEl.style.border = '1px solid #007bff';
+        circleEl.style.background = toRgba('#007bff', fillOpacity);
+    } else {
+        circleEl.style.display = 'none';
+    }
+
+    searchCircle = circleEl;
+    centerMarker = markerEl;
+}
+
 window.adjustNumber = function (inputId, amount) {
     const input = document.getElementById(inputId);
     if (!input) return;
@@ -1778,13 +1971,7 @@ function updateUI() {
     zoomLabel.innerText = 'Zoom: ' + displayZoom;
     const searchCenter = getSearchCenter();
     const radiusKm = parseFloat(radiusInput.value) || 5;
-
-    if (searchCircle) map.removeLayer(searchCircle);
-    if (centerMarker) map.removeLayer(centerMarker);
-
-    centerMarker = L.circleMarker(searchCenter, {
-        radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false
-    }).addTo(map);
+    const markerColor = isLocked ? '#e67e22' : '#007bff';
 
     // Show circle when checkbox is checked OR when a slope map is active
     const radiusM = radiusKm * 1000;
@@ -1792,13 +1979,12 @@ function updateUI() {
     const completelyOutsideSlopeArea = slopeMapCenter !== null &&
         searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius + radiusM;
     const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+    let fillOpacity = 0;
     if (showCircle) {
         // No fill when slope map is active and circle overlaps generated area; fill 0.1 when fully outside
-        const fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
-        searchCircle = L.circle(searchCenter, {
-            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusM, interactive: false
-        }).addTo(map);
     }
+    fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
+    updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity);
 }
 
 async function updateCenterElevation() {
@@ -2723,11 +2909,7 @@ function applyInitialMapState() {
     updateCenterElevation();
 }
 
-if (map._isLoaded) {
-    applyInitialMapState();
-} else {
-    map.on('load', applyInitialMapState);
-}
+applyInitialMapState();
 
 // Auto-start tutorial for new visitors
 if (!localStorage.getItem('topo_tutorial_done')) {
