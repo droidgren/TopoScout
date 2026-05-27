@@ -276,20 +276,21 @@ function getMarkerOffset(options = {}, element) {
 }
 
 function getPopupOptions(options = {}) {
+    const popupGap = 8;
     const popupOptions = {
         className: 'result-popup'
     };
     if (!options.icon || !options.icon.options) {
-        popupOptions.offset = 18;
+        popupOptions.offset = 18 + popupGap;
         return popupOptions;
     }
     const iconOptions = options.icon.options;
     if (iconOptions.popupAnchor) {
         popupOptions.anchor = 'bottom';
-        popupOptions.offset = [iconOptions.popupAnchor[0], iconOptions.popupAnchor[1]];
+        popupOptions.offset = [iconOptions.popupAnchor[0], iconOptions.popupAnchor[1] - popupGap];
         return popupOptions;
     }
-    popupOptions.offset = 18;
+    popupOptions.offset = 18 + popupGap;
     return popupOptions;
 }
 
