@@ -96,10 +96,31 @@ function createPoint(x, y) {
         x: Number(x),
         y: Number(y),
         add(other) {
-            return createPoint(this.x + other.x, this.y + other.y);
+            const point = createPoint(other.x, other.y);
+            return createPoint(this.x + point.x, this.y + point.y);
+        },
+        subtract(other) {
+            const point = createPoint(other.x, other.y);
+            return createPoint(this.x - point.x, this.y - point.y);
+        },
+        divideBy(num) {
+            return createPoint(this.x / num, this.y / num);
+        },
+        multiplyBy(num) {
+            return createPoint(this.x * num, this.y * num);
+        },
+        floor() {
+            return createPoint(Math.floor(this.x), Math.floor(this.y));
+        },
+        round() {
+            return createPoint(Math.round(this.x), Math.round(this.y));
+        },
+        ceil() {
+            return createPoint(Math.ceil(this.x), Math.ceil(this.y));
         },
         distanceTo(other) {
-            return Math.hypot(this.x - other.x, this.y - other.y);
+            const point = createPoint(other.x, other.y);
+            return Math.hypot(this.x - point.x, this.y - point.y);
         }
     };
 }
@@ -358,8 +379,8 @@ function createMarkerLayer(latlng, options = {}) {
         },
         openPopup() {
             if (this._marker && this._popup) {
-                this._marker.togglePopup();
-                if (!this._marker.isPopupOpen()) {
+                const popup = this._marker.getPopup ? this._marker.getPopup() : this._popup;
+                if (popup && typeof popup.isOpen === 'function' && !popup.isOpen()) {
                     this._marker.togglePopup();
                 }
             }
@@ -373,6 +394,9 @@ function createMarkerLayer(latlng, options = {}) {
             return this;
         },
         remove() {
+            if (this._popup) {
+                this._popup.remove();
+            }
             if (this._marker) {
                 this._marker.remove();
                 this._marker = null;
@@ -2809,8 +2833,6 @@ function finishTutorial() {
 // ==========================================
 
 // Event Listeners
-if (scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // ADDED BACK THIS Event Listener
-if (climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // ADDED BACK THIS Event Listener
 if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
 if (radiusInput) radiusInput.addEventListener('input', updateUI);
 if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
