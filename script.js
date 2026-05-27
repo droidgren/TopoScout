@@ -478,14 +478,6 @@ function createControl(options = {}) {
     };
 }
 
-function toNativeZoom(leafletZoom) {
-    return Number(leafletZoom) + 1;
-}
-
-function fromNativeZoom(nativeZoom) {
-    return Number(nativeZoom) - 1;
-}
-
 function createMapAdapter(containerId, options) {
     const initialTileLayer = options.initialTileLayer || null;
     const initialStyle = initialTileLayer ? {
@@ -518,8 +510,8 @@ function createMapAdapter(containerId, options) {
         attributionControl: false,
         style: initialStyle,
         center: [options.center.lng, options.center.lat],
-        zoom: toNativeZoom(options.zoom),
-        maxZoom: initialTileLayer ? toNativeZoom(initialTileLayer.options.maxZoom || 19) : toNativeZoom(19),
+        zoom: options.zoom,
+        maxZoom: initialTileLayer ? (initialTileLayer.options.maxZoom || 19) : 19,
         bearing: options.bearing || 0,
         pitch: 0,
         dragRotate: true,
@@ -548,7 +540,7 @@ function createMapAdapter(containerId, options) {
         },
         setView(center, zoom) {
             const nextCenter = toLngLat(center);
-            nativeMap.jumpTo({ center: [nextCenter.lng, nextCenter.lat], zoom: toNativeZoom(zoom) });
+            nativeMap.jumpTo({ center: [nextCenter.lng, nextCenter.lat], zoom });
             return this;
         },
         addLayer(layer) {
@@ -632,7 +624,7 @@ function createMapAdapter(containerId, options) {
                     'raster-opacity': layer.options.opacity == null ? 1 : layer.options.opacity
                 }
             });
-            nativeMap.setMaxZoom(toNativeZoom(layer.options.maxZoom || 19));
+            nativeMap.setMaxZoom(layer.options.maxZoom || 19);
             this._tileLayer = layer;
         },
         _renderOverlay(layer) {
@@ -804,7 +796,7 @@ function createMapAdapter(containerId, options) {
             return createLatLng(center.lat, center.lng);
         },
         getZoom() {
-            return fromNativeZoom(nativeMap.getZoom());
+            return nativeMap.getZoom();
         },
         setBearing(bearing) {
             nativeMap.rotateTo(bearing, { duration: 0 });
@@ -813,10 +805,10 @@ function createMapAdapter(containerId, options) {
         getBearing() {
             return nativeMap.getBearing();
         },
-        project(latlng, zoom = fromNativeZoom(nativeMap.getZoom())) {
+        project(latlng, zoom = nativeMap.getZoom()) {
             return projectToWorldPoint(latlng, zoom);
         },
-        unproject(point, zoom = fromNativeZoom(nativeMap.getZoom())) {
+        unproject(point, zoom = nativeMap.getZoom()) {
             return unprojectWorldPoint(point, zoom);
         },
         getSize() {
