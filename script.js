@@ -36,6 +36,790 @@ const NORGES_MAP_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/w
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev";
 
+const MAP_SOURCES = {
+    "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
+    "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 19 },
+    "thunderforest": { url: '', attribution: 'ThunderForest', maxZoom: 22 },
+    "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 17 },
+    "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 18 },
+    "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
+    "satellite": { url: SATELLITE_URL, attribution: 'Esri', maxZoom: 19 },
+    "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 }
+};
+
+const EARTH_RADIUS_M = 6371000;
+let mapOverlayId = 0;
+
+function getTileUrls(urlTemplate) {
+    if (!urlTemplate) return [];
+    if (urlTemplate.includes('{s}')) {
+        return ['a', 'b', 'c'].map((subdomain) => urlTemplate.replace('{s}', subdomain));
+    }
+    return [urlTemplate];
+}
+
+function normalizeControlPosition(position) {
+    const positions = {
+        topleft: 'top-left',
+        topright: 'top-right',
+        bottomleft: 'bottom-left',
+        bottomright: 'bottom-right'
+    };
+    return positions[position] || position || 'top-right';
+}
+
+function toLngLat(input) {
+    if (Array.isArray(input)) {
+        return { lat: Number(input[0]), lng: Number(input[1]) };
+    }
+    return { lat: Number(input.lat), lng: Number(input.lng) };
+}
+
+function createLatLng(lat, lng) {
+    return {
+        lat: Number(lat),
+        lng: Number(lng),
+        distanceTo(other) {
+            const target = toLngLat(other);
+            const lat1 = this.lat * Math.PI / 180;
+            const lat2 = target.lat * Math.PI / 180;
+            const dLat = (target.lat - this.lat) * Math.PI / 180;
+            const dLng = (target.lng - this.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+            return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+    };
+}
+
+function createPoint(x, y) {
+    return {
+        x: Number(x),
+        y: Number(y),
+        add(other) {
+            return createPoint(this.x + other.x, this.y + other.y);
+        },
+        distanceTo(other) {
+            return Math.hypot(this.x - other.x, this.y - other.y);
+        }
+    };
+}
+
+function normalizeBoundsInput(input) {
+    if (Array.isArray(input) && input.length === 2 && !Array.isArray(input[0]) && typeof input[0] === 'object' && 'lat' in input[0]) {
+        return [toLngLat(input[0]), toLngLat(input[1])];
+    }
+    if (Array.isArray(input) && input.length === 2 && Array.isArray(input[0])) {
+        return [toLngLat(input[0]), toLngLat(input[1])];
+    }
+    const points = Array.isArray(input) ? input.map(toLngLat) : [toLngLat(input)];
+    let minLat = points[0].lat;
+    let maxLat = points[0].lat;
+    let minLng = points[0].lng;
+    let maxLng = points[0].lng;
+    for (const point of points) {
+        minLat = Math.min(minLat, point.lat);
+        maxLat = Math.max(maxLat, point.lat);
+        minLng = Math.min(minLng, point.lng);
+        maxLng = Math.max(maxLng, point.lng);
+    }
+    return [createLatLng(minLat, minLng), createLatLng(maxLat, maxLng)];
+}
+
+function createBounds(inputA, inputB) {
+    const [southWest, northEast] = inputB ? [toLngLat(inputA), toLngLat(inputB)] : normalizeBoundsInput(inputA);
+    return {
+        getSouthWest() {
+            return createLatLng(southWest.lat, southWest.lng);
+        },
+        getNorthEast() {
+            return createLatLng(northEast.lat, northEast.lng);
+        },
+        getNorthWest() {
+            return createLatLng(northEast.lat, southWest.lng);
+        },
+        getSouthEast() {
+            return createLatLng(southWest.lat, northEast.lng);
+        },
+        toMapLibreBounds() {
+            return [[southWest.lng, southWest.lat], [northEast.lng, northEast.lat]];
+        },
+        contains(latlng) {
+            const point = toLngLat(latlng);
+            return point.lat >= southWest.lat &&
+                point.lat <= northEast.lat &&
+                point.lng >= southWest.lng &&
+                point.lng <= northEast.lng;
+        },
+        pad(ratio) {
+            const latPad = (northEast.lat - southWest.lat) * ratio;
+            const lngPad = (northEast.lng - southWest.lng) * ratio;
+            return createBounds(
+                createLatLng(southWest.lat - latPad, southWest.lng - lngPad),
+                createLatLng(northEast.lat + latPad, northEast.lng + lngPad)
+            );
+        }
+    };
+}
+
+function getOverlayIds(baseId, kind) {
+    switch (kind) {
+        case 'circle':
+            return { sourceId: `${baseId}-source`, fillLayerId: `${baseId}-fill`, lineLayerId: `${baseId}-line` };
+        case 'circleMarker':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-circle` };
+        case 'polyline':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-line` };
+        case 'image':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
+        default:
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-layer` };
+    }
+}
+
+function ensureRemoved(nativeMap, overlay) {
+    const ids = overlay._ids || {};
+    if (ids.fillLayerId && nativeMap.getLayer(ids.fillLayerId)) nativeMap.removeLayer(ids.fillLayerId);
+    if (ids.lineLayerId && nativeMap.getLayer(ids.lineLayerId)) nativeMap.removeLayer(ids.lineLayerId);
+    if (ids.layerId && nativeMap.getLayer(ids.layerId)) nativeMap.removeLayer(ids.layerId);
+    if (ids.sourceId && nativeMap.getSource(ids.sourceId)) nativeMap.removeSource(ids.sourceId);
+}
+
+function circleToPolygon(center, radiusMeters, points = 64) {
+    const coords = [];
+    const latRad = center.lat * Math.PI / 180;
+    for (let index = 0; index <= points; index++) {
+        const angle = (index / points) * Math.PI * 2;
+        const dLat = (radiusMeters * Math.cos(angle)) / EARTH_RADIUS_M;
+        const dLng = (radiusMeters * Math.sin(angle)) / (EARTH_RADIUS_M * Math.cos(latRad));
+        coords.push([
+            center.lng + (dLng * 180 / Math.PI),
+            center.lat + (dLat * 180 / Math.PI)
+        ]);
+    }
+    return {
+        type: 'Feature',
+        geometry: {
+            type: 'Polygon',
+            coordinates: [coords]
+        }
+    };
+}
+
+function projectToWorldPoint(latlng, zoom) {
+    const point = toLngLat(latlng);
+    const scale = 256 * Math.pow(2, zoom);
+    const sinLat = Math.sin((point.lat * Math.PI) / 180);
+    const clampedSin = Math.min(Math.max(sinLat, -0.9999), 0.9999);
+    const x = ((point.lng + 180) / 360) * scale;
+    const y = (0.5 - Math.log((1 + clampedSin) / (1 - clampedSin)) / (4 * Math.PI)) * scale;
+    return createPoint(x, y);
+}
+
+function unprojectWorldPoint(point, zoom) {
+    const scale = 256 * Math.pow(2, zoom);
+    const lng = (point.x / scale) * 360 - 180;
+    const y = 0.5 - (point.y / scale);
+    const lat = 90 - (360 * Math.atan(Math.exp(-y * 2 * Math.PI))) / Math.PI;
+    return createLatLng(lat, lng);
+}
+
+function createMarkerElement(options = {}) {
+    if (options.icon && options.icon.options) {
+        const iconOptions = options.icon.options;
+        const img = document.createElement('img');
+        img.src = iconOptions.iconUrl;
+        img.alt = '';
+        img.draggable = false;
+        const size = iconOptions.iconSize || [25, 41];
+        img.style.width = `${size[0]}px`;
+        img.style.height = `${size[1]}px`;
+        img.style.display = 'block';
+        return img;
+    }
+    if (options.icon && options.icon.type === 'divIcon') {
+        const wrapper = document.createElement('div');
+        wrapper.className = options.icon.options.className || '';
+        wrapper.innerHTML = options.icon.options.html || '';
+        return wrapper;
+    }
+    return null;
+}
+
+function getMarkerOffset(options = {}, element) {
+    if (!options.icon || !options.icon.options) return [0, 0];
+    const iconOptions = options.icon.options;
+    if (!iconOptions.iconAnchor || !iconOptions.iconSize) return [0, 0];
+    const [width, height] = iconOptions.iconSize;
+    const [anchorX, anchorY] = iconOptions.iconAnchor;
+    return [width / 2 - anchorX, height / 2 - anchorY];
+}
+
+function createTileLayer(url, options = {}) {
+    return {
+        type: 'tile',
+        url,
+        options,
+        setUrl(nextUrl) {
+            this.url = nextUrl;
+            return this;
+        },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createCircleLayer(center, options = {}, isMarker = false) {
+    const overlay = {
+        type: isMarker ? 'circleMarker' : 'circle',
+        _center: toLngLat(center),
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        },
+        setLatLng(nextCenter) {
+            this._center = toLngLat(nextCenter);
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        setStyle(nextOptions) {
+            Object.assign(this._options, nextOptions);
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        setOpacity(opacity) {
+            this._options.opacity = opacity;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        }
+    };
+    return overlay;
+}
+
+function createPolylineLayer(latlngs, options = {}) {
+    return {
+        type: 'polyline',
+        _latlngs: latlngs.map(toLngLat),
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createMarkerLayer(latlng, options = {}) {
+    return {
+        type: 'marker',
+        _latlng: toLngLat(latlng),
+        _options: { ...options },
+        _marker: null,
+        _popup: null,
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        bindPopup(html) {
+            this._popup = new maplibregl.Popup({ offset: 18 }).setHTML(html);
+            if (this._marker) {
+                this._marker.setPopup(this._popup);
+            }
+            return this;
+        },
+        openPopup() {
+            if (this._marker && this._popup) {
+                this._marker.togglePopup();
+                if (!this._marker.isPopupOpen()) {
+                    this._marker.togglePopup();
+                }
+            }
+            return this;
+        },
+        setLatLng(nextLatLng) {
+            this._latlng = toLngLat(nextLatLng);
+            if (this._marker) {
+                this._marker.setLngLat([this._latlng.lng, this._latlng.lat]);
+            }
+            return this;
+        },
+        remove() {
+            if (this._marker) {
+                this._marker.remove();
+                this._marker = null;
+            }
+            this._map = null;
+        }
+    };
+}
+
+function createImageOverlay(url, bounds, options = {}) {
+    return {
+        type: 'image',
+        _url: url,
+        _bounds: bounds,
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        setOpacity(opacity) {
+            this._options.opacity = opacity;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createLayerGroup(layersToAdd = []) {
+    return {
+        type: 'group',
+        _layers: layersToAdd,
+        addTo(mapInstance) {
+            this._map = mapInstance;
+            for (const layer of this._layers) {
+                layer.addTo(mapInstance);
+            }
+            return this;
+        },
+        remove() {
+            for (const layer of this._layers) {
+                if (layer && typeof layer.remove === 'function') {
+                    layer.remove();
+                }
+            }
+            this._map = null;
+        }
+    };
+}
+
+function createControl(options = {}) {
+    return {
+        options,
+        addTo(mapInstance) {
+            const control = {
+                onAdd: () => this.onAdd(mapInstance),
+                onRemove: () => {
+                    if (typeof this.onRemove === 'function') {
+                        this.onRemove(mapInstance);
+                    }
+                }
+            };
+            this._control = control;
+            this._map = mapInstance;
+            mapInstance._map.addControl(control, normalizeControlPosition(options.position));
+            return this;
+        },
+        remove() {
+            if (this._map && this._control) {
+                this._map._map.removeControl(this._control);
+            }
+        }
+    };
+}
+
+function createMapAdapter(containerId, options) {
+    const nativeMap = new maplibregl.Map({
+        container: containerId,
+        attributionControl: false,
+        style: {
+            version: 8,
+            sources: {},
+            layers: []
+        },
+        center: [options.center.lng, options.center.lat],
+        zoom: options.zoom,
+        bearing: options.bearing || 0,
+        pitch: 0,
+        dragRotate: true,
+        pitchWithRotate: false,
+        touchPitch: false,
+        boxZoom: options.boxZoom !== false,
+        cooperativeGestures: false
+    });
+
+    const adapter = {
+        _map: nativeMap,
+        _eventHandlers: new Map(),
+        _isLoaded: false,
+        _pendingTileLayer: null,
+        _tileLayer: null,
+        _controls: [],
+        _overlayOrder: [],
+        getContainer() {
+            return nativeMap.getContainer();
+        },
+        setView(center, zoom) {
+            const nextCenter = toLngLat(center);
+            nativeMap.jumpTo({ center: [nextCenter.lng, nextCenter.lat], zoom });
+            return this;
+        },
+        addLayer(layer) {
+            if (!layer) return this;
+            layer._map = this;
+            if (layer.type === 'tile') {
+                if (!this._isLoaded) {
+                    this._pendingTileLayer = layer;
+                    return this;
+                }
+                this._setTileLayer(layer);
+                return this;
+            }
+            if (layer.type === 'marker') {
+                const element = createMarkerElement(layer._options);
+                const markerOptions = element ? { element, offset: getMarkerOffset(layer._options, element) } : {};
+                if (element && layer._options.interactive === false) {
+                    element.style.pointerEvents = 'none';
+                }
+                layer._marker = new maplibregl.Marker(markerOptions)
+                    .setLngLat([layer._latlng.lng, layer._latlng.lat])
+                    .addTo(nativeMap);
+                if (layer._popup) {
+                    layer._marker.setPopup(layer._popup);
+                }
+                return this;
+            }
+            if (layer.type === 'group') {
+                layer.addTo(this);
+                return this;
+            }
+            this._renderOverlay(layer);
+            return this;
+        },
+        removeLayer(layer) {
+            if (!layer) return this;
+            if (layer.type === 'tile') {
+                if (this._pendingTileLayer === layer) {
+                    this._pendingTileLayer = null;
+                }
+                if (this._tileLayer === layer) {
+                    if (nativeMap.getLayer('basemap-layer')) nativeMap.removeLayer('basemap-layer');
+                    if (nativeMap.getSource('basemap')) nativeMap.removeSource('basemap');
+                    this._tileLayer = null;
+                }
+                layer._map = null;
+                return this;
+            }
+            if (layer.type === 'marker') {
+                layer.remove();
+                return this;
+            }
+            if (layer.type === 'group') {
+                layer.remove();
+                return this;
+            }
+            ensureRemoved(nativeMap, layer);
+            layer._map = null;
+            return this;
+        },
+        _setTileLayer(layer) {
+            if (nativeMap.getLayer('basemap-layer')) nativeMap.removeLayer('basemap-layer');
+            if (nativeMap.getSource('basemap')) nativeMap.removeSource('basemap');
+            nativeMap.addSource('basemap', {
+                type: 'raster',
+                tiles: getTileUrls(layer.url),
+                tileSize: 256,
+                maxzoom: layer.options.maxZoom || 19,
+                attribution: layer.options.attribution || ''
+            });
+            nativeMap.addLayer({
+                id: 'basemap-layer',
+                type: 'raster',
+                source: 'basemap',
+                paint: {
+                    'raster-opacity': layer.options.opacity == null ? 1 : layer.options.opacity
+                }
+            });
+            nativeMap.setMaxZoom(layer.options.maxZoom || 19);
+            this._tileLayer = layer;
+        },
+        _renderOverlay(layer) {
+            if (!layer._id) {
+                layer._id = `overlay-${++mapOverlayId}`;
+            }
+            layer._ids = getOverlayIds(layer._id, layer.type);
+            ensureRemoved(nativeMap, layer);
+
+            if (layer.type === 'circle') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'geojson',
+                    data: circleToPolygon(layer._center, layer._options.radius || 0)
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.fillLayerId,
+                    type: 'fill',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'fill-color': layer._options.fillColor || layer._options.color || '#007bff',
+                        'fill-opacity': layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity
+                    }
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.lineLayerId,
+                    type: 'line',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'line-color': layer._options.color || '#007bff',
+                        'line-width': layer._options.weight || 1,
+                        'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
+            }
+
+            if (layer.type === 'circleMarker') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [layer._center.lng, layer._center.lat]
+                        }
+                    }
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'circle',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'circle-radius': layer._options.radius || 5,
+                        'circle-color': layer._options.fillColor || layer._options.color || '#fff',
+                        'circle-stroke-color': layer._options.color || '#000',
+                        'circle-stroke-width': layer._options.weight || 2,
+                        'circle-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
+            }
+
+            if (layer.type === 'polyline') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: layer._latlngs.map((point) => [point.lng, point.lat])
+                        }
+                    }
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'line',
+                    source: layer._ids.sourceId,
+                    layout: {
+                        'line-cap': 'round',
+                        'line-join': 'round'
+                    },
+                    paint: {
+                        'line-color': layer._options.color || '#007bff',
+                        'line-width': layer._options.weight || 3,
+                        'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
+            }
+
+            if (layer.type === 'image') {
+                const bounds = layer._bounds;
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'image',
+                    url: layer._url,
+                    coordinates: [
+                        [bounds.getNorthWest().lng, bounds.getNorthWest().lat],
+                        [bounds.getNorthEast().lng, bounds.getNorthEast().lat],
+                        [bounds.getSouthEast().lng, bounds.getSouthEast().lat],
+                        [bounds.getSouthWest().lng, bounds.getSouthWest().lat]
+                    ]
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'raster',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+            }
+        },
+        addControl(control, position) {
+            nativeMap.addControl(control, normalizeControlPosition(position));
+            this._controls.push(control);
+            return this;
+        },
+        removeControl(control) {
+            nativeMap.removeControl(control && control._control ? control._control : control);
+            return this;
+        },
+        on(eventName, handler, context) {
+            const wrapped = context ? handler.bind(context) : handler;
+            this._eventHandlers.set(handler, wrapped);
+            const mapped = eventName === 'zoomend' ? 'zoomend' : eventName;
+            nativeMap.on(mapped, wrapped);
+            return this;
+        },
+        off(eventName, handler) {
+            const wrapped = this._eventHandlers.get(handler) || handler;
+            nativeMap.off(eventName, wrapped);
+            return this;
+        },
+        getCenter() {
+            const center = nativeMap.getCenter();
+            return createLatLng(center.lat, center.lng);
+        },
+        getZoom() {
+            return nativeMap.getZoom();
+        },
+        setBearing(bearing) {
+            nativeMap.rotateTo(bearing, { duration: 0 });
+            return this;
+        },
+        getBearing() {
+            return nativeMap.getBearing();
+        },
+        project(latlng, zoom = nativeMap.getZoom()) {
+            return projectToWorldPoint(latlng, zoom);
+        },
+        unproject(point, zoom = nativeMap.getZoom()) {
+            return unprojectWorldPoint(point, zoom);
+        },
+        getSize() {
+            const canvasSize = nativeMap.getCanvas();
+            return createPoint(canvasSize.clientWidth, canvasSize.clientHeight);
+        },
+        fitBounds(bounds) {
+            nativeMap.fitBounds(bounds.toMapLibreBounds(), { padding: 40, duration: 0 });
+            return this;
+        },
+        getBounds() {
+            const bounds = nativeMap.getBounds();
+            return createBounds(
+                createLatLng(bounds.getSouth(), bounds.getWest()),
+                createLatLng(bounds.getNorth(), bounds.getEast())
+            );
+        },
+        dragging: {
+            disable() {
+                nativeMap.dragPan.disable();
+            },
+            enable() {
+                nativeMap.dragPan.enable();
+            }
+        }
+    };
+
+    nativeMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    nativeMap.on('load', () => {
+        adapter._isLoaded = true;
+        if (adapter._pendingTileLayer) {
+            adapter._setTileLayer(adapter._pendingTileLayer);
+            adapter._pendingTileLayer = null;
+        }
+        nativeMap.fire('zoomend');
+    });
+    nativeMap.on('zoomend', () => {
+        nativeMap.fire('moveend');
+    });
+
+    return adapter;
+}
+
+const L = {
+    tileLayer: createTileLayer,
+    Icon: function Icon(options) { this.options = options; },
+    divIcon(options) {
+        return { type: 'divIcon', options };
+    },
+    map(containerId, options) {
+        const center = createLatLng(savedLat, savedLng);
+        return createMapAdapter(containerId, { ...options, center, zoom: savedZoom });
+    },
+    control(options = {}) {
+        return createControl(options);
+    },
+    DomUtil: {
+        create(tagName, className, parent) {
+            const element = document.createElement(tagName);
+            if (className) element.className = className;
+            if (parent) parent.appendChild(element);
+            return element;
+        }
+    },
+    DomEvent: {
+        disableClickPropagation(element) {
+            ['click', 'dblclick', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'contextmenu'].forEach((eventName) => {
+                element.addEventListener(eventName, (event) => event.stopPropagation());
+            });
+        },
+        on(element, eventName, handler) {
+            element.addEventListener(eventName, handler);
+        },
+        preventDefault(event) {
+            event.preventDefault();
+        }
+    },
+    Control: {
+        extend(definition) {
+            return function ControlCtor() {
+                Object.assign(this, createControl(definition.options || {}), definition);
+                this.options = definition.options || {};
+            };
+        }
+    },
+    latLng: createLatLng,
+    point: createPoint,
+    Point: createPoint,
+    latLngBounds: createBounds,
+    marker(latlng, options) {
+        return createMarkerLayer(latlng, options);
+    },
+    circle(latlng, options) {
+        return createCircleLayer(latlng, options, false);
+    },
+    circleMarker(latlng, options) {
+        return createCircleLayer(latlng, options, true);
+    },
+    imageOverlay(url, bounds, options) {
+        return createImageOverlay(url, bounds, options);
+    },
+    polyline(latlngs, options) {
+        return createPolylineLayer(latlngs, options);
+    },
+    layerGroup(layersToAdd) {
+        return createLayerGroup(layersToAdd);
+    }
+};
+
 // ==========================================
 // 2. DOM ELEMENTS
 // ==========================================
@@ -82,22 +866,7 @@ let climbScanAngles = 32;
 // 4. MAP & VARIABLE INITIALIZATION
 // ==========================================
 
-const layers = {
-    "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
-    "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
-    "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, {
-        attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
-        maxZoom: 17
-    }),
-    "norges_map": L.tileLayer(NORGES_MAP_URL, {
-        attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
-        maxZoom: 18
-    }),
-    "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
-    "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
-    "debug": L.tileLayer(DATA_TILE_URL, { attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 })
-};
+const layers = Object.fromEntries(Object.entries(MAP_SOURCES).map(([key, source]) => [key, L.tileLayer(source.url, { attribution: source.attribution, maxZoom: source.maxZoom, opacity: source.opacity })]));
 
 // Icons
 const _shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
@@ -168,13 +937,13 @@ const map = L.map('map', {
     rotateControl: false,
     bearing: 0
 }).setView([savedLat, savedLng], savedZoom);
-L.control.zoom({ position: 'bottomright' }).addTo(map);
+map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), 'bottom-right');
 
 // Reset-north compass control
 const ResetNorthControl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function (map) {
-        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control reset-north-control');
+        const container = L.DomUtil.create('div', 'maplibregl-ctrl maplibregl-ctrl-group reset-north-control');
         const btn = L.DomUtil.create('a', 'reset-north-btn', container);
         btn.href = '#';
         btn.title = 'Reset North';
@@ -1944,9 +2713,21 @@ if (savedUnit) {
     const unitSel = document.getElementById('distanceUnit');
     if (unitSel) unitSel.value = savedUnit;
 }
-handleLayerChange(savedLayer); // Now everything is loaded, so this works!
-updateUI();
-updateCenterElevation();
+
+let initialMapStateApplied = false;
+function applyInitialMapState() {
+    if (initialMapStateApplied) return;
+    initialMapStateApplied = true;
+    handleLayerChange(savedLayer);
+    updateUI();
+    updateCenterElevation();
+}
+
+if (map._isLoaded) {
+    applyInitialMapState();
+} else {
+    map.on('load', applyInitialMapState);
+}
 
 // Auto-start tutorial for new visitors
 if (!localStorage.getItem('topo_tutorial_done')) {
