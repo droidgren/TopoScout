@@ -1942,11 +1942,19 @@ function toRgba(hexColor, opacity) {
 
 function ensureSearchOverlay() {
     const mapContainer = map.getContainer();
-    const overlayParent = mapContainer.querySelector('.maplibregl-canvas-container') || mapContainer;
+    const canvasContainer = mapContainer.querySelector('.maplibregl-canvas-container');
+    const overlayParent = mapContainer;
     let overlay = document.getElementById('search-overlay');
-    const placeOverlayFirst = () => {
-        if (overlayParent.firstChild === overlay) return;
-        overlayParent.insertBefore(overlay, overlayParent.firstChild);
+    const placeOverlayAfterCanvas = () => {
+        if (!canvasContainer) {
+            if (overlay.parentElement !== overlayParent) {
+                overlayParent.appendChild(overlay);
+            }
+            return;
+        }
+        const nextSibling = canvasContainer.nextSibling;
+        if (nextSibling === overlay) return;
+        overlayParent.insertBefore(overlay, nextSibling);
     };
     if (!overlay) {
         overlay = document.createElement('div');
@@ -1954,7 +1962,6 @@ function ensureSearchOverlay() {
         overlay.style.position = 'absolute';
         overlay.style.inset = '0';
         overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '0';
 
         const circleEl = document.createElement('div');
         circleEl.style.position = 'absolute';
@@ -1977,12 +1984,12 @@ function ensureSearchOverlay() {
         overlay.appendChild(markerEl);
         overlay._circle = circleEl;
         overlay._marker = markerEl;
-        placeOverlayFirst();
+        placeOverlayAfterCanvas();
     } else {
         if (overlay.parentElement !== overlayParent) {
             overlayParent.appendChild(overlay);
         }
-        placeOverlayFirst();
+        placeOverlayAfterCanvas();
     }
     return overlay;
 }
