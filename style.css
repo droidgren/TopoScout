@@ -765,8 +765,7 @@ select {
 }
 
 .maplibregl-popup.result-popup .maplibregl-popup-tip {
-    border-top-color: #fff;
-    border-bottom-color: #fff;
+    display: none;
 }
 
 .maplibregl-popup.result-popup .maplibregl-popup-close-button {
