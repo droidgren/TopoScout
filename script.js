@@ -1005,6 +1005,13 @@ let currentLang = localStorage.getItem('topo_lang') || 'en';
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
+let peakMinPixelDistance = normalizePeakMinPixelDistance(localStorage.getItem('topo_peak_min_pixel_dist'));
+
+function normalizePeakMinPixelDistance(value) {
+    const parsed = parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 40;
+    return Math.min(200, Math.max(1, parsed));
+}
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
@@ -1210,6 +1217,7 @@ function updateLanguage() {
         if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
+        if (document.getElementById('lbl-peak-min-pixels')) document.getElementById('lbl-peak-min-pixels').textContent = t.lbl_peak_min_pixels;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
         if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
         if (document.getElementById('lbl-slope-filter')) document.getElementById('lbl-slope-filter').textContent = t.lbl_slope_filter;
@@ -1235,6 +1243,8 @@ function updateLanguage() {
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
         if (stepInput) stepInput.value = climbStepRes;
+        const peakMinPixelInput = document.getElementById('peakMinPixelDistInput');
+        if (peakMinPixelInput) peakMinPixelInput.value = peakMinPixelDistance;
         const anglesInput = document.getElementById('scanAnglesInput');
         if (anglesInput) anglesInput.value = climbScanAngles;
         document.getElementById('info-close').textContent = t.btn_close;
@@ -2350,7 +2360,7 @@ function findPeaks() {
     validPeaks.sort((a, b) => b.h - a.h);
     const finalPoints = [];
     const limit = parseInt(document.getElementById('numPoints').value) || 5;
-    const minPixelDist = 40;
+    const minPixelDist = peakMinPixelDistance;
     for (let p of validPeaks) {
         if (finalPoints.length >= limit) break;
         let tooClose = false;
@@ -2890,6 +2900,16 @@ if (stepInput) {
     stepInput.value = climbStepRes;
     stepInput.addEventListener('change', (e) => {
         climbStepRes = parseInt(e.target.value) || 10;
+    });
+}
+
+const peakMinPixelInput = document.getElementById('peakMinPixelDistInput');
+if (peakMinPixelInput) {
+    peakMinPixelInput.value = peakMinPixelDistance;
+    peakMinPixelInput.addEventListener('change', (e) => {
+        peakMinPixelDistance = normalizePeakMinPixelDistance(e.target.value);
+        e.target.value = peakMinPixelDistance;
+        localStorage.setItem('topo_peak_min_pixel_dist', peakMinPixelDistance);
     });
 }
 

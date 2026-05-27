@@ -66,6 +66,7 @@ const LANG_EN = {
     debug_settings: "Debug settings",
     lbl_water_analysis: "Water analysis (filter water from results)",
     lbl_step_size: "Climb Step Res. (m):",
+    lbl_peak_min_pixels: "Peak Min Dist. (px):",
     lbl_scan_angles: "Scan Angles:",
     update_available: "A new version is available.",
     update_btn: "Update",

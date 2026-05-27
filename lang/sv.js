@@ -66,6 +66,7 @@ const LANG_SV = {
     debug_settings: "Felsökningsinställningar",
     lbl_water_analysis: "Vattenanalys (dölj vatten från resultat)",
     lbl_step_size: "Stigningssteg Upplösning (m):",
+    lbl_peak_min_pixels: "Minsta toppavstånd (px):",
     lbl_scan_angles: "Skanningsvinklar:",
     update_available: "En ny version finns tillgänglig.",
     update_btn: "Uppdatera",
