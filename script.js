@@ -1944,13 +1944,17 @@ function ensureSearchOverlay() {
     const mapContainer = map.getContainer();
     const overlayParent = mapContainer.querySelector('.maplibregl-canvas-container') || mapContainer;
     let overlay = document.getElementById('search-overlay');
+    const placeOverlayFirst = () => {
+        if (overlayParent.firstChild === overlay) return;
+        overlayParent.insertBefore(overlay, overlayParent.firstChild);
+    };
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'search-overlay';
         overlay.style.position = 'absolute';
         overlay.style.inset = '0';
         overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '1';
+        overlay.style.zIndex = '0';
 
         const circleEl = document.createElement('div');
         circleEl.style.position = 'absolute';
@@ -1973,9 +1977,12 @@ function ensureSearchOverlay() {
         overlay.appendChild(markerEl);
         overlay._circle = circleEl;
         overlay._marker = markerEl;
-        overlayParent.appendChild(overlay);
-    } else if (overlay.parentElement !== overlayParent) {
-        overlayParent.appendChild(overlay);
+        placeOverlayFirst();
+    } else {
+        if (overlay.parentElement !== overlayParent) {
+            overlayParent.appendChild(overlay);
+        }
+        placeOverlayFirst();
     }
     return overlay;
 }
