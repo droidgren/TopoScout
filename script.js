@@ -1943,8 +1943,9 @@ function ensureSearchOverlay() {
 function updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity) {
     const overlay = ensureSearchOverlay();
     const point = map._map.project([searchCenter.lng, searchCenter.lat]);
-    const metersPerPixel = (156543.03392 * Math.cos(searchCenter.lat * Math.PI / 180)) / Math.pow(2, map.getZoom());
-    const radiusPx = metersPerPixel > 0 ? radiusM / metersPerPixel : 0;
+    const edgeLatLng = moveLatLng(searchCenter, radiusM, 0);
+    const edgePoint = map._map.project([edgeLatLng.lng, edgeLatLng.lat]);
+    const radiusPx = Math.hypot(edgePoint.x - point.x, edgePoint.y - point.y);
 
     const markerEl = overlay._marker;
     markerEl.style.display = 'block';
