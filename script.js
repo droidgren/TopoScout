@@ -275,6 +275,24 @@ function getMarkerOffset(options = {}, element) {
     return [width / 2 - anchorX, height / 2 - anchorY];
 }
 
+function getPopupOptions(options = {}) {
+    const popupOptions = {
+        className: 'result-popup'
+    };
+    if (!options.icon || !options.icon.options) {
+        popupOptions.offset = 18;
+        return popupOptions;
+    }
+    const iconOptions = options.icon.options;
+    if (iconOptions.popupAnchor) {
+        popupOptions.anchor = 'bottom';
+        popupOptions.offset = [iconOptions.popupAnchor[0], iconOptions.popupAnchor[1]];
+        return popupOptions;
+    }
+    popupOptions.offset = 18;
+    return popupOptions;
+}
+
 function createTileLayer(url, options = {}) {
     return {
         type: 'tile',
@@ -371,7 +389,7 @@ function createMarkerLayer(latlng, options = {}) {
             return this;
         },
         bindPopup(html) {
-            this._popup = new maplibregl.Popup({ offset: 18 }).setHTML(html);
+            this._popup = new maplibregl.Popup(getPopupOptions(this._options)).setHTML(html);
             if (this._marker) {
                 this._marker.setPopup(this._popup);
             }
