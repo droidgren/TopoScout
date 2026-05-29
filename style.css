@@ -105,6 +105,12 @@ h3 {
     color: #555;
 }
 
+.share-circle-btn {
+    color: #1565C0;
+    font-size: 13px;
+    transform: translateY(-1px);
+}
+
 /* FLAG IMAGE */
 .flag-img {
     width: 100%;
