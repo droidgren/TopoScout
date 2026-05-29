@@ -23,10 +23,11 @@ Also check out [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer), 
     * *Optional:* Tracetrack and Thunderforest (requires API keys).
 * **Slope Map:** Generates a color-coded overlay within the search radius, visualizing terrain steepness by slope angle, with adjustable opacity and angle filters.
 * **GPX Route Overlay:** Upload GPX files to display routes on the map with customizable track color, width, distance labels (km/mi), slope-based coloring, waypoints, and min/max elevation markers. Includes track stats: length, elevation gain/loss, and min/max elevation.
+* **Share Map View:** Copy a link that restores the current language, map center, zoom level, and selected map layer.
 * **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
 * **Geolocation:** Quickly locate your current position.
 * **Address Search:** Integrated search using Nominatim (OSM).
-* **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser.
+* **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser, while also supporting shared URLs that restore that same view state.
 * **Bilingual Support:** Full support for English and Swedish.
 
 
@@ -42,7 +43,8 @@ Also check out [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer), 
     * Click **Find Climbs** to identify the steepest sections.
 4.  **GPX Routes:** Expand the **Add Routes** section to load a GPX file. Customize track color, width, and toggle distance labels, slope coloring, waypoints, and min/max elevation markers.
 5.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
-6.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
+6.  **Share Map View:** Click the link button in the header to copy a URL that restores your current language, zoom, center, and layer when opened.
+7.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
 
 ## Technical Details
 

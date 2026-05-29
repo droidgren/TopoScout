@@ -1022,6 +1022,7 @@ const searchInput = document.getElementById('searchInput');
 const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
+const shareMapBtn = document.getElementById('share-map-btn');
 
 // ==========================================
 // 3. LANGUAGE & TRANSLATIONS
@@ -1031,7 +1032,6 @@ const translations = {
     en: LANG_EN
 };
 
-let currentLang = localStorage.getItem('topo_lang') || 'en';
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
@@ -1041,6 +1041,16 @@ function normalizePeakMinPixelDistance(value) {
     const parsed = parseInt(value, 10);
     if (!Number.isFinite(parsed)) return 40;
     return Math.min(200, Math.max(1, parsed));
+}
+
+function parseStoredCoordinate(key, fallback) {
+    const parsed = parseFloat(localStorage.getItem(key));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseStoredZoom(key, fallback) {
+    const parsed = parseInt(localStorage.getItem(key), 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 // ==========================================
@@ -1103,11 +1113,72 @@ let analysisNwOrigin = null;
 let analysisBounds = null;
 let deferredInstallPrompt = null;
 
-// Load saved position
-const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
-const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
-const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
-let savedLayer = localStorage.getItem('topo_layer') || "opentopo";
+function isSupportedLayer(layerKey) {
+    return Boolean(layerKey) && Boolean(layers[layerKey]);
+}
+
+function parseSharedMapHash(hashValue) {
+    const hash = (hashValue || '').replace(/^#/, '');
+    if (!hash) return null;
+    const match = hash.match(/^map=(.+)$/);
+    if (!match) return null;
+
+    const parts = match[1].split('/');
+    if (parts.length < 3) return null;
+
+    const zoom = parseInt(parts[0], 10);
+    const lat = parseFloat(parts[1]);
+    const lng = parseFloat(parts[2]);
+    const layer = parts[3] || null;
+
+    if (!Number.isFinite(zoom) || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+    }
+
+    if (zoom < 1 || zoom > 22 || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return null;
+    }
+
+    return {
+        zoom,
+        lat,
+        lng,
+        layer: isSupportedLayer(layer) ? layer : null
+    };
+}
+
+function resolveInitialAppState() {
+    const params = new URLSearchParams(location.search);
+    const requestedLang = params.get('lang');
+    const storedLang = localStorage.getItem('topo_lang') || 'en';
+    const sharedMapState = parseSharedMapHash(location.hash);
+    const initialLang = translations[requestedLang] ? requestedLang : (translations[storedLang] ? storedLang : 'en');
+
+    let initialLayer = localStorage.getItem('topo_layer') || 'opentopo';
+    if (!isSupportedLayer(initialLayer)) {
+        initialLayer = 'opentopo';
+    }
+
+    if (sharedMapState && sharedMapState.layer) {
+        initialLayer = sharedMapState.layer;
+    }
+
+    return {
+        lang: initialLang,
+        lat: sharedMapState ? sharedMapState.lat : parseStoredCoordinate('topo_lat', 67.89),
+        lng: sharedMapState ? sharedMapState.lng : parseStoredCoordinate('topo_lng', 18.52),
+        zoom: sharedMapState ? sharedMapState.zoom : parseStoredZoom('topo_zoom', 11),
+        layer: initialLayer
+    };
+}
+
+const initialAppState = resolveInitialAppState();
+const hasSharedMapView = Boolean(parseSharedMapHash(location.hash));
+let currentLang = initialAppState.lang;
+const savedLat = initialAppState.lat;
+const savedLng = initialAppState.lng;
+const savedZoom = initialAppState.zoom;
+let savedLayer = initialAppState.layer;
 
 if (!layers[savedLayer]) {
     savedLayer = "opentopo";
@@ -1212,6 +1283,87 @@ function isWaterPixel(r, g, b) {
         Math.abs(b - WATER_COLOR.b) <= WATER_TOLERANCE;
 }
 
+function getCurrentMapHash() {
+    const center = map.getCenter();
+    const zoom = Math.round(map.getZoom());
+    const lat = center.lat.toFixed(5);
+    const lng = center.lng.toFixed(5);
+    const activeLayer = (layerSelect && layerSelect.value) || localStorage.getItem('topo_layer') || savedLayer || 'opentopo';
+    return '#map=' + zoom + '/' + lat + '/' + lng + '/' + activeLayer;
+}
+
+function getCurrentShareLink() {
+    const params = new URLSearchParams();
+    params.set('lang', currentLang);
+    return location.origin + location.pathname + '?' + params.toString() + getCurrentMapHash();
+}
+
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+
+    const selection = document.getSelection();
+    const previousRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, textArea.value.length);
+
+    let didCopy = false;
+    try {
+        didCopy = document.execCommand('copy');
+    } catch (err) {
+        didCopy = false;
+    }
+
+    document.body.removeChild(textArea);
+    if (selection) {
+        selection.removeAllRanges();
+        if (previousRange) {
+            selection.addRange(previousRange);
+        }
+    }
+
+    return didCopy;
+}
+
+async function copyTextToClipboard(text, successMessage, errorMessage) {
+    let didCopy = false;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            didCopy = true;
+        } catch (err) {
+            didCopy = fallbackCopyTextToClipboard(text);
+        }
+    } else {
+        didCopy = fallbackCopyTextToClipboard(text);
+    }
+
+    if (didCopy) {
+        statusDiv.textContent = successMessage;
+        return;
+    }
+
+    window.prompt('Copy this link:', text);
+    statusDiv.textContent = errorMessage;
+}
+
+window.generateShareLink = function () {
+    const t = translations[currentLang];
+    copyTextToClipboard(
+        getCurrentShareLink(),
+        t.status_link_copied || 'Link copied to clipboard.',
+        t.status_clipboard_error || 'Could not copy link.'
+    );
+};
+
 function updateLanguage() {
     const t = translations[currentLang];
     const isEn = currentLang === 'en';
@@ -1311,6 +1463,10 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
+        if (shareMapBtn) {
+            shareMapBtn.title = t.btn_share_map_title || 'Share Map View';
+            shareMapBtn.setAttribute('aria-label', t.btn_share_map_title || 'Share Map View');
+        }
     }
 }
 
@@ -2927,6 +3083,7 @@ let _tutorialOverlayClickHandler = null;
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
     { targetSelector: '.circle-btn:not(.info-btn)', titleKey: 'tutorial_language_title', textKey: 'tutorial_language_text' },
+    { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
@@ -3186,6 +3343,6 @@ function applyInitialMapState() {
 applyInitialMapState();
 
 // Auto-start tutorial for new visitors
-if (!localStorage.getItem('topo_tutorial_done')) {
+if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView) {
     setTimeout(() => startTutorial(), 1000);
 }
