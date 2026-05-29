@@ -1105,6 +1105,7 @@ let markers = [];
 let polylines = [];
 let slopeOverlay = null;
 let slopeLegend = null;
+let gpxSlopeLegend = null;
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
 let slopeMapUsesRadius = false;
@@ -1643,14 +1644,8 @@ function clearSlopeMapState(preserveStatus = false) {
         map.removeLayer(slopeOverlay);
         slopeOverlay = null;
     }
-    if (slopeLegend) {
-        if (typeof slopeLegend.remove === 'function') {
-            slopeLegend.remove();
-        } else {
-            map.removeControl(slopeLegend);
-        }
-        slopeLegend = null;
-    }
+    removeLegendControl(slopeLegend);
+    slopeLegend = null;
     slopeMapCenter = null;
     slopeMapRadius = 0;
     slopeMapUsesRadius = false;
@@ -1689,6 +1684,8 @@ window.clearGpxRoute = function () {
     currentMarkers = [];
     clearMarkerCollection(currentKmMarkers);
     currentKmMarkers = [];
+    removeLegendControl(gpxSlopeLegend);
+    gpxSlopeLegend = null;
     gpxLayer = null;
     gpxTrackData = null;
     const clearBtn = document.getElementById('gpx-clear-btn');
@@ -1969,6 +1966,43 @@ function clearMarkerCollection(markers) {
     markers.forEach(marker => marker.remove());
 }
 
+function removeLegendControl(control) {
+    if (!control) return;
+    if (typeof control.remove === 'function') {
+        control.remove();
+    } else {
+        map.removeControl(control);
+    }
+}
+
+function getSlopeLegendItems() {
+    return [
+        { label: '0-9°', color: '#FFFFFF' },
+        { label: '10-29°', color: '#247400' },
+        { label: '30-34°', color: '#ffff00' },
+        { label: '35-39°', color: '#ffa900' },
+        { label: '40-44°', color: '#ff5500' },
+        { label: '45-49°', color: '#e60000' },
+        { label: '50°+', color: '#740000' }
+    ];
+}
+
+function createSlopeLegendControl() {
+    const t = translations[currentLang];
+    const legendItems = getSlopeLegendItems();
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'slope-legend');
+        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
+        for (const item of legendItems) {
+            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
+        }
+        div.innerHTML = html;
+        return div;
+    };
+    return legend;
+}
+
 function clearGpxTrackSourceAndLayers() {
     const nativeMap = map._map;
     if (nativeMap.getLayer('gpx-line-0')) {
@@ -2136,12 +2170,25 @@ function refreshGpxKmLabels() {
     currentKmMarkers = buildKmLabels(gpxTrackData.segments);
 }
 
+function syncGpxSlopeLegend() {
+    removeLegendControl(gpxSlopeLegend);
+    gpxSlopeLegend = null;
+
+    if (!gpxTrackData || !getGpxColorBySlope()) {
+        return;
+    }
+
+    gpxSlopeLegend = createSlopeLegendControl();
+    gpxSlopeLegend.addTo(map);
+}
+
 function rebuildGpxLayer() {
     if (!gpxTrackData) return;
 
     updateGpxTrackLine();
     rebuildGpxMarkers();
     refreshGpxKmLabels();
+    syncGpxSlopeLegend();
 }
 
 document.getElementById('gpx-file-input').addEventListener('change', function (e) {
@@ -2163,6 +2210,8 @@ document.getElementById('gpx-file-input').addEventListener('change', function (e
             currentMarkers = [];
             clearMarkerCollection(currentKmMarkers);
             currentKmMarkers = [];
+            removeLegendControl(gpxSlopeLegend);
+            gpxSlopeLegend = null;
             gpxLayer = null;
 
             const allSegments = [];
@@ -2653,27 +2702,7 @@ function _renderSlopeMap() {
 
     slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
 
-    // Build legend
-    const legendItems = [
-        { label: '0–9°',   color: '#FFFFFF' },
-        { label: '10–29°', color: '#247400' },
-        { label: '30–34°', color: '#ffff00' },
-        { label: '35–39°', color: '#ffa900' },
-        { label: '40–44°', color: '#ff5500' },
-        { label: '45–49°', color: '#e60000' },
-        { label: '50°+',   color: '#740000' }
-    ];
-
-    slopeLegend = L.control({ position: 'bottomleft' });
-    slopeLegend.onAdd = function () {
-        const div = L.DomUtil.create('div', 'slope-legend');
-        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
-        for (const item of legendItems) {
-            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
-        }
-        div.innerHTML = html;
-        return div;
-    };
+    slopeLegend = createSlopeLegendControl();
     slopeLegend.addTo(map);
 
     // Store generated area so the radius circle can be shown as overlay
