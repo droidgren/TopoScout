@@ -475,13 +475,23 @@ function createLayerGroup(layersToAdd = []) {
 function createControl(options = {}) {
     return {
         options,
+        _controlContainer: null,
         addTo(mapInstance) {
             const control = {
-                onAdd: () => this.onAdd(mapInstance),
+                onAdd: () => {
+                    const container = this.onAdd(mapInstance);
+                    this._controlContainer = container;
+                    return container;
+                },
                 onRemove: () => {
                     if (typeof this.onRemove === 'function') {
                         this.onRemove(mapInstance);
                     }
+                    if (this._controlContainer && this._controlContainer.parentNode) {
+                        this._controlContainer.parentNode.removeChild(this._controlContainer);
+                    }
+                    this._controlContainer = null;
+                    this._map = null;
                 }
             };
             this._control = control;
@@ -493,6 +503,7 @@ function createControl(options = {}) {
             if (this._map && this._control) {
                 this._map._map.removeControl(this._control);
             }
+            return this;
         }
     };
 }
@@ -1074,6 +1085,7 @@ let slopeOverlay = null;
 let slopeLegend = null;
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
+let slopeMapUsesRadius = false;
 let gpxLayer = null;
 let gpxTrackData = null; // stores parsed GPX stats for info panel
 let searchCircle = null;
@@ -1086,6 +1098,7 @@ let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
 let analysisZoom = null;
 let analysisNwOrigin = null;
+let analysisBounds = null;
 let deferredInstallPrompt = null;
 
 // Load saved position
@@ -1455,15 +1468,48 @@ function locateUser() {
     );
 }
 
+function clearSlopeMapState(preserveStatus = false) {
+    if (slopeOverlay) {
+        map.removeLayer(slopeOverlay);
+        slopeOverlay = null;
+    }
+    if (slopeLegend) {
+        if (typeof slopeLegend.remove === 'function') {
+            slopeLegend.remove();
+        } else {
+            map.removeControl(slopeLegend);
+        }
+        slopeLegend = null;
+    }
+    slopeMapCenter = null;
+    slopeMapRadius = 0;
+    slopeMapUsesRadius = false;
+    updateUI();
+    if (!preserveStatus) {
+        statusDiv.textContent = translations[currentLang].status_cleared;
+    }
+}
+
+function invalidateSlopeMapIfSearchAreaChanged() {
+    if (!slopeOverlay || !slopeMapCenter) return;
+
+    const searchCenter = getSearchCenter();
+    const radiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+    const centerShiftMeters = searchCenter.distanceTo(slopeMapCenter);
+
+    if (centerShiftMeters <= 1 && Math.abs(radiusMeters - slopeMapRadius) <= 0.5) {
+        return;
+    }
+
+    clearSlopeMapState(true);
+}
+
 window.clearResults = function () {
     markers.forEach(m => map.removeLayer(m));
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
     polylines = [];
-    if (slopeOverlay) { map.removeLayer(slopeOverlay); slopeOverlay = null; }
-    if (slopeLegend) { map.removeControl(slopeLegend); slopeLegend = null; }
-    slopeMapCenter = null;
-    slopeMapRadius = 0;
+    clearSlopeMapState(true);
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
@@ -1943,16 +1989,17 @@ function toRgba(hexColor, opacity) {
 function ensureSearchOverlay() {
     const mapContainer = map.getContainer();
     const canvasContainer = mapContainer.querySelector('.maplibregl-canvas-container');
-    const overlayParent = mapContainer;
+    const canvas = canvasContainer ? canvasContainer.querySelector('.maplibregl-canvas, canvas') : null;
+    const overlayParent = canvasContainer || mapContainer;
     let overlay = document.getElementById('search-overlay');
-    const placeOverlayAfterCanvas = () => {
-        if (!canvasContainer) {
+    const placeOverlayAboveMapBelowMarkers = () => {
+        if (!canvasContainer || !canvas) {
             if (overlay.parentElement !== overlayParent) {
                 overlayParent.appendChild(overlay);
             }
             return;
         }
-        const nextSibling = canvasContainer.nextSibling;
+        const nextSibling = canvas.nextSibling;
         if (nextSibling === overlay) return;
         overlayParent.insertBefore(overlay, nextSibling);
     };
@@ -1984,12 +2031,12 @@ function ensureSearchOverlay() {
         overlay.appendChild(markerEl);
         overlay._circle = circleEl;
         overlay._marker = markerEl;
-        placeOverlayAfterCanvas();
+        placeOverlayAboveMapBelowMarkers();
     } else {
         if (overlay.parentElement !== overlayParent) {
             overlayParent.appendChild(overlay);
         }
-        placeOverlayAfterCanvas();
+        placeOverlayAboveMapBelowMarkers();
     }
     return overlay;
 }
@@ -2054,15 +2101,16 @@ function updateUI() {
 
     // Show circle when checkbox is checked OR when a slope map is active
     const radiusM = radiusKm * 1000;
+    const slopeMapHasRadiusArea = slopeMapCenter !== null && slopeMapUsesRadius;
     // Circle is completely outside the generated slope area when there is no overlap at all
-    const completelyOutsideSlopeArea = slopeMapCenter !== null &&
+    const completelyOutsideSlopeArea = slopeMapHasRadiusArea &&
         searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius + radiusM;
-    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+    const showCircle = circleCheckbox.checked || slopeMapHasRadiusArea;
     let fillOpacity = 0;
     if (showCircle) {
         // No fill when slope map is active and circle overlaps generated area; fill 0.1 when fully outside
     }
-    fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
+    fillOpacity = isLocked ? 0 : (slopeMapHasRadiusArea ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
     updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity);
 }
 
@@ -2114,23 +2162,25 @@ async function updateCenterElevation() {
 
 // Updated function that fetches both elevation and water tiles
 async function fetchAnalysisData() {
-    const size = map.getSize();
-    canvas.width = size.x;
-    canvas.height = size.y;
-    waterCanvas.width = size.x;
-    waterCanvas.height = size.y;
+    const bounds = map.getBounds();
+    const zoom = Math.min(Math.floor(map.getZoom()), 15);
+    analysisZoom = zoom;
+    analysisBounds = bounds;
+    const nw = map.project(bounds.getNorthWest(), zoom);
+    const se = map.project(bounds.getSouthEast(), zoom);
+    const analysisSize = se.subtract(nw);
+
+    canvas.width = Math.max(1, Math.ceil(analysisSize.x));
+    canvas.height = Math.max(1, Math.ceil(analysisSize.y));
+    waterCanvas.width = canvas.width;
+    waterCanvas.height = canvas.height;
 
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     waterCtx.imageSmoothingEnabled = false;
     waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
 
-    const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 15);
-    analysisZoom = zoom;
-    const nw = map.project(bounds.getNorthWest(), zoom);
     analysisNwOrigin = nw;
-    const se = map.project(bounds.getSouthEast(), zoom);
     const tileMin = nw.divideBy(256).floor();
     const tileMax = se.divideBy(256).floor();
 
@@ -2297,9 +2347,7 @@ function _renderSlopeMap() {
     outCtx.putImageData(outImgData, 0, 0);
     const dataUrl = outCanvas.toDataURL();
 
-    const nwLatLng = canvasPointToLatLng(0, 0);
-    const seLatLng = canvasPointToLatLng(w, h);
-    const bounds = L.latLngBounds(nwLatLng, seLatLng);
+    const bounds = analysisBounds || L.latLngBounds(canvasPointToLatLng(0, 0), canvasPointToLatLng(w, h));
 
     slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
 
@@ -2329,6 +2377,7 @@ function _renderSlopeMap() {
     // Store generated area so the radius circle can be shown as overlay
     slopeMapCenter = searchCenterLatLng;
     slopeMapRadius = searchRadiusMeters;
+    slopeMapUsesRadius = useRadius;
     updateUI();
 
     statusDiv.textContent = t.status_slope_done;
@@ -2344,7 +2393,7 @@ function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
             img.onload = () => {
                 const tilePos = new L.Point(t.x * 256, t.y * 256);
                 const offset = tilePos.subtract(nwPixelOrigin);
-                targetCtx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
+                targetCtx.drawImage(img, offset.x, offset.y, 256, 256);
                 resolve();
             };
             img.onerror = () => resolve();
@@ -2889,7 +2938,7 @@ function finishTutorial() {
 
 // Event Listeners
 if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
-if (radiusInput) radiusInput.addEventListener('input', updateUI);
+if (radiusInput) radiusInput.addEventListener('input', () => { invalidateSlopeMapIfSearchAreaChanged(); updateUI(); });
 if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
 if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     isLocked = e.target.checked;
@@ -2900,6 +2949,7 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
         lockedCenterCoords = null;
         crosshair.style.display = 'none';
     }
+    invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
 });
 
@@ -2959,7 +3009,10 @@ if (anglesInput) {
 
 // Map Events
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); rebuildGpxLayer(); });
-map.on('move', () => { updateUI(); }); // UI (circle) updates directly
+map.on('move', () => {
+    invalidateSlopeMapIfSearchAreaChanged();
+    updateUI();
+});
 map.on('moveend', () => { // Data saved/fetched at end of movement
     const center = map.getCenter();
     localStorage.setItem('topo_lat', center.lat);
