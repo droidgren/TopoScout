@@ -1088,6 +1088,8 @@ let slopeMapRadius = 0;
 let slopeMapUsesRadius = false;
 let gpxLayer = null;
 let gpxTrackData = null; // stores parsed GPX stats for info panel
+let currentMarkers = [];
+let currentKmMarkers = [];
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -1514,7 +1516,12 @@ window.clearResults = function () {
 };
 
 window.clearGpxRoute = function () {
-    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+    clearGpxTrackSourceAndLayers();
+    clearMarkerCollection(currentMarkers);
+    currentMarkers = [];
+    clearMarkerCollection(currentKmMarkers);
+    currentKmMarkers = [];
+    gpxLayer = null;
     gpxTrackData = null;
     const clearBtn = document.getElementById('gpx-clear-btn');
     if (clearBtn) clearBtn.style.display = 'none';
@@ -1645,7 +1652,6 @@ function computeDynamicStep(totalLengthMeters, visibleLengthMeters) {
 
 function buildKmLabels(allSegments) {
     const labels = [];
-    // compute total length first
     let totalLength = 0;
     for (const seg of allSegments) {
         for (let i = 1; i < seg.length; i++) {
@@ -1666,8 +1672,15 @@ function buildKmLabels(allSegments) {
                 const lat = seg[i - 1].lat + frac * (seg[i].lat - seg[i - 1].lat);
                 const lon = seg[i - 1].lon + frac * (seg[i].lon - seg[i - 1].lon);
                 const displayVal = Number.isInteger(nextMark) ? nextMark : nextMark.toFixed(1);
-                const icon = L.divIcon({ className: 'gpx-km-label', html: `${displayVal} ${unitLabel}`, iconSize: null });
-                labels.push(L.marker([lat, lon], { icon, interactive: false }));
+
+                const el = document.createElement('div');
+                el.className = 'gpx-km-label';
+                el.innerHTML = `${displayVal} ${unitLabel}`;
+
+                labels.push(new maplibregl.Marker({ element: el, anchor: 'center' })
+                    .setLngLat([lon, lat])
+                    .addTo(map._map));
+
                 nextMark += step;
             }
         }
@@ -1678,6 +1691,16 @@ function buildKmLabels(allSegments) {
 function getGpxColorBySlope() {
     const el = document.getElementById('gpxColorBySlope');
     return el ? el.checked : false;
+}
+
+function slopeToColorHex(slopeDeg, baseColor) {
+    const rgb = slopeToColor(slopeDeg, baseColor);
+    const match = rgb.match(/rgb\((\d+),(\d+),(\d+)\)/);
+    if (!match) return baseColor;
+    const r = parseInt(match[1], 10);
+    const g = parseInt(match[2], 10);
+    const b = parseInt(match[3], 10);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
 function slopeToColor(slopeDeg, baseColor) {
@@ -1717,8 +1740,8 @@ function slopeToColor(slopeDeg, baseColor) {
     return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
 }
 
-function buildSlopeColoredTrack(seg, weight, baseColor) {
-    const lines = [];
+function buildSlopeColoredGeoJSON(seg, baseColor) {
+    const features = [];
     for (let i = 1; i < seg.length; i++) {
         const p0 = seg[i - 1], p1 = seg[i];
         const dist = haversineDistance(p0.lat, p0.lon, p1.lat, p1.lon);
@@ -1726,11 +1749,18 @@ function buildSlopeColoredTrack(seg, weight, baseColor) {
         if (dist > 0 && p0.ele !== null && p1.ele !== null) {
             slopeDeg = Math.atan2(p1.ele - p0.ele, dist) * (180 / Math.PI);
         }
-        lines.push(L.polyline([[p0.lat, p0.lon], [p1.lat, p1.lon]], {
-            color: slopeToColor(slopeDeg, baseColor), weight, opacity: 0.9
-        }));
+        features.push({
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: [[p0.lon, p0.lat], [p1.lon, p1.lat]]
+            },
+            properties: {
+                color: slopeToColorHex(slopeDeg, baseColor)
+            }
+        });
     }
-    return lines;
+    return features;
 }
 
 function findMinMaxElevPoints(allSegments) {
@@ -1767,81 +1797,183 @@ function getGpxShowMinMax() {
     return el ? el.checked : true;
 }
 
-function rebuildGpxLayer() {
-    // re-render with current settings; requires stored parse data
-    if (!gpxTrackData) return;
-    const wasFitted = !gpxLayer;
-    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+function clearMarkerCollection(markers) {
+    markers.forEach(marker => marker.remove());
+}
 
+function clearGpxTrackSourceAndLayers() {
+    const nativeMap = map._map;
+    if (nativeMap.getLayer('gpx-line-0')) {
+        let i = 0;
+        while (nativeMap.getLayer(`gpx-line-${i}`)) {
+            nativeMap.removeLayer(`gpx-line-${i}`);
+            i++;
+        }
+    }
+    if (nativeMap.getSource('gpx-track')) {
+        nativeMap.removeSource('gpx-track');
+    }
+}
+
+function buildGpxTrackFeatures() {
     const color = getGpxTrackColor();
-    const weight = getGpxTrackWidth();
-    const showKm = getGpxShowKmLabels();
     const colorBySlope = getGpxColorBySlope();
-    const showWaypoints = getGpxShowWaypoints();
-    const showMinMax = getGpxShowMinMax();
-    const mapLayers = [];
-    const t = translations[currentLang];
+    const gpxFeatures = [];
 
     for (const seg of gpxTrackData.segments) {
         if (seg.length < 2) continue;
         if (colorBySlope) {
-            mapLayers.push(...buildSlopeColoredTrack(seg, weight, color));
+            gpxFeatures.push(...buildSlopeColoredGeoJSON(seg, color));
         } else {
-            const coords = seg.map(p => [p.lat, p.lon]);
-            mapLayers.push(L.polyline(coords, { color, weight, opacity: 0.85 }));
+            gpxFeatures.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: seg.map(p => [p.lon, p.lat])
+                },
+                properties: { color: color }
+            });
         }
     }
+
+    return gpxFeatures;
+}
+
+function updateGpxTrackLine() {
+    const nativeMap = map._map;
+    const gpxFeatures = buildGpxTrackFeatures();
+    const weight = getGpxTrackWidth();
+
+    if (gpxFeatures.length === 0) {
+        clearGpxTrackSourceAndLayers();
+        return;
+    }
+
+    const sourceData = {
+        type: 'FeatureCollection',
+        features: gpxFeatures
+    };
+
+    const existingSource = nativeMap.getSource('gpx-track');
+    if (existingSource) {
+        existingSource.setData(sourceData);
+    } else {
+        nativeMap.addSource('gpx-track', {
+            type: 'geojson',
+            data: sourceData
+        });
+    }
+
+    if (nativeMap.getLayer('gpx-line-0')) {
+        nativeMap.setPaintProperty('gpx-line-0', 'line-color', ['get', 'color']);
+        nativeMap.setPaintProperty('gpx-line-0', 'line-width', weight);
+        nativeMap.setPaintProperty('gpx-line-0', 'line-opacity', 0.85);
+        return;
+    }
+
+    nativeMap.addLayer({
+        id: 'gpx-line-0',
+        type: 'line',
+        source: 'gpx-track',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+            'line-color': ['get', 'color'],
+            'line-width': weight,
+            'line-opacity': 0.85
+        }
+    });
+}
+
+function rebuildGpxMarkers() {
+    clearMarkerCollection(currentMarkers);
+    currentMarkers = [];
+
+    const showWaypoints = getGpxShowWaypoints();
+    const showMinMax = getGpxShowMinMax();
+    const t = translations[currentLang];
 
     if (showWaypoints) {
         for (const wp of gpxTrackData.waypoints) {
             const label = wp.name || '•';
-            const icon = L.divIcon({ className: 'gpx-waypoint-label', html: label, iconSize: null });
-            mapLayers.push(L.marker([wp.lat, wp.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-waypoint-label';
+            el.innerHTML = label;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([wp.lon, wp.lat])
+                .addTo(map._map));
         }
     }
 
-    // Start / End markers
     const { startPt, endPt } = getTrackEndpoints(gpxTrackData.segments);
-    const OVERLAP_THRESHOLD = 50; // meters
+    const OVERLAP_THRESHOLD = 50;
     const startEndOverlap = startPt && endPt &&
         haversineDistance(startPt.lat, startPt.lon, endPt.lat, endPt.lon) < OVERLAP_THRESHOLD;
 
     if (startEndOverlap) {
         const label = `▶ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
-        const icon = L.divIcon({ className: 'gpx-start-end-label', html: label, iconSize: null });
-        mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+        const el = document.createElement('div');
+        el.className = 'gpx-start-end-label';
+        el.innerHTML = label;
+        currentMarkers.push(new maplibregl.Marker({ element: el })
+            .setLngLat([startPt.lon, startPt.lat])
+            .addTo(map._map));
     } else {
         if (startPt) {
-            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `▶ ${t.gpx_start || 'Start'}`, iconSize: null });
-            mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-start-end-label';
+            el.innerHTML = `▶ ${t.gpx_start || 'Start'}`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([startPt.lon, startPt.lat])
+                .addTo(map._map));
         }
         if (endPt) {
-            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `⏹ ${t.gpx_end || 'End'}`, iconSize: null });
-            mapLayers.push(L.marker([endPt.lat, endPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-start-end-label';
+            el.innerHTML = `⏹ ${t.gpx_end || 'End'}`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([endPt.lon, endPt.lat])
+                .addTo(map._map));
         }
     }
 
-    // Min / Max elevation labels
     if (showMinMax) {
         const { minPt, maxPt } = findMinMaxElevPoints(gpxTrackData.segments);
         if (maxPt) {
-            const icon = L.divIcon({ className: 'gpx-elev-label', html: `▲ ${Math.round(maxPt.ele)} m`, iconSize: null });
-            mapLayers.push(L.marker([maxPt.lat, maxPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-elev-label';
+            el.innerHTML = `▲ ${Math.round(maxPt.ele)} m`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([maxPt.lon, maxPt.lat])
+                .addTo(map._map));
         }
         if (minPt) {
-            const icon = L.divIcon({ className: 'gpx-elev-label min-elev', html: `▼ ${Math.round(minPt.ele)} m`, iconSize: null });
-            mapLayers.push(L.marker([minPt.lat, minPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-elev-label min-elev';
+            el.innerHTML = `▼ ${Math.round(minPt.ele)} m`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([minPt.lon, minPt.lat])
+                .addTo(map._map));
         }
     }
+}
 
-    if (showKm) {
-        const kmLabels = buildKmLabels(gpxTrackData.segments);
-        mapLayers.push(...kmLabels);
+function refreshGpxKmLabels() {
+    clearMarkerCollection(currentKmMarkers);
+    currentKmMarkers = [];
+
+    if (!gpxTrackData || !getGpxShowKmLabels()) {
+        return;
     }
 
-    if (mapLayers.length > 0) {
-        gpxLayer = L.layerGroup(mapLayers).addTo(map);
-    }
+    currentKmMarkers = buildKmLabels(gpxTrackData.segments);
+}
+
+function rebuildGpxLayer() {
+    if (!gpxTrackData) return;
+
+    updateGpxTrackLine();
+    rebuildGpxMarkers();
+    refreshGpxKmLabels();
 }
 
 document.getElementById('gpx-file-input').addEventListener('change', function (e) {
@@ -1858,8 +1990,12 @@ document.getElementById('gpx-file-input').addEventListener('change', function (e
                 return;
             }
 
-            // Remove previous GPX layer
-            if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+            clearGpxTrackSourceAndLayers();
+            clearMarkerCollection(currentMarkers);
+            currentMarkers = [];
+            clearMarkerCollection(currentKmMarkers);
+            currentKmMarkers = [];
+            gpxLayer = null;
 
             const allSegments = [];
             const waypoints = [];
@@ -1925,13 +2061,11 @@ document.getElementById('gpx-file-input').addEventListener('change', function (e
             updateGpxTrackInfo();
 
             // Fit map
-            if (gpxLayer) {
-                const allCoords = [];
-                allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
-                waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
-                if (allCoords.length > 0) {
-                    map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
-                }
+            const allCoords = [];
+            allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
+            waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
+            if (allCoords.length > 0) {
+                map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
             }
 
             const clearBtn = document.getElementById('gpx-clear-btn');
@@ -3008,7 +3142,7 @@ if (anglesInput) {
 }
 
 // Map Events
-map.on('zoomend', () => { updateUI(); updateCenterElevation(); rebuildGpxLayer(); });
+map.on('zoomend', () => { updateUI(); updateCenterElevation(); refreshGpxKmLabels(); });
 map.on('move', () => {
     invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
