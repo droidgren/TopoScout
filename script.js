@@ -654,14 +654,26 @@ function createMapAdapter(containerId, options) {
                 maxzoom: layer.options.maxZoom || 19,
                 attribution: layer.options.attribution || ''
             });
-            nativeMap.addLayer({
+            const basemapLayer = {
                 id: 'basemap-layer',
                 type: 'raster',
                 source: 'basemap',
                 paint: {
                     'raster-opacity': layer.options.opacity == null ? 1 : layer.options.opacity
                 }
-            });
+            };
+
+            const styleLayers = nativeMap.getStyle() && nativeMap.getStyle().layers
+                ? nativeMap.getStyle().layers
+                : [];
+            const firstOverlayLayer = styleLayers.find((styleLayer) => styleLayer.id !== 'basemap-layer');
+
+            if (firstOverlayLayer) {
+                nativeMap.addLayer(basemapLayer, firstOverlayLayer.id);
+            } else {
+                nativeMap.addLayer(basemapLayer);
+            }
+
             nativeMap.setMaxZoom(toNativeZoom(layer.options.maxZoom || 19));
             this._tileLayer = layer;
         },
