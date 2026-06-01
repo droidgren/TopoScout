@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.8.2";
+const APP_VERSION = "2.0";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -1348,10 +1348,12 @@ const ResetNorthControl = L.Control.extend({
     onAdd: function (map) {
         const container = L.DomUtil.create('div', 'maplibregl-ctrl maplibregl-ctrl-group reset-north-control');
         const btn = L.DomUtil.create('a', 'reset-north-btn', container);
+        const t = translations[currentLang] || {};
+        const resetNorthLabel = t.btn_reset_north || 'Reset North';
         btn.href = '#';
-        btn.title = 'Reset North';
+        btn.title = resetNorthLabel;
         btn.setAttribute('role', 'button');
-        btn.setAttribute('aria-label', 'Reset North');
+        btn.setAttribute('aria-label', resetNorthLabel);
         btn.innerHTML = '<svg class="compass-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="12,2 15,14 12,12 9,14" fill="#e53935"/><polygon points="12,22 9,14 12,12 15,14" fill="#999"/></svg>';
         L.DomEvent.disableClickPropagation(container);
         L.DomEvent.on(btn, 'click', function (e) {
@@ -1567,6 +1569,52 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
+        const languageBtn = document.querySelector('.header-buttons .circle-btn:not(#share-map-btn):not(.info-btn)');
+        if (languageBtn) {
+            const label = t.btn_switch_language || 'Switch Language';
+            languageBtn.title = label;
+            languageBtn.setAttribute('aria-label', label);
+        }
+        const infoBtn = document.querySelector('.info-btn');
+        if (infoBtn) {
+            const label = t.btn_info_panel || 'Info';
+            infoBtn.title = label;
+            infoBtn.setAttribute('aria-label', label);
+        }
+        const toggleBtn = document.querySelector('.toggle-btn');
+        if (toggleBtn) {
+            const toggleLabel = getControlsToggleLabel(isControlsMinimized);
+            toggleBtn.title = toggleLabel;
+            toggleBtn.setAttribute('aria-label', toggleLabel);
+        }
+        const editKeyBtn = document.getElementById('edit-key-btn');
+        if (editKeyBtn) {
+            const label = t.btn_api_key || 'API';
+            editKeyBtn.title = label;
+            editKeyBtn.setAttribute('aria-label', label);
+        }
+        const gpsBtn = document.querySelector('.search-group .icon-btn[onclick="locateUser()"]');
+        if (gpsBtn) {
+            const label = t.btn_gps || 'GPS';
+            gpsBtn.title = label;
+            gpsBtn.setAttribute('aria-label', label);
+        }
+        const searchBtn = document.querySelector('.search-group .icon-btn[onclick="searchLocation()"]');
+        if (searchBtn) {
+            const label = t.btn_search || 'Search';
+            searchBtn.title = label;
+            searchBtn.setAttribute('aria-label', label);
+        }
+        const lockRadiusLabel = document.getElementById('lbl-lock-circle');
+        if (lockRadiusLabel) {
+            lockRadiusLabel.title = t.lbl_lock_radius_title || 'Lock';
+        }
+        const resetNorthBtn = document.querySelector('.reset-north-btn');
+        if (resetNorthBtn) {
+            const label = t.btn_reset_north || 'Reset North';
+            resetNorthBtn.title = label;
+            resetNorthBtn.setAttribute('aria-label', label);
+        }
         if (shareMapBtn) {
             shareMapBtn.title = t.btn_share_map_title || 'Share Map View';
             shareMapBtn.setAttribute('aria-label', t.btn_share_map_title || 'Share Map View');
@@ -1731,6 +1779,13 @@ function toggleControls() {
     setControlsMinimized(!controls.classList.contains('minimized'));
 }
 
+function getControlsToggleLabel(minimized) {
+    const t = translations[currentLang] || {};
+    return minimized
+        ? (t.btn_maximize_panel || 'Maximize')
+        : (t.btn_minimize_panel || 'Minimize');
+}
+
 function setControlsMinimized(minimized) {
     const btn = document.querySelector('.toggle-btn');
     isControlsMinimized = minimized;
@@ -1739,6 +1794,9 @@ function setControlsMinimized(minimized) {
     }
     if (btn) {
         btn.textContent = minimized ? '➕' : '➖';
+        const label = getControlsToggleLabel(minimized);
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
     }
 }
 
