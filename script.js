@@ -1975,7 +1975,7 @@ function removeLegendControl(control) {
     }
 }
 
-function getSlopeLegendItems() {
+function getSlopeMapLegendItems() {
     return [
         { label: '0-9°', color: '#FFFFFF' },
         { label: '10-29°', color: '#247400' },
@@ -1987,9 +1987,20 @@ function getSlopeLegendItems() {
     ];
 }
 
-function createSlopeLegendControl() {
+function getGpxSlopeLegendItems(baseColor) {
+    return [
+        { label: '<= -20°', color: slopeToColorHex(-20, baseColor) },
+        { label: '-20° to -10°', color: slopeToColorHex(-15, baseColor) },
+        { label: '-10° to 0°', color: slopeToColorHex(-5, baseColor) },
+        { label: '0°', color: slopeToColorHex(0, baseColor) },
+        { label: '0° to 10°', color: slopeToColorHex(5, baseColor) },
+        { label: '10° to 20°', color: slopeToColorHex(15, baseColor) },
+        { label: '>= 20°', color: slopeToColorHex(20, baseColor) }
+    ];
+}
+
+function createSlopeLegendControl(legendItems) {
     const t = translations[currentLang];
-    const legendItems = getSlopeLegendItems();
     const legend = L.control({ position: 'bottomleft' });
     legend.onAdd = function () {
         const div = L.DomUtil.create('div', 'slope-legend');
@@ -2178,7 +2189,7 @@ function syncGpxSlopeLegend() {
         return;
     }
 
-    gpxSlopeLegend = createSlopeLegendControl();
+    gpxSlopeLegend = createSlopeLegendControl(getGpxSlopeLegendItems(getGpxTrackColor()));
     gpxSlopeLegend.addTo(map);
 }
 
@@ -2702,7 +2713,7 @@ function _renderSlopeMap() {
 
     slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
 
-    slopeLegend = createSlopeLegendControl();
+    slopeLegend = createSlopeLegendControl(getSlopeMapLegendItems());
     slopeLegend.addTo(map);
 
     // Store generated area so the radius circle can be shown as overlay
