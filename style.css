@@ -105,6 +105,12 @@ h3 {
     color: #555;
 }
 
+.share-circle-btn {
+    color: #1565C0;
+    font-size: 13px;
+    transform: translateY(-1px);
+}
+
 /* FLAG IMAGE */
 .flag-img {
     width: 100%;
@@ -553,6 +559,12 @@ button {
     align-items: center;
 }
 
+.map-tools-group {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
 #searchInput {
     flex-grow: 1;
     height: 32px;
@@ -681,6 +693,13 @@ select {
     margin-top: 5px;
 }
 
+.map-toggle-group {
+    justify-content: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 0;
+}
+
 .checkbox-row {
     display: flex;
     gap: 6px;
@@ -691,6 +710,28 @@ select {
     font-size: 13px;
     cursor: pointer;
     user-select: none;
+}
+
+.exaggeration-row {
+    display: none;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.exaggeration-row input[type="range"] {
+    flex: 1;
+    margin: 0;
+    accent-color: #1565c0;
+}
+
+.range-value {
+    min-width: 32px;
+    text-align: right;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: #444;
 }
 
 .zoom-badge {
@@ -755,6 +796,31 @@ select {
     color: #666;
     display: block;
     margin-bottom: 1px;
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-content {
+    padding: 14px 16px 12px;
+    border-radius: 14px;
+    border: none;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-tip {
+    border-top-color: #fff;
+    border-bottom-color: #fff;
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-close-button {
+    color: #777;
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px 8px 0 0;
+}
+
+.maplibregl-popup.result-popup .maplibregl-popup-close-button:hover {
+    background: transparent;
+    color: #333;
 }
 
 /* CHANGELOG ACCORDION */
