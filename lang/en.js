@@ -101,6 +101,7 @@ const LANG_EN = {
     tutorial_elevation_text: "This display shows the real-time elevation at the map center. Move the map to see it update.",
     tutorial_layers_title: "Map Layers & Search",
     tutorial_layers_text: "Choose a map layer, then search for a place by name or coordinates. Use the GPS button to jump to your current location. Some map layers require a free API key.",
+    tutorial_layers_tools_text: "• Map Layers: Choose your preferred map style. (Note: Some layers require a free API key).\n• Navigation: Search for a place by name or coordinates, or click the GPS button to jump to your current location.\n• Overzoom: Zoom in beyond the standard limit. This enlarges the map but does not reveal extra detail.\n• Tilt & 3D: Enable Tilt to pitch the map angle, and enable 3D to view terrain with adjustable exaggeration.",
     tutorial_scan_title: "Search Radius",
     tutorial_scan_text: "Set the search radius (km) for all analysis features.\n• Show Radius: toggles the blue circle on the map.\n• Lock Radius: pins the search area to the current position.",
     tutorial_map_tools_title: "Overzoom, Tilt & 3D",
