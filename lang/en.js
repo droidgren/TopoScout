@@ -47,6 +47,8 @@ const LANG_EN = {
     info_changelog_title: "Changelog",
     info_privacy: "This application is fully client-side. It runs directly in your browser and no data or searches are saved on any server.",
     btn_close: "Close",
+    btn_refresh_app: "Refresh app",
+    btn_refreshing_app: "Refreshing...",
     modal_api_title: "Enter API Key for {service}",
     modal_api_text: "To use {service}, you need an API key. You can get one for free by registering at the link below.",
     input_api_ph: "Paste your key here...",
