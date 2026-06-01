@@ -1727,25 +1727,43 @@ function showInfo() { document.getElementById('info-modal').style.display = 'fle
 function closeInfo() { document.getElementById('info-modal').style.display = 'none'; }
 
 function toggleControls() {
+    if (!controls) return;
+    setControlsMinimized(!controls.classList.contains('minimized'));
+}
+
+function setControlsMinimized(minimized) {
     const btn = document.querySelector('.toggle-btn');
-    isControlsMinimized = !isControlsMinimized;
-    if (isControlsMinimized) {
-        controls.classList.add('minimized');
-        btn.textContent = '➕';
-    } else {
-        controls.classList.remove('minimized');
-        btn.textContent = '➖';
+    isControlsMinimized = minimized;
+    if (controls) {
+        controls.classList.toggle('minimized', minimized);
     }
-};
+    if (btn) {
+        btn.textContent = minimized ? '➕' : '➖';
+    }
+}
+
+const tutorialSectionIds = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
+
+function setSectionExpanded(sectionId, expanded) {
+    const content = document.getElementById(sectionId);
+    if (!content) return;
+
+    const header = content.previousElementSibling;
+    const toggle = header ? header.querySelector('.section-toggle') : null;
+    content.style.display = expanded ? 'block' : 'none';
+    if (toggle) {
+        toggle.textContent = expanded ? '➖' : '➕';
+    }
+}
+
+function collapseTutorialSections() {
+    tutorialSectionIds.forEach((sectionId) => setSectionExpanded(sectionId, false));
+}
 
 window.toggleSection = function (sectionId) {
     const content = document.getElementById(sectionId);
     if (!content) return;
-    const header = content.previousElementSibling;
-    const toggle = header ? header.querySelector('.section-toggle') : null;
-    const isHidden = content.style.display === 'none' || content.style.display === '';
-    content.style.display = isHidden ? 'block' : 'none';
-    if (toggle) toggle.textContent = isHidden ? '➖' : '➕';
+    setSectionExpanded(sectionId, content.style.display !== 'block');
 };
 
 async function searchLocation() {
@@ -3270,6 +3288,7 @@ window.addEventListener('appinstalled', () => {
 
 let tutorialStep = 0;
 let _tutorialOverlayClickHandler = null;
+let _tutorialKeydownHandler = null;
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
@@ -3277,22 +3296,94 @@ const tutorialSteps = [
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
-    { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
-    { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
-    { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
-    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
-    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandSection: 'section-points' },
-    { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandSection: 'section-climbs' },
-    { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandSection: 'section-slope' },
-    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandSection: 'section-routes' },
+    { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text', expandControls: true },
+    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true },
+    { targetSelector: '.map-tools-group', titleKey: 'tutorial_map_tools_title', textKey: 'tutorial_map_tools_text', expandControls: true },
+    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
+    { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
+    { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
+    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
-function startTutorial() {
-    // Expand controls panel so UI elements are visible
-    if (controls && controls.classList.contains('minimized')) {
-        toggleControls();
+function isTutorialVisible() {
+    const overlay = document.getElementById('tutorial-overlay');
+    return Boolean(overlay) && overlay.style.display === 'block';
+}
+
+function syncTutorialUiState(step) {
+    setControlsMinimized(!step.expandControls);
+    collapseTutorialSections();
+    if (step.expandSection) {
+        setSectionExpanded(step.expandSection, true);
     }
+}
+
+function getTutorialTargetRect(step) {
+    if (!step.targetSelector) return null;
+
+    const startEl = document.querySelector(step.targetSelector);
+    if (!startEl) return null;
+
+    let rect = startEl.getBoundingClientRect();
+    if (!step.targetSelectorEnd) {
+        return rect;
+    }
+
+    const endEl = document.querySelector(step.targetSelectorEnd);
+    if (!endEl) {
+        return rect;
+    }
+
+    const endRect = endEl.getBoundingClientRect();
+    const left = Math.min(rect.left, endRect.left);
+    const top = Math.min(rect.top, endRect.top);
+    const right = Math.max(rect.right, endRect.right);
+    const bottom = Math.max(rect.bottom, endRect.bottom);
+    rect = {
+        left,
+        top,
+        right,
+        bottom,
+        width: right - left,
+        height: bottom - top
+    };
+
+    return rect;
+}
+
+function attachTutorialKeyboardNavigation() {
+    if (_tutorialKeydownHandler) {
+        document.removeEventListener('keydown', _tutorialKeydownHandler, true);
+    }
+
+    _tutorialKeydownHandler = function (e) {
+        if (!isTutorialVisible() || e.repeat) return;
+
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            e.stopPropagation();
+            tutorialNext();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            e.stopPropagation();
+            tutorialPrev();
+        }
+    };
+
+    document.addEventListener('keydown', _tutorialKeydownHandler, true);
+}
+
+function detachTutorialKeyboardNavigation() {
+    if (_tutorialKeydownHandler) {
+        document.removeEventListener('keydown', _tutorialKeydownHandler, true);
+        _tutorialKeydownHandler = null;
+    }
+}
+
+function startTutorial() {
+    setControlsMinimized(true);
+    collapseTutorialSections();
     tutorialStep = 0;
     const overlay = document.getElementById('tutorial-overlay');
     overlay.style.display = 'block';
@@ -3307,12 +3398,12 @@ function startTutorial() {
         if (e.target === overlay) finishTutorial();
     };
     overlay.addEventListener('click', _tutorialOverlayClickHandler);
+    attachTutorialKeyboardNavigation();
 }
 
 function renderTutorialStep() {
     const t = translations[currentLang];
     const step = tutorialSteps[tutorialStep];
-    const overlay = document.getElementById('tutorial-overlay');
     const spotlight = document.getElementById('tutorial-spotlight');
     const tooltip = document.getElementById('tutorial-tooltip');
     const titleEl = document.getElementById('tutorial-title');
@@ -3320,6 +3411,9 @@ function renderTutorialStep() {
     const prevBtn = document.getElementById('tutorial-prev');
     const nextBtn = document.getElementById('tutorial-next');
     const progressEl = document.getElementById('tutorial-progress');
+
+    syncTutorialUiState(step);
+    tooltip.style.transform = '';
 
     titleEl.textContent = t[step.titleKey] || '';
     textEl.textContent = t[step.textKey] || '';
@@ -3329,19 +3423,10 @@ function renderTutorialStep() {
     nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? (t.tutorial_btn_finish || 'Finish') : (t.tutorial_btn_next || 'Next');
     prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
 
-    // Expand the section if the step requires it
-    if (step.expandSection) {
-        const sectionContent = document.getElementById(step.expandSection);
-        if (sectionContent && (sectionContent.style.display === 'none' || sectionContent.style.display === '')) {
-            toggleSection(step.expandSection);
-        }
-    }
-
     const PAD = 8;
     if (step.targetSelector) {
-        const el = document.querySelector(step.targetSelector);
-        if (el) {
-            const rect = el.getBoundingClientRect();
+        const rect = getTutorialTargetRect(step);
+        if (rect) {
             spotlight.style.display = 'block';
             spotlight.style.left = (rect.left - PAD) + 'px';
             spotlight.style.top = (rect.top - PAD) + 'px';
@@ -3410,8 +3495,11 @@ function finishTutorial() {
         overlay.removeEventListener('click', _tutorialOverlayClickHandler);
         _tutorialOverlayClickHandler = null;
     }
+    detachTutorialKeyboardNavigation();
     overlay.style.display = 'none';
     overlay.style.pointerEvents = 'none';
+    collapseTutorialSections();
+    setControlsMinimized(true);
 }
 
 // ==========================================
