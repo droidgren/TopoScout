@@ -559,6 +559,12 @@ button {
     align-items: center;
 }
 
+.map-tools-group {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
 #searchInput {
     flex-grow: 1;
     height: 32px;
@@ -687,6 +693,13 @@ select {
     margin-top: 5px;
 }
 
+.map-toggle-group {
+    justify-content: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 0;
+}
+
 .checkbox-row {
     display: flex;
     gap: 6px;
@@ -697,6 +710,28 @@ select {
     font-size: 13px;
     cursor: pointer;
     user-select: none;
+}
+
+.exaggeration-row {
+    display: none;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.exaggeration-row input[type="range"] {
+    flex: 1;
+    margin: 0;
+    accent-color: #1565c0;
+}
+
+.range-value {
+    min-width: 32px;
+    text-align: right;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: #444;
 }
 
 .zoom-badge {
