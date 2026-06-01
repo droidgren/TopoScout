@@ -101,6 +101,7 @@ const LANG_SV = {
     tutorial_elevation_text: "Här visas höjden ovan havet i kartans mittpunkt. Flytta kartan för att se den uppdateras.",
     tutorial_layers_title: "Kartlager & Sök",
     tutorial_layers_text: "Välj kartlager och sök sedan efter en plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din aktuella position. Vissa kartlager kräver en gratis API-nyckel.",
+    tutorial_layers_tools_text: "• Kartlager: Välj den kartstil du föredrar. (Obs: Vissa lager kräver en gratis API-nyckel).\n• Navigering: Sök efter en plats med namn eller koordinater, eller klicka på GPS-knappen för att hoppa till din aktuella position.\n• Överzoom: Zooma in bortom standardgränsen. Kartan förstoras, men visar inga extra detaljer.\n• Tilt & 3D: Aktivera Tilt för att luta kartvinkeln och aktivera 3D för att visa terräng med justerbar förstärkning.",
     tutorial_scan_title: "Sökradie",
     tutorial_scan_text: "Ange sökradien (km) för alla analysfunktioner.\n• Visa radie: visar eller döljer den blå cirkeln på kartan.\n• Lås radie: fäster sökområdet vid nuvarande position.",
     tutorial_map_tools_title: "Överzoom, tilt & 3D",
