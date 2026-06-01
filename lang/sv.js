@@ -78,6 +78,8 @@ const LANG_SV = {
     mobile_install_msg: "Installera Höjdsökaren som app!",
     btn_install: "Installera",
     btn_switch_language: "Byt språk",
+    btn_refresh_app: "Uppdatera appen",
+    btn_refreshing_app: "Uppdaterar...",
     btn_info_panel: "Info",
     btn_api_key: "API",
     btn_gps: "GPS",

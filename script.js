@@ -2,6 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.0";
+const APP_REFRESH_PARAM = 'app-refresh';
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -1175,6 +1176,8 @@ const translations = {
     en: LANG_EN
 };
 
+clearRefreshUrlFlag();
+
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
@@ -1540,6 +1543,8 @@ function updateLanguage() {
         const anglesInput = document.getElementById('scanAnglesInput');
         if (anglesInput) anglesInput.value = climbScanAngles;
         document.getElementById('info-close').textContent = t.btn_close;
+        const infoRefresh = document.getElementById('info-refresh');
+        if (infoRefresh && !infoRefresh.disabled) infoRefresh.textContent = t.btn_refresh_app;
 
         document.getElementById('modal-save').textContent = t.btn_save;
         document.getElementById('modal-cancel').textContent = t.btn_cancel;
@@ -3255,6 +3260,57 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 // 5.1 SERVICE WORKER & UPDATES
 // ==========================================
 let newWorker;
+let isAppRefreshInProgress = false;
+
+function clearRefreshUrlFlag() {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(APP_REFRESH_PARAM)) {
+        return;
+    }
+    url.searchParams.delete(APP_REFRESH_PARAM);
+    const cleanUrl = url.pathname + (url.search ? url.search : '') + url.hash;
+    window.history.replaceState({}, '', cleanUrl);
+}
+
+function buildRefreshUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set(APP_REFRESH_PARAM, Date.now().toString());
+    return url.toString();
+}
+
+async function refreshApp(button) {
+    if (isAppRefreshInProgress) {
+        return;
+    }
+
+    isAppRefreshInProgress = true;
+    closeInfo();
+
+    const refreshButton = button || document.getElementById('info-refresh');
+    if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = translations[currentLang].btn_refreshing_app;
+    }
+
+    try {
+        if ('serviceWorker' in navigator) {
+            const registrations = navigator.serviceWorker.getRegistrations
+                ? await navigator.serviceWorker.getRegistrations()
+                : [];
+            await Promise.all(registrations.map(registration => registration.unregister()));
+        }
+
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+        }
+    } catch (error) {
+        console.warn('App refresh reset failed:', error);
+    } finally {
+        window.location.replace(buildRefreshUrl());
+    }
+}
+
 function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
@@ -3272,6 +3328,7 @@ function initServiceWorker() {
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
+        if (isAppRefreshInProgress) return;
         window.location.reload();
         refreshing = true;
     });
