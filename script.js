@@ -3358,6 +3358,33 @@ function isMobileDevice() {
         (window.innerWidth <= 600 && 'ontouchstart' in window);
 }
 
+function shouldDelayInstallUiUntilTutorialCompletes() {
+    return !localStorage.getItem('topo_tutorial_done') && !hasSharedMapView;
+}
+
+function showDeferredInstallUi(mobileDelayMs = 0) {
+    if (!deferredInstallPrompt) return;
+    if (shouldDelayInstallUiUntilTutorialCompletes() || isTutorialVisible()) return;
+
+    const installBtn = document.getElementById('install-app-btn');
+    if (installBtn) installBtn.style.display = 'block';
+
+    if (!isMobileDevice() || localStorage.getItem('topo_install_dismissed')) return;
+
+    const showMobileBar = () => {
+        if (!deferredInstallPrompt || shouldDelayInstallUiUntilTutorialCompletes() || isTutorialVisible()) return;
+        const mobileBar = document.getElementById('mobile-install-bar');
+        if (mobileBar) mobileBar.classList.add('show');
+    };
+
+    if (mobileDelayMs > 0) {
+        window.setTimeout(showMobileBar, mobileDelayMs);
+        return;
+    }
+
+    showMobileBar();
+}
+
 function triggerInstallPrompt() {
     if (!deferredInstallPrompt) return;
     deferredInstallPrompt.prompt();
@@ -3379,14 +3406,7 @@ function dismissInstallBar() {
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    const installBtn = document.getElementById('install-app-btn');
-    if (installBtn) installBtn.style.display = 'block';
-    if (isMobileDevice() && !localStorage.getItem('topo_install_dismissed')) {
-        setTimeout(() => {
-            const mobileBar = document.getElementById('mobile-install-bar');
-            if (mobileBar) mobileBar.classList.add('show');
-        }, 1500);
-    }
+    showDeferredInstallUi(1500);
 });
 
 window.addEventListener('appinstalled', () => {
@@ -3411,9 +3431,9 @@ const tutorialSteps = [
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
-    { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text', expandControls: true },
-    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true },
+    { targetSelectors: ['.layer-row', '.search-group'], titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text', expandControls: true },
     { targetSelector: '.map-tools-group', titleKey: 'tutorial_map_tools_title', textKey: 'tutorial_map_tools_text', expandControls: true },
+    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true },
     { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
@@ -3465,6 +3485,56 @@ function getTutorialTargetRect(step) {
     };
 
     return rect;
+}
+
+function getTutorialTargetRects(step) {
+    if (Array.isArray(step.targetSelectors) && step.targetSelectors.length > 0) {
+        return step.targetSelectors
+            .map((selector) => {
+                const target = document.querySelector(selector);
+                return target ? target.getBoundingClientRect() : null;
+            })
+            .filter(Boolean);
+    }
+
+    const rect = getTutorialTargetRect(step);
+    return rect ? [rect] : [];
+}
+
+function getTutorialSpotlightBounds(rects) {
+    if (!rects.length) return null;
+
+    const left = Math.min(...rects.map((rect) => rect.left));
+    const top = Math.min(...rects.map((rect) => rect.top));
+    const right = Math.max(...rects.map((rect) => rect.right));
+    const bottom = Math.max(...rects.map((rect) => rect.bottom));
+
+    return {
+        left,
+        top,
+        right,
+        bottom,
+        width: right - left,
+        height: bottom - top
+    };
+}
+
+function positionTutorialSpotlight(spotlight, rect, pad) {
+    if (!spotlight || !rect) return;
+
+    spotlight.style.display = 'block';
+    spotlight.style.left = (rect.left - pad) + 'px';
+    spotlight.style.top = (rect.top - pad) + 'px';
+    spotlight.style.width = (rect.width + pad * 2) + 'px';
+    spotlight.style.height = (rect.height + pad * 2) + 'px';
+}
+
+function hideTutorialSpotlight(spotlight) {
+    if (!spotlight) return;
+
+    spotlight.style.display = 'none';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
 }
 
 function attachTutorialKeyboardNavigation() {
@@ -3520,6 +3590,7 @@ function renderTutorialStep() {
     const t = translations[currentLang];
     const step = tutorialSteps[tutorialStep];
     const spotlight = document.getElementById('tutorial-spotlight');
+    const secondarySpotlight = document.getElementById('tutorial-spotlight-secondary');
     const tooltip = document.getElementById('tutorial-tooltip');
     const titleEl = document.getElementById('tutorial-title');
     const textEl = document.getElementById('tutorial-text');
@@ -3539,46 +3610,45 @@ function renderTutorialStep() {
     prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
 
     const PAD = 8;
-    if (step.targetSelector) {
-        const rect = getTutorialTargetRect(step);
-        if (rect) {
-            spotlight.style.display = 'block';
-            spotlight.style.left = (rect.left - PAD) + 'px';
-            spotlight.style.top = (rect.top - PAD) + 'px';
-            spotlight.style.width = (rect.width + PAD * 2) + 'px';
-            spotlight.style.height = (rect.height + PAD * 2) + 'px';
+    const rects = getTutorialTargetRects(step);
+    if (rects.length > 0) {
+        const visibleRects = rects.slice(0, 2);
+        const bounds = getTutorialSpotlightBounds(rects);
+        if (bounds) {
+            positionTutorialSpotlight(spotlight, visibleRects[0], PAD);
+            if (visibleRects[1]) {
+                positionTutorialSpotlight(secondarySpotlight, visibleRects[1], PAD);
+            } else {
+                hideTutorialSpotlight(secondarySpotlight);
+            }
 
             // Position tooltip below or above the element
             const margin = 10;
             const tooltipW = tooltip.offsetWidth || 320;
             const tooltipH = tooltip.offsetHeight || 200;
-            const spaceBelow = window.innerHeight - rect.bottom;
-            let leftPos = Math.max(margin, Math.min(rect.left, window.innerWidth - tooltipW - margin));
+            const spaceBelow = window.innerHeight - bounds.bottom;
+            let leftPos = Math.max(margin, Math.min(bounds.left, window.innerWidth - tooltipW - margin));
             let topPos;
             if (spaceBelow >= tooltipH + 20) {
-                topPos = rect.bottom + 14;
+                topPos = bounds.bottom + 14;
             } else {
-                topPos = rect.top - tooltipH - 14;
+                topPos = bounds.top - tooltipH - 14;
             }
             topPos = Math.max(margin, Math.min(topPos, window.innerHeight - tooltipH - margin));
             tooltip.style.left = leftPos + 'px';
             tooltip.style.top = topPos + 'px';
         } else {
             // Fallback to centered if element not found
-            centerTutorialTooltip(spotlight, tooltip);
+            centerTutorialTooltip([spotlight, secondarySpotlight], tooltip);
         }
     } else {
         // No target - center the tooltip, hide spotlight
-        centerTutorialTooltip(spotlight, tooltip);
+        centerTutorialTooltip([spotlight, secondarySpotlight], tooltip);
     }
 }
 
-function centerTutorialTooltip(spotlight, tooltip) {
-    spotlight.style.display = 'block';
-    spotlight.style.width = '0';
-    spotlight.style.height = '0';
-    spotlight.style.left = (window.innerWidth / 2) + 'px';
-    spotlight.style.top = (window.innerHeight / 2) + 'px';
+function centerTutorialTooltip(spotlights, tooltip) {
+    spotlights.forEach(hideTutorialSpotlight);
     tooltip.style.left = '50%';
     tooltip.style.top = '50%';
     tooltip.style.transform = 'translate(-50%, -50%)';
@@ -3615,6 +3685,7 @@ function finishTutorial() {
     overlay.style.pointerEvents = 'none';
     collapseTutorialSections();
     setControlsMinimized(true);
+    showDeferredInstallUi(1500);
 }
 
 // ==========================================

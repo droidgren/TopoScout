@@ -921,7 +921,8 @@ details[open] summary {
     pointer-events: none;
 }
 
-#tutorial-spotlight {
+#tutorial-spotlight,
+#tutorial-spotlight-secondary {
     position: absolute;
     border-radius: 10px;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
