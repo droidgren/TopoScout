@@ -1,110 +1,209 @@
-# Topo Elevation Search
+# Elevation Finder
 
-Topo Elevation Search is a client-side web application designed to analyze terrain elevation data directly in the browser. It allows users to identify the highest points within a specific radius and calculate maximum ascent (climbing potential) over a set distance.
+Elevation Finder is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend.
 
-The application relies on global elevation tiles and runs entirely in the browser without sending user data or search queries to a backend server.
+Live demo: [Elevation Finder](https://droidgren.github.io/elevation_finder/)
 
-Live demo: [Topo Elevation Search](https://droidgren.github.io/elevation_finder/)
+Repository: [droidgren/elevation_finder](https://github.com/droidgren/elevation_finder)
 
-Also check out [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer), a companion project focused on visualizing GPX tracks with elevation-aware map tools.
+Companion project: [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer/)
 
-## Features
+## What Is New In v2.0
 
-* **Real-time Elevation:** Displays the elevation above sea level for the map center dynamically.
-* **Peak Finding:** Scans a user-defined radius to identify and rank the highest points in the area.
-* **Climb Analysis:** Calculates true cumulative elevation gain (Total Ascent) over a specific distance by sampling terrain in 10m steps.
-* **Detailed Stats:** Climb results include vertical drop, slope percentage, and straight-line distance.
-* **Multiple Map Layers:**
-    * OpenTopoMap (Default)
-    * OpenStreetMap
-    * Satellite (ESRI)
-    * Lantmäteriet (Sweden)
-    * Elevation Data (Debug view)
-    * *Optional:* Tracetrack and Thunderforest (requires API keys).
-* **Slope Map:** Generates a color-coded overlay within the search radius, visualizing terrain steepness by slope angle, with adjustable opacity and angle filters.
-* **GPX Route Overlay:** Upload GPX files to display routes on the map with customizable track color, width, distance labels (km/mi), slope-based coloring, waypoints, and min/max elevation markers. Includes track stats: length, elevation gain/loss, and min/max elevation.
-* **Share Map View:** Copy a link that restores the current language, map center, zoom level, and selected map layer.
-* **PWA Support:** Installable as a Progressive Web App via an install button in the info modal or a mobile install prompt bar.
-* **Geolocation:** Quickly locate your current position.
-* **Address Search:** Integrated search using Nominatim (OSM).
-* **State Persistence:** Automatically saves your last position, zoom level, selected language, and map layer settings locally in the browser, while also supporting shared URLs that restore that same view state.
-* **Bilingual Support:** Full support for English and Swedish.
+- Migrated frontend map rendering to MapLibre GL JS.
+- Added map tools for overzoom, tilt, 3D terrain, and shareable map views.
+- Kept the terrain-analysis workflow, slope overlay, GPX route overlay, and bilingual UI in the same static deployment model.
 
+## Core Capabilities
 
-## Usage
+- **Live center elevation** for the current map position.
+- **Find Highest Points** within a configurable search radius.
+- **Find Climbs** by scanning many directions and ranking routes by cumulative ascent.
+- **Slope Map** overlay with opacity and slope-angle filtering.
+- **GPX route overlay** with customizable styling and route stats.
+- **Map tools** for overzoom, tilt, and 3D terrain exaggeration.
+- **Share Map View** links that restore language, center, zoom, and selected layer.
+- **Multiple map sources** including topographic, satellite, national, and debug elevation layers.
+- **PWA install support** for desktop and mobile.
+- **English and Swedish** localization.
 
-1.  **Navigation:** Drag the map or use the search bar to find a location.
-2.  **Settings:**
-    * **Radius:** Sets the search area in kilometers.
-    * **Points:** Sets how many top peaks to display.
-    * **Measure Dist:** Sets the distance over which to calculate elevation gain (for climb analysis).
-3.  **Analysis:**
-    * Click **Find Highest Points** to scan the visible area for peaks.
-    * Click **Find Climbs** to identify the steepest sections.
-4.  **GPX Routes:** Expand the **Add Routes** section to load a GPX file. Customize track color, width, and toggle distance labels, slope coloring, waypoints, and min/max elevation markers.
-5.  **Map Layers:** Use the dropdown menu to switch layers. If a layer requires an API key, a prompt will appear where you can enter and save it.
-6.  **Share Map View:** Click the link button in the header to copy a URL that restores your current language, zoom, center, and layer when opened.
-7.  **Debug Settings:** Accessible via the info modal. Includes a **Water Analysis** toggle (filters water from results), adjustable **Climb Step Resolution**, and **Scan Angles**.
+## Feature Overview
 
-## Technical Details
+### Terrain analysis
 
-This application uses **Leaflet.js** for map rendering. Elevation data is fetched using high-resolution 512x512 WebP terrain tiles from **Mapterhorn**. 
+Elevation Finder focuses on terrain discovery rather than just displaying a single height sample.
 
-### Shared foundation
-1.  Elevation tiles are silently rendered onto a hidden HTML5 Canvas element that covers the current map view.
-2.  When an analysis is triggered, the script reads raw pixel data (R, G, B, A) from that canvas.
-3.  Each pixel's elevation (in metres) is decoded using the **Terrarium formula**: `(R × 256 + G + B / 256) − 32768`.
-4.  If **Water Analysis** is enabled, a second canvas is populated with OpenStreetMap water tiles; pixels that match a water colour are excluded from results.
+- **Highest-point scanning** ranks the tallest candidates inside the current search radius.
+- **Climb analysis** estimates the strongest uphill routes by summing positive elevation changes over a chosen distance.
+- **Slope visualization** renders a color-coded raster overlay that highlights shallow terrain, steep hillsides, and very steep ground.
+- **Water filtering** can exclude water-colored areas from analysis to reduce false positives.
+
+### GPX route tools
+
+The built-in GPX overlay lets you add route context while inspecting the terrain.
+
+- Load a local `.gpx` file directly in the browser.
+- Customize track color and line width.
+- Toggle distance labels in kilometers or miles.
+- Color the route by slope.
+- Show waypoints and min/max elevation markers.
+- View route summary stats including distance, elevation gain/loss, and min/max elevation.
+
+### Map and navigation tools
+
+- Search by place name or coordinates.
+- Jump to your current position with the GPS button.
+- Rotate the map with `Ctrl` + drag on desktop or two-finger rotation on touch devices.
+- Reset north using the compass control.
+- Enable overzoom to inspect raster layers beyond their standard max zoom.
+- Enable tilt and 3D terrain from the map-tools section.
+- Switch between multiple map layers without leaving the current map state.
+
+## Map Layers And Data Sources
+
+Built-in layers include:
+
+- OpenTopoMap
+- Tracetrack Topo
+- ThunderForest Outdoors
+- Lantmateriet (Sweden)
+- Norgeskart (Norway)
+- OpenStreetMap
+- Satellite (ESRI)
+- Elevation Data (debug view)
+
+Some third-party layers require an API key. When needed, the app prompts for the key and stores it locally in the browser.
+
+Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
+
+## How The Analysis Works
+
+### Shared analysis pipeline
+
+1. The app loads terrain raster tiles for the current viewport into an off-screen analysis surface.
+2. Pixel values are decoded with the Terrarium elevation formula: `(R * 256 + G + B / 256) - 32768`.
+3. The same viewport data can then be reused by the peak scan, climb scan, and slope renderer.
+4. Optional water analysis masks out likely water pixels before ranking terrain results.
 
 ### Find Highest Points
-1.  Every second pixel (2-pixel step) within the canvas is decoded to an elevation value.
-2.  Only pixels that fall inside the user-defined **search radius** (measured from the map centre) are kept as candidates.
-3.  Candidates are sorted by elevation in descending order.
-4.  A **minimum separation filter** (40 px ≈ a few hundred metres depending on zoom) removes points that are too close together, ensuring spatially diverse results.
-5.  The top **N** results (as set by *Num Points*) are placed as numbered markers on the map.
+
+1. The visible analysis surface is sampled for candidate elevations.
+2. Only candidates inside the selected search radius are kept.
+3. Candidates are sorted by elevation.
+4. A minimum-distance filter removes near-duplicates so the result list stays geographically useful.
+5. The best matches are rendered as numbered markers with result popups.
 
 ### Find Climbs
-1.  Candidate **start points** are sampled on a 4-pixel grid across the visible canvas, filtered to those within the search radius.
-2.  For each start point, **N evenly-spaced angles** are scanned (default 32, covering the full 360°). An end point is projected at exactly the user-defined **Measure Dist** distance in each direction.
-3.  Each start→end path is walked in steps of **climbStepRes** metres (default 10 m). The elevation at every step is read from the canvas using the Terrarium formula.
-4.  A **3-sample moving average** is applied to the elevation profile to suppress tile-level noise.
-5.  **Cumulative ascent** is calculated by summing only the positive elevation differences between consecutive smoothed samples — downhill sections are ignored.
-6.  Candidates with cumulative ascent > 1 m are sorted in descending order.
-7.  The same 40-px **minimum separation filter** is applied to avoid duplicate nearby results.
-8.  The top **N** climbs (as set by *Num Climbs*) are drawn as polylines on the map, with start and peak markers showing elevation, total ascent, slope %, and straight-line distance.
+
+1. Candidate start points are sampled across the analysis surface.
+2. Multiple headings are tested from each start point.
+3. Each path is walked in small elevation steps.
+4. A smoothing pass reduces tile noise.
+5. The route is scored by cumulative positive ascent.
+6. The best climbs are drawn on the map with distance, slope, vertical drop, and elevation details.
+
+### Slope Map
+
+1. The app compares neighboring elevation samples to estimate slope angle.
+2. Each pixel is assigned a slope class color.
+3. The overlay can be clipped to the search radius or shown across the full visible viewport.
+4. Users can filter by minimum and maximum slope angle, then adjust overlay opacity.
+
+## Using The App
+
+### 1. Choose the map context
+
+- Pick a base layer from the layer selector.
+- Search for a place or center the map on your current location.
+- Adjust the search radius and decide whether to show or lock it.
+
+### 2. Enable map tools when needed
+
+- Turn on **Overzoom** to inspect raster layers more closely.
+- Keep **Tilt** enabled for angled map interaction.
+- Turn on **3D** and adjust exaggeration for terrain relief.
+
+### 3. Run analysis
+
+- Open **Find Highest Points** to rank peaks inside the active radius.
+- Open **Find Climbs** to look for strong uphill routes over a fixed measurement distance.
+- Open **Generate Slope Map** to paint the terrain by steepness.
+
+### 4. Add GPX context
+
+- Expand **Add Routes**.
+- Load a GPX file.
+- Tune track styling and visibility options.
+- Compare the route against peak, climb, and slope results already on the map.
+
+### 5. Share or install
+
+- Click the share button in the header to copy a map-state link.
+- Install the app from the About dialog or the mobile install prompt when supported.
+
+## State, Sharing, And Storage
+
+- The app remembers language, map position, zoom, and selected layer in `localStorage`.
+- Shared URLs restore the current language and map state.
+- API keys are stored locally in the browser.
+- No terrain analysis results are uploaded to a project server.
+
+## Progressive Web App Notes
+
+- The app can be installed on mobile and desktop.
+- A service worker caches the core app shell for faster repeat visits.
+- When shipping a new release, bump both the displayed app version and the cache name so clients refresh cleanly.
+
+## Repository Layout
+
+- `index.html` - application shell and modal markup
+- `script.js` - map adapter, terrain analysis, GPX overlay, localization, and app logic
+- `style.css` - control panel, modal, and map styling
+- `service-worker.js` - offline asset caching
+- `manifest.json` - PWA metadata
+- `lang/en.js` - English strings
+- `lang/sv.js` - Swedish strings
 
 ## Changelog
 
-* **v1.8.1:** Added map rotation with Ctrl+drag and two-finger touch support, compass indicator with reset-north button.
-* **v1.8:** Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.
-* **v1.7:** Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.
-* **v1.6:** Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.
-* **v1.5:** Added PWA install button in the info modal and a mobile install prompt bar.
-* **v1.4:** Improved 'Find Climbs' accuracy (cumulative ascent, noise filtering, 32-angle scan). Added detailed climb stats and debug settings for step resolution and scan angles.
-* **v1.3:** Made app installable (PWA), added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-res screens.
-* **v1.2.1:** Fixed incorrect results at zoom level 15+. Added toggleable water analysis in debug settings.
-* **v1.2:** Migrated elevation tiles to Mapterhorn (512px resolution).
-* **v1.1:** Added "Find Climbs" feature, Lantmäteriet map, and multi-language support.
-* **v1.0:** Initial release.
+- **v2.0:** Migrated frontend map rendering to MapLibre GL JS and added overzoom, tilt, 3D terrain, and shareable map views.
+- **v1.8.2:** Added Norgeskart (Norway) map layer.
+- **v1.8.1:** Added map rotation with `Ctrl` + drag and two-finger touch support, plus a compass indicator with reset-north button.
+- **v1.8:** Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.
+- **v1.7:** Added the Slope Map feature to color-code terrain by steepness, with filter and opacity controls.
+- **v1.6:** Added an interactive tutorial, reordered tutorial steps, and added the GitHub Project link in the info modal.
+- **v1.5:** Added a PWA install button in the info modal and a mobile install prompt bar.
+- **v1.4:** Improved Find Climbs accuracy with cumulative ascent, noise filtering, and higher scan resolution. Added detailed climb stats and new debug settings.
+- **v1.3:** Made the app installable, added custom numbered map pins, improved touch UI for number inputs, and fixed alignment on high-resolution screens.
+- **v1.2.1:** Fixed incorrect results at zoom level 15+ and added toggleable water analysis in debug settings.
+- **v1.2:** Migrated elevation tiles to Mapterhorn with 512 px terrain tiles.
+- **v1.1:** Added Find Climbs, the Lantmateriet map layer, and multilingual support.
+- **v1.0:** Initial release.
 
-## Privacy Policy
+## Privacy
 
-**Topo Elevation Search is 100% client-side.**
+Elevation Finder is fully client-side.
 
-* No location data is sent to the creator's server.
-* No search history is tracked.
-* API keys (if used) are stored locally in your browser's `localStorage` and are only communicated directly to the respective tile providers (e.g., Thunderforest).
+- No location data is sent to the creator's server.
+- No search history is stored on a backend.
+- API keys are only stored locally in the browser and sent directly to the relevant map provider when used.
 
 ## Credits
 
-**Created by:** [droidgren.github.io](http://droidgren.github.io/) mostly using Gemini Pro.
+Created by [droidgren.github.io](http://droidgren.github.io/).
 
-### Third-party libraries and data:
-* **Leaflet:** Interactive maps.
-* **OpenTopoMap:** Topographic map tiles.
-* **OpenStreetMap:** Map data and geocoding.
-* **Mapterhorn:** High-resolution WebP elevation tiles.
+Libraries, services, and data sources used by the project include:
+
+- MapLibre GL JS
+- OpenTopoMap
+- OpenStreetMap and Nominatim
+- Esri World Imagery
+- Lantmateriet
+- Kartverket / Norgeskart
+- ThunderForest
+- Tracestrack
+- Mapterhorn
 
 ## License
 
-This project is open source. Please refer to the repository for license details.
+This project is open source. See the repository for the applicable license and distribution terms.
