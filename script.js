@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "1.8.2";
+const APP_VERSION = "2.0";
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -35,6 +35,1101 @@ const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Worl
 const NORGES_MAP_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev";
+const ELEVATION_TILE_MAX_ZOOM = 15;
+const OVERZOOM_STORAGE_KEY = 'topo_overzoom';
+const OVERZOOM_MAX_ZOOM = 22;
+const TERRAIN_SOURCE_ID = 'elevation-dem';
+const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
+
+const MAP_SOURCES = {
+    "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
+    "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 19 },
+    "thunderforest": { url: '', attribution: 'ThunderForest', maxZoom: 22 },
+    "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 17 },
+    "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 18 },
+    "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
+    "satellite": { url: SATELLITE_URL, attribution: 'Esri', maxZoom: 19 },
+    "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: ELEVATION_TILE_MAX_ZOOM, opacity: 1 }
+};
+
+const EARTH_RADIUS_M = 6371000;
+let mapOverlayId = 0;
+
+function isOverzoomEnabled() {
+    try {
+        return localStorage.getItem(OVERZOOM_STORAGE_KEY) === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+function getEffectiveLayerMaxZoom(maxZoom) {
+    const resolvedMaxZoom = Number(maxZoom) || 19;
+    return isOverzoomEnabled() ? Math.max(resolvedMaxZoom, OVERZOOM_MAX_ZOOM) : resolvedMaxZoom;
+}
+
+function getTerrainSourceDefinition() {
+    return {
+        type: 'raster-dem',
+        tiles: getTileUrls(DATA_TILE_URL),
+        encoding: 'terrarium',
+        tileSize: 512,
+        maxzoom: ELEVATION_TILE_MAX_ZOOM
+    };
+}
+
+function getTileUrls(urlTemplate) {
+    if (!urlTemplate) return [];
+    if (urlTemplate.includes('{s}')) {
+        return ['a', 'b', 'c'].map((subdomain) => urlTemplate.replace('{s}', subdomain));
+    }
+    return [urlTemplate];
+}
+
+function normalizeControlPosition(position) {
+    const positions = {
+        topleft: 'top-left',
+        topright: 'top-right',
+        bottomleft: 'bottom-left',
+        bottomright: 'bottom-right'
+    };
+    return positions[position] || position || 'top-right';
+}
+
+function toLngLat(input) {
+    if (Array.isArray(input)) {
+        return { lat: Number(input[0]), lng: Number(input[1]) };
+    }
+    return { lat: Number(input.lat), lng: Number(input.lng) };
+}
+
+function createLatLng(lat, lng) {
+    return {
+        lat: Number(lat),
+        lng: Number(lng),
+        distanceTo(other) {
+            const target = toLngLat(other);
+            const lat1 = this.lat * Math.PI / 180;
+            const lat2 = target.lat * Math.PI / 180;
+            const dLat = (target.lat - this.lat) * Math.PI / 180;
+            const dLng = (target.lng - this.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+            return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+    };
+}
+
+function createPoint(x, y) {
+    return {
+        x: Number(x),
+        y: Number(y),
+        add(other) {
+            const point = createPoint(other.x, other.y);
+            return createPoint(this.x + point.x, this.y + point.y);
+        },
+        subtract(other) {
+            const point = createPoint(other.x, other.y);
+            return createPoint(this.x - point.x, this.y - point.y);
+        },
+        divideBy(num) {
+            return createPoint(this.x / num, this.y / num);
+        },
+        multiplyBy(num) {
+            return createPoint(this.x * num, this.y * num);
+        },
+        floor() {
+            return createPoint(Math.floor(this.x), Math.floor(this.y));
+        },
+        round() {
+            return createPoint(Math.round(this.x), Math.round(this.y));
+        },
+        ceil() {
+            return createPoint(Math.ceil(this.x), Math.ceil(this.y));
+        },
+        distanceTo(other) {
+            const point = createPoint(other.x, other.y);
+            return Math.hypot(this.x - point.x, this.y - point.y);
+        }
+    };
+}
+
+function normalizeBoundsInput(input) {
+    if (Array.isArray(input) && input.length === 2 && !Array.isArray(input[0]) && typeof input[0] === 'object' && 'lat' in input[0]) {
+        return [toLngLat(input[0]), toLngLat(input[1])];
+    }
+    if (Array.isArray(input) && input.length === 2 && Array.isArray(input[0])) {
+        return [toLngLat(input[0]), toLngLat(input[1])];
+    }
+    const points = Array.isArray(input) ? input.map(toLngLat) : [toLngLat(input)];
+    let minLat = points[0].lat;
+    let maxLat = points[0].lat;
+    let minLng = points[0].lng;
+    let maxLng = points[0].lng;
+    for (const point of points) {
+        minLat = Math.min(minLat, point.lat);
+        maxLat = Math.max(maxLat, point.lat);
+        minLng = Math.min(minLng, point.lng);
+        maxLng = Math.max(maxLng, point.lng);
+    }
+    return [createLatLng(minLat, minLng), createLatLng(maxLat, maxLng)];
+}
+
+function createBounds(inputA, inputB) {
+    const [southWest, northEast] = inputB ? [toLngLat(inputA), toLngLat(inputB)] : normalizeBoundsInput(inputA);
+    return {
+        getSouthWest() {
+            return createLatLng(southWest.lat, southWest.lng);
+        },
+        getNorthEast() {
+            return createLatLng(northEast.lat, northEast.lng);
+        },
+        getNorthWest() {
+            return createLatLng(northEast.lat, southWest.lng);
+        },
+        getSouthEast() {
+            return createLatLng(southWest.lat, northEast.lng);
+        },
+        toMapLibreBounds() {
+            return [[southWest.lng, southWest.lat], [northEast.lng, northEast.lat]];
+        },
+        contains(latlng) {
+            const point = toLngLat(latlng);
+            return point.lat >= southWest.lat &&
+                point.lat <= northEast.lat &&
+                point.lng >= southWest.lng &&
+                point.lng <= northEast.lng;
+        },
+        pad(ratio) {
+            const latPad = (northEast.lat - southWest.lat) * ratio;
+            const lngPad = (northEast.lng - southWest.lng) * ratio;
+            return createBounds(
+                createLatLng(southWest.lat - latPad, southWest.lng - lngPad),
+                createLatLng(northEast.lat + latPad, northEast.lng + lngPad)
+            );
+        }
+    };
+}
+
+function getOverlayIds(baseId, kind) {
+    switch (kind) {
+        case 'circle':
+            return { sourceId: `${baseId}-source`, fillLayerId: `${baseId}-fill`, lineLayerId: `${baseId}-line` };
+        case 'circleMarker':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-circle` };
+        case 'polyline':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-line` };
+        case 'image':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
+        default:
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-layer` };
+    }
+}
+
+function ensureRemoved(nativeMap, overlay) {
+    const ids = overlay._ids || {};
+    if (ids.fillLayerId && nativeMap.getLayer(ids.fillLayerId)) nativeMap.removeLayer(ids.fillLayerId);
+    if (ids.lineLayerId && nativeMap.getLayer(ids.lineLayerId)) nativeMap.removeLayer(ids.lineLayerId);
+    if (ids.layerId && nativeMap.getLayer(ids.layerId)) nativeMap.removeLayer(ids.layerId);
+    if (ids.sourceId && nativeMap.getSource(ids.sourceId)) nativeMap.removeSource(ids.sourceId);
+}
+
+function circleToPolygon(center, radiusMeters, points = 64) {
+    const coords = [];
+    const latRad = center.lat * Math.PI / 180;
+    for (let index = 0; index <= points; index++) {
+        const angle = (index / points) * Math.PI * 2;
+        const dLat = (radiusMeters * Math.cos(angle)) / EARTH_RADIUS_M;
+        const dLng = (radiusMeters * Math.sin(angle)) / (EARTH_RADIUS_M * Math.cos(latRad));
+        coords.push([
+            center.lng + (dLng * 180 / Math.PI),
+            center.lat + (dLat * 180 / Math.PI)
+        ]);
+    }
+    return {
+        type: 'Feature',
+        geometry: {
+            type: 'Polygon',
+            coordinates: [coords]
+        }
+    };
+}
+
+function projectToWorldPoint(latlng, zoom) {
+    const point = toLngLat(latlng);
+    const scale = 256 * Math.pow(2, zoom);
+    const sinLat = Math.sin((point.lat * Math.PI) / 180);
+    const clampedSin = Math.min(Math.max(sinLat, -0.9999), 0.9999);
+    const x = ((point.lng + 180) / 360) * scale;
+    const y = (0.5 - Math.log((1 + clampedSin) / (1 - clampedSin)) / (4 * Math.PI)) * scale;
+    return createPoint(x, y);
+}
+
+function unprojectWorldPoint(point, zoom) {
+    const scale = 256 * Math.pow(2, zoom);
+    const lng = (point.x / scale) * 360 - 180;
+    const y = 0.5 - (point.y / scale);
+    const lat = 90 - (360 * Math.atan(Math.exp(-y * 2 * Math.PI))) / Math.PI;
+    return createLatLng(lat, lng);
+}
+
+function createMarkerElement(options = {}) {
+    if (options.icon && options.icon.options) {
+        const iconOptions = options.icon.options;
+        const img = document.createElement('img');
+        img.src = iconOptions.iconUrl;
+        img.alt = '';
+        img.draggable = false;
+        const size = iconOptions.iconSize || [25, 41];
+        img.style.width = `${size[0]}px`;
+        img.style.height = `${size[1]}px`;
+        img.style.display = 'block';
+        return img;
+    }
+    if (options.icon && options.icon.type === 'divIcon') {
+        const wrapper = document.createElement('div');
+        wrapper.className = options.icon.options.className || '';
+        wrapper.innerHTML = options.icon.options.html || '';
+        return wrapper;
+    }
+    return null;
+}
+
+function getMarkerOffset(options = {}, element) {
+    if (!options.icon || !options.icon.options) return [0, 0];
+    const iconOptions = options.icon.options;
+    if (!iconOptions.iconAnchor || !iconOptions.iconSize) return [0, 0];
+    const [width, height] = iconOptions.iconSize;
+    const [anchorX, anchorY] = iconOptions.iconAnchor;
+    return [width / 2 - anchorX, height / 2 - anchorY];
+}
+
+function getPopupOptions(options = {}) {
+    const popupGap = 8;
+    const popupOptions = {
+        className: 'result-popup'
+    };
+    if (!options.icon || !options.icon.options) {
+        popupOptions.offset = 18 + popupGap;
+        return popupOptions;
+    }
+    const iconOptions = options.icon.options;
+    if (iconOptions.popupAnchor) {
+        popupOptions.anchor = 'bottom';
+        popupOptions.offset = [iconOptions.popupAnchor[0], iconOptions.popupAnchor[1] - popupGap];
+        return popupOptions;
+    }
+    popupOptions.offset = 18 + popupGap;
+    return popupOptions;
+}
+
+function createTileLayer(url, options = {}) {
+    return {
+        type: 'tile',
+        url,
+        options,
+        setUrl(nextUrl) {
+            this.url = nextUrl;
+            return this;
+        },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createCircleLayer(center, options = {}, isMarker = false) {
+    const overlay = {
+        type: isMarker ? 'circleMarker' : 'circle',
+        _center: toLngLat(center),
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        },
+        setLatLng(nextCenter) {
+            this._center = toLngLat(nextCenter);
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        setStyle(nextOptions) {
+            Object.assign(this._options, nextOptions);
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        setRadius(radius) {
+            this._options.radius = radius;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        setOpacity(opacity) {
+            this._options.opacity = opacity;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        }
+    };
+    return overlay;
+}
+
+function createPolylineLayer(latlngs, options = {}) {
+    return {
+        type: 'polyline',
+        _latlngs: latlngs.map(toLngLat),
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createMarkerLayer(latlng, options = {}) {
+    return {
+        type: 'marker',
+        _latlng: toLngLat(latlng),
+        _options: { ...options },
+        _marker: null,
+        _popup: null,
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        bindPopup(html) {
+            this._popup = new maplibregl.Popup(getPopupOptions(this._options)).setHTML(html);
+            if (this._marker) {
+                this._marker.setPopup(this._popup);
+            }
+            return this;
+        },
+        openPopup() {
+            if (this._marker && this._popup) {
+                const popup = this._marker.getPopup ? this._marker.getPopup() : this._popup;
+                if (popup && typeof popup.isOpen === 'function' && !popup.isOpen()) {
+                    this._marker.togglePopup();
+                }
+            }
+            return this;
+        },
+        setLatLng(nextLatLng) {
+            this._latlng = toLngLat(nextLatLng);
+            if (this._marker) {
+                this._marker.setLngLat([this._latlng.lng, this._latlng.lat]);
+            }
+            return this;
+        },
+        remove() {
+            if (this._popup) {
+                this._popup.remove();
+            }
+            if (this._marker) {
+                this._marker.remove();
+                this._marker = null;
+            }
+            this._map = null;
+        }
+    };
+}
+
+function createImageOverlay(url, bounds, options = {}) {
+    return {
+        type: 'image',
+        _url: url,
+        _bounds: bounds,
+        _options: { ...options },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        setOpacity(opacity) {
+            this._options.opacity = opacity;
+            if (this._map) {
+                this._map._renderOverlay(this);
+            }
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createLayerGroup(layersToAdd = []) {
+    return {
+        type: 'group',
+        _layers: layersToAdd,
+        addTo(mapInstance) {
+            this._map = mapInstance;
+            for (const layer of this._layers) {
+                layer.addTo(mapInstance);
+            }
+            return this;
+        },
+        remove() {
+            for (const layer of this._layers) {
+                if (layer && typeof layer.remove === 'function') {
+                    layer.remove();
+                }
+            }
+            this._map = null;
+        }
+    };
+}
+
+function createControl(options = {}) {
+    return {
+        options,
+        _controlContainer: null,
+        addTo(mapInstance) {
+            const control = {
+                onAdd: () => {
+                    const container = this.onAdd(mapInstance);
+                    this._controlContainer = container;
+                    return container;
+                },
+                onRemove: () => {
+                    if (typeof this.onRemove === 'function') {
+                        this.onRemove(mapInstance);
+                    }
+                    if (this._controlContainer && this._controlContainer.parentNode) {
+                        this._controlContainer.parentNode.removeChild(this._controlContainer);
+                    }
+                    this._controlContainer = null;
+                    this._map = null;
+                }
+            };
+            this._control = control;
+            this._map = mapInstance;
+            mapInstance._map.addControl(control, normalizeControlPosition(options.position));
+            return this;
+        },
+        remove() {
+            if (this._map && this._control) {
+                this._map._map.removeControl(this._control);
+            }
+            return this;
+        }
+    };
+}
+
+function toNativeZoom(leafletZoom) {
+    return Number(leafletZoom) - 1;
+}
+
+function fromNativeZoom(nativeZoom) {
+    return Number(nativeZoom) + 1;
+}
+
+function createMapAdapter(containerId, options) {
+    const initialTileLayer = options.initialTileLayer || null;
+    const initialMaxZoom = initialTileLayer
+        ? (initialTileLayer.options.maxZoom || 19)
+        : 19;
+    const initialStyle = initialTileLayer ? {
+        version: 8,
+        sources: {
+            basemap: {
+                type: 'raster',
+                tiles: getTileUrls(initialTileLayer.url),
+                tileSize: 256,
+                maxzoom: initialTileLayer.options.maxZoom || 19,
+                attribution: initialTileLayer.options.attribution || ''
+            }
+        },
+        layers: [{
+            id: 'basemap-layer',
+            type: 'raster',
+            source: 'basemap',
+            paint: {
+                'raster-opacity': initialTileLayer.options.opacity == null ? 1 : initialTileLayer.options.opacity
+            }
+        }]
+    } : {
+        version: 8,
+        sources: {},
+        layers: []
+    };
+
+    const nativeMap = new maplibregl.Map({
+        container: containerId,
+        attributionControl: false,
+        style: initialStyle,
+        center: [options.center.lng, options.center.lat],
+        zoom: toNativeZoom(options.zoom),
+        maxZoom: toNativeZoom(getEffectiveLayerMaxZoom(initialMaxZoom)),
+        bearing: options.bearing || 0,
+        pitch: 0,
+        dragRotate: true,
+        pitchWithRotate: true,
+        touchPitch: true,
+        boxZoom: options.boxZoom !== false,
+        cooperativeGestures: false
+    });
+
+    function hasUsableStyle() {
+        return Boolean(nativeMap.style && (nativeMap.style.stylesheet || nativeMap.style._loaded));
+    }
+
+    const adapter = {
+        _map: nativeMap,
+        _eventHandlers: new Map(),
+        _isLoaded: false,
+        _styleReady: false,
+        _pendingTileLayer: null,
+        _pendingOverlayLayers: new Set(),
+        _tileLayer: null,
+        _terrain: null,
+        _tiltEnabled: options.tiltEnabled !== false,
+        _maxZoom: initialMaxZoom,
+        _controls: [],
+        _overlayOrder: [],
+        getContainer() {
+            return nativeMap.getContainer();
+        },
+        setView(center, zoom) {
+            const nextCenter = toLngLat(center);
+            nativeMap.jumpTo({ center: [nextCenter.lng, nextCenter.lat], zoom: toNativeZoom(zoom) });
+            return this;
+        },
+        addLayer(layer) {
+            if (!layer) return this;
+            layer._map = this;
+            if (layer.type === 'tile') {
+                if (!this._styleReady) {
+                    this._pendingTileLayer = layer;
+                    return this;
+                }
+                this._setTileLayer(layer);
+                return this;
+            }
+            if (layer.type === 'marker') {
+                const element = createMarkerElement(layer._options);
+                const markerOptions = element ? { element, offset: getMarkerOffset(layer._options, element) } : {};
+                if (element && layer._options.interactive === false) {
+                    element.style.pointerEvents = 'none';
+                }
+                layer._marker = new maplibregl.Marker(markerOptions)
+                    .setLngLat([layer._latlng.lng, layer._latlng.lat])
+                    .addTo(nativeMap);
+                if (layer._popup) {
+                    layer._marker.setPopup(layer._popup);
+                }
+                return this;
+            }
+            if (layer.type === 'group') {
+                layer.addTo(this);
+                return this;
+            }
+            if (!this._styleReady) {
+                this._pendingOverlayLayers.add(layer);
+                return this;
+            }
+            this._renderOverlay(layer);
+            return this;
+        },
+        removeLayer(layer) {
+            if (!layer) return this;
+            if (layer.type === 'tile') {
+                if (this._pendingTileLayer === layer) {
+                    this._pendingTileLayer = null;
+                }
+                if (this._tileLayer === layer) {
+                    if (nativeMap.getLayer('basemap-layer')) nativeMap.removeLayer('basemap-layer');
+                    if (nativeMap.getSource('basemap')) nativeMap.removeSource('basemap');
+                    this._tileLayer = null;
+                }
+                layer._map = null;
+                return this;
+            }
+            if (layer.type === 'marker') {
+                layer.remove();
+                return this;
+            }
+            if (layer.type === 'group') {
+                layer.remove();
+                return this;
+            }
+            this._pendingOverlayLayers.delete(layer);
+            ensureRemoved(nativeMap, layer);
+            layer._map = null;
+            return this;
+        },
+        _setTileLayer(layer) {
+            if (nativeMap.getLayer('basemap-layer')) nativeMap.removeLayer('basemap-layer');
+            if (nativeMap.getSource('basemap')) nativeMap.removeSource('basemap');
+            nativeMap.addSource('basemap', {
+                type: 'raster',
+                tiles: getTileUrls(layer.url),
+                tileSize: 256,
+                maxzoom: layer.options.maxZoom || 19,
+                attribution: layer.options.attribution || ''
+            });
+            const basemapLayer = {
+                id: 'basemap-layer',
+                type: 'raster',
+                source: 'basemap',
+                paint: {
+                    'raster-opacity': layer.options.opacity == null ? 1 : layer.options.opacity
+                }
+            };
+
+            const styleLayers = nativeMap.getStyle() && nativeMap.getStyle().layers
+                ? nativeMap.getStyle().layers
+                : [];
+            const firstOverlayLayer = styleLayers.find((styleLayer) => styleLayer.id !== 'basemap-layer');
+
+            if (firstOverlayLayer) {
+                nativeMap.addLayer(basemapLayer, firstOverlayLayer.id);
+            } else {
+                nativeMap.addLayer(basemapLayer);
+            }
+
+            this.setMaxZoom(layer.options.maxZoom || 19);
+            this._tileLayer = layer;
+        },
+        _renderOverlay(layer) {
+            if (!this._styleReady) {
+                this._pendingOverlayLayers.add(layer);
+                return;
+            }
+            if (!layer._id) {
+                layer._id = `overlay-${++mapOverlayId}`;
+            }
+            layer._ids = getOverlayIds(layer._id, layer.type);
+
+            if (layer.type === 'circle') {
+                const source = nativeMap.getSource(layer._ids.sourceId);
+                const circleData = circleToPolygon(layer._center, layer._options.radius || 0);
+                if (source) {
+                    source.setData(circleData);
+                } else {
+                    nativeMap.addSource(layer._ids.sourceId, {
+                        type: 'geojson',
+                        data: circleData
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.fillLayerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.fillLayerId,
+                        type: 'fill',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'fill-color': layer._options.fillColor || layer._options.color || '#007bff',
+                            'fill-opacity': layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity
+                        }
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.lineLayerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.lineLayerId,
+                        type: 'line',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'line-color': layer._options.color || '#007bff',
+                            'line-width': layer._options.weight || 1,
+                            'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                        }
+                    });
+                }
+                nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-color', layer._options.fillColor || layer._options.color || '#007bff');
+                nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-opacity', layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity);
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-color', layer._options.color || '#007bff');
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-width', layer._options.weight || 1);
+                nativeMap.setPaintProperty(layer._ids.lineLayerId, 'line-opacity', layer._options.opacity == null ? 1 : layer._options.opacity);
+                return;
+            }
+
+            if (layer.type === 'circleMarker') {
+                const markerSource = nativeMap.getSource(layer._ids.sourceId);
+                const markerData = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [layer._center.lng, layer._center.lat]
+                    }
+                };
+                if (markerSource) {
+                    markerSource.setData(markerData);
+                } else {
+                    nativeMap.addSource(layer._ids.sourceId, {
+                        type: 'geojson',
+                        data: markerData
+                    });
+                }
+                if (!nativeMap.getLayer(layer._ids.layerId)) {
+                    nativeMap.addLayer({
+                        id: layer._ids.layerId,
+                        type: 'circle',
+                        source: layer._ids.sourceId,
+                        paint: {
+                            'circle-radius': layer._options.radius || 5,
+                            'circle-color': layer._options.fillColor || layer._options.color || '#fff',
+                            'circle-stroke-color': layer._options.color || '#000',
+                            'circle-stroke-width': layer._options.weight || 2,
+                            'circle-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                        }
+                    });
+                }
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-radius', layer._options.radius || 5);
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-color', layer._options.fillColor || layer._options.color || '#fff');
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-stroke-color', layer._options.color || '#000');
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-stroke-width', layer._options.weight || 2);
+                nativeMap.setPaintProperty(layer._ids.layerId, 'circle-opacity', layer._options.opacity == null ? 1 : layer._options.opacity);
+                return;
+            }
+
+            ensureRemoved(nativeMap, layer);
+
+            if (layer.type === 'polyline') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: layer._latlngs.map((point) => [point.lng, point.lat])
+                        }
+                    }
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'line',
+                    source: layer._ids.sourceId,
+                    layout: {
+                        'line-cap': 'round',
+                        'line-join': 'round'
+                    },
+                    paint: {
+                        'line-color': layer._options.color || '#007bff',
+                        'line-width': layer._options.weight || 3,
+                        'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
+            }
+
+            if (layer.type === 'image') {
+                const bounds = layer._bounds;
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'image',
+                    url: layer._url,
+                    coordinates: [
+                        [bounds.getNorthWest().lng, bounds.getNorthWest().lat],
+                        [bounds.getNorthEast().lng, bounds.getNorthEast().lat],
+                        [bounds.getSouthEast().lng, bounds.getSouthEast().lat],
+                        [bounds.getSouthWest().lng, bounds.getSouthWest().lat]
+                    ]
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'raster',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+            }
+        },
+        addControl(control, position) {
+            nativeMap.addControl(control, normalizeControlPosition(position));
+            this._controls.push(control);
+            return this;
+        },
+        removeControl(control) {
+            nativeMap.removeControl(control && control._control ? control._control : control);
+            return this;
+        },
+        on(eventName, handler, context) {
+            const wrapped = context ? handler.bind(context) : handler;
+            this._eventHandlers.set(handler, wrapped);
+            const mapped = eventName === 'zoomend' ? 'zoomend' : eventName;
+            nativeMap.on(mapped, wrapped);
+            return this;
+        },
+        off(eventName, handler) {
+            const wrapped = this._eventHandlers.get(handler) || handler;
+            nativeMap.off(eventName, wrapped);
+            return this;
+        },
+        getCenter() {
+            const center = nativeMap.getCenter();
+            return createLatLng(center.lat, center.lng);
+        },
+        getZoom() {
+            return fromNativeZoom(nativeMap.getZoom());
+        },
+        setMaxZoom(maxZoom) {
+            const nextMaxZoom = Number(maxZoom) || 19;
+            this._maxZoom = nextMaxZoom;
+            const effectiveMaxZoom = getEffectiveLayerMaxZoom(nextMaxZoom);
+            nativeMap.setMaxZoom(toNativeZoom(effectiveMaxZoom));
+            if (this.getZoom() > effectiveMaxZoom) {
+                nativeMap.jumpTo({ zoom: toNativeZoom(effectiveMaxZoom) });
+            }
+            return this;
+        },
+        getMaxZoom() {
+            return getEffectiveLayerMaxZoom(this._maxZoom);
+        },
+        setBearing(bearing) {
+            nativeMap.rotateTo(bearing, { duration: 0 });
+            return this;
+        },
+        getBearing() {
+            return nativeMap.getBearing();
+        },
+        setTerrain(terrainOptions) {
+            if (!terrainOptions) {
+                this._terrain = null;
+                if (this._styleReady) {
+                    nativeMap.setTerrain(null);
+                }
+                return this;
+            }
+            const exaggeration = typeof terrainOptions.exaggeration === 'number'
+                ? terrainOptions.exaggeration
+                : DEFAULT_TERRAIN_EXAGGERATION;
+            this._terrain = {
+                source: TERRAIN_SOURCE_ID,
+                exaggeration
+            };
+            if (this._styleReady) {
+                ensureTerrainSource();
+                nativeMap.setTerrain(this._terrain);
+            }
+            return this;
+        },
+        getPitch() {
+            return nativeMap.getPitch();
+        },
+        setTiltEnabled(enabled) {
+            this._tiltEnabled = enabled !== false;
+            if (nativeMap.dragRotate) {
+                if (this._tiltEnabled && typeof nativeMap.dragRotate.enable === 'function') {
+                    nativeMap.dragRotate.enable();
+                }
+                if (!this._tiltEnabled && typeof nativeMap.dragRotate.disable === 'function') {
+                    nativeMap.dragRotate.disable();
+                }
+            }
+            if (nativeMap.touchPitch) {
+                if (this._tiltEnabled && typeof nativeMap.touchPitch.enable === 'function') {
+                    nativeMap.touchPitch.enable();
+                }
+                if (!this._tiltEnabled && typeof nativeMap.touchPitch.disable === 'function') {
+                    nativeMap.touchPitch.disable();
+                }
+            }
+            return this;
+        },
+        isTiltEnabled() {
+            return this._tiltEnabled;
+        },
+        easeTo(options) {
+            if (!options) return this;
+            const nextOptions = { ...options };
+            if (typeof nextOptions.zoom === 'number') {
+                nextOptions.zoom = toNativeZoom(nextOptions.zoom);
+            }
+            if (nextOptions.center) {
+                const center = toLngLat(nextOptions.center);
+                nextOptions.center = [center.lng, center.lat];
+            }
+            nativeMap.easeTo(nextOptions);
+            return this;
+        },
+        project(latlng, zoom = fromNativeZoom(nativeMap.getZoom())) {
+            return projectToWorldPoint(latlng, zoom);
+        },
+        unproject(point, zoom = fromNativeZoom(nativeMap.getZoom())) {
+            return unprojectWorldPoint(point, zoom);
+        },
+        getSize() {
+            const canvasSize = nativeMap.getCanvas();
+            return createPoint(canvasSize.clientWidth, canvasSize.clientHeight);
+        },
+        fitBounds(bounds) {
+            nativeMap.fitBounds(bounds.toMapLibreBounds(), { padding: 40, duration: 0 });
+            return this;
+        },
+        getBounds() {
+            const bounds = nativeMap.getBounds();
+            return createBounds(
+                createLatLng(bounds.getSouth(), bounds.getWest()),
+                createLatLng(bounds.getNorth(), bounds.getEast())
+            );
+        },
+        dragging: {
+            disable() {
+                nativeMap.dragPan.disable();
+            },
+            enable() {
+                nativeMap.dragPan.enable();
+            }
+        }
+    };
+
+    function ensureTerrainSource() {
+        if (!adapter._styleReady) return false;
+        if (nativeMap.getSource(TERRAIN_SOURCE_ID)) {
+            return true;
+        }
+        nativeMap.addSource(TERRAIN_SOURCE_ID, getTerrainSourceDefinition());
+        return true;
+    }
+
+    function syncTerrain() {
+        if (!adapter._styleReady) return;
+        ensureTerrainSource();
+        nativeMap.setTerrain(adapter._terrain);
+    }
+
+    function flushPendingStyleLayers() {
+        if (!adapter._styleReady) return;
+        ensureTerrainSource();
+        if (adapter._pendingTileLayer) {
+            adapter._setTileLayer(adapter._pendingTileLayer);
+            adapter._pendingTileLayer = null;
+        }
+        if (adapter._pendingOverlayLayers.size > 0) {
+            const pendingLayers = Array.from(adapter._pendingOverlayLayers);
+            adapter._pendingOverlayLayers.clear();
+            for (const layer of pendingLayers) {
+                if (layer && layer._map === adapter) {
+                    adapter._renderOverlay(layer);
+                }
+            }
+        }
+        syncTerrain();
+    }
+
+    function markStyleReady() {
+        if (!adapter._styleReady && hasUsableStyle()) {
+            adapter._styleReady = true;
+        }
+        if (!adapter._styleReady) {
+            return false;
+        }
+        flushPendingStyleLayers();
+        if (!adapter._isLoaded) {
+            adapter._isLoaded = true;
+            nativeMap.fire('zoomend');
+        }
+        return true;
+    }
+
+    function pollStyleReady() {
+        if (markStyleReady()) {
+            return;
+        }
+        window.setTimeout(pollStyleReady, 50);
+    }
+
+    nativeMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+    nativeMap.on('load', markStyleReady);
+    nativeMap.on('styledata', markStyleReady);
+    nativeMap.on('zoomend', () => {
+        nativeMap.fire('moveend');
+    });
+    window.requestAnimationFrame(() => {
+        nativeMap.resize();
+        markStyleReady();
+    });
+    adapter.setTiltEnabled(adapter._tiltEnabled);
+    pollStyleReady();
+
+    return adapter;
+}
+
+const L = {
+    tileLayer: createTileLayer,
+    Icon: function Icon(options) { this.options = options; },
+    divIcon(options) {
+        return { type: 'divIcon', options };
+    },
+    map(containerId, options) {
+        const center = createLatLng(savedLat, savedLng);
+        return createMapAdapter(containerId, { ...options, center, zoom: savedZoom });
+    },
+    control(options = {}) {
+        return createControl(options);
+    },
+    DomUtil: {
+        create(tagName, className, parent) {
+            const element = document.createElement(tagName);
+            if (className) element.className = className;
+            if (parent) parent.appendChild(element);
+            return element;
+        }
+    },
+    DomEvent: {
+        disableClickPropagation(element) {
+            ['click', 'dblclick', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'contextmenu'].forEach((eventName) => {
+                element.addEventListener(eventName, (event) => event.stopPropagation());
+            });
+        },
+        on(element, eventName, handler) {
+            element.addEventListener(eventName, handler);
+        },
+        preventDefault(event) {
+            event.preventDefault();
+        }
+    },
+    Control: {
+        extend(definition) {
+            return function ControlCtor() {
+                Object.assign(this, createControl(definition.options || {}), definition);
+                this.options = definition.options || {};
+            };
+        }
+    },
+    latLng: createLatLng,
+    point: createPoint,
+    Point: createPoint,
+    latLngBounds: createBounds,
+    marker(latlng, options) {
+        return createMarkerLayer(latlng, options);
+    },
+    circle(latlng, options) {
+        return createCircleLayer(latlng, options, false);
+    },
+    circleMarker(latlng, options) {
+        return createCircleLayer(latlng, options, true);
+    },
+    imageOverlay(url, bounds, options) {
+        return createImageOverlay(url, bounds, options);
+    },
+    polyline(latlngs, options) {
+        return createPolylineLayer(latlngs, options);
+    },
+    layerGroup(layersToAdd) {
+        return createLayerGroup(layersToAdd);
+    }
+};
 
 // ==========================================
 // 2. DOM ELEMENTS
@@ -64,6 +1159,13 @@ const searchInput = document.getElementById('searchInput');
 const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
+const shareMapBtn = document.getElementById('share-map-btn');
+const overzoomCheckbox = document.getElementById('enableOverzoom');
+const tiltCheckbox = document.getElementById('enableTilt');
+const enable3dCheckbox = document.getElementById('enable3dView');
+const exaggerationRow = document.getElementById('exaggeration-row');
+const exaggerationSlider = document.getElementById('exaggerationSlider');
+const exaggerationValue = document.getElementById('exaggerationVal');
 
 // ==========================================
 // 3. LANGUAGE & TRANSLATIONS
@@ -73,31 +1175,32 @@ const translations = {
     en: LANG_EN
 };
 
-let currentLang = localStorage.getItem('topo_lang') || 'en';
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
+let peakMinPixelDistance = normalizePeakMinPixelDistance(localStorage.getItem('topo_peak_min_pixel_dist'));
+
+function normalizePeakMinPixelDistance(value) {
+    const parsed = parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 40;
+    return Math.min(200, Math.max(1, parsed));
+}
+
+function parseStoredCoordinate(key, fallback) {
+    const parsed = parseFloat(localStorage.getItem(key));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseStoredZoom(key, fallback) {
+    const parsed = parseInt(localStorage.getItem(key), 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 // ==========================================
 // 4. MAP & VARIABLE INITIALIZATION
 // ==========================================
 
-const layers = {
-    "opentopo": L.tileLayer(OPENTOPO_URL, { attribution: 'OpenTopoMap', maxZoom: 17 }),
-    "tracetrack": L.tileLayer('', { attribution: 'Tracetrack', maxZoom: 19 }),
-    "thunderforest": L.tileLayer('', { attribution: 'ThunderForest', maxZoom: 22 }),
-    "lm_map": L.tileLayer(`${WORKER_URL}/{z}/{x}/{y}`, {
-        attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantmäteriet</a> - CC BY 4.0',
-        maxZoom: 17
-    }),
-    "norges_map": L.tileLayer(NORGES_MAP_URL, {
-        attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>',
-        maxZoom: 18
-    }),
-    "osm": L.tileLayer(OSM_URL, { attribution: 'OpenStreetMap', maxZoom: 19 }),
-    "satellite": L.tileLayer(SATELLITE_URL, { attribution: 'Esri', maxZoom: 19 }),
-    "debug": L.tileLayer(DATA_TILE_URL, { attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 })
-};
+const layers = Object.fromEntries(Object.entries(MAP_SOURCES).map(([key, source]) => [key, L.tileLayer(source.url, { attribution: source.attribution, maxZoom: source.maxZoom, opacity: source.opacity })]));
 
 // Icons
 const _shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
@@ -133,10 +1236,14 @@ let markers = [];
 let polylines = [];
 let slopeOverlay = null;
 let slopeLegend = null;
+let gpxSlopeLegend = null;
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
+let slopeMapUsesRadius = false;
 let gpxLayer = null;
 let gpxTrackData = null; // stores parsed GPX stats for info panel
+let currentMarkers = [];
+let currentKmMarkers = [];
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -147,17 +1254,81 @@ let previousLayerValue = "opentopo";
 let pendingServiceKey = null;
 let analysisZoom = null;
 let analysisNwOrigin = null;
+let analysisBounds = null;
 let deferredInstallPrompt = null;
 
-// Load saved position
-const savedLat = parseFloat(localStorage.getItem('topo_lat')) || 67.89;
-const savedLng = parseFloat(localStorage.getItem('topo_lng')) || 18.52;
-const savedZoom = parseInt(localStorage.getItem('topo_zoom')) || 11;
-let savedLayer = localStorage.getItem('topo_layer') || "opentopo";
+function isSupportedLayer(layerKey) {
+    return Boolean(layerKey) && Boolean(layers[layerKey]);
+}
+
+function parseSharedMapHash(hashValue) {
+    const hash = (hashValue || '').replace(/^#/, '');
+    if (!hash) return null;
+    const match = hash.match(/^map=(.+)$/);
+    if (!match) return null;
+
+    const parts = match[1].split('/');
+    if (parts.length < 3) return null;
+
+    const zoom = parseInt(parts[0], 10);
+    const lat = parseFloat(parts[1]);
+    const lng = parseFloat(parts[2]);
+    const layer = parts[3] || null;
+
+    if (!Number.isFinite(zoom) || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+    }
+
+    if (zoom < 1 || zoom > 22 || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return null;
+    }
+
+    return {
+        zoom,
+        lat,
+        lng,
+        layer: isSupportedLayer(layer) ? layer : null
+    };
+}
+
+function resolveInitialAppState() {
+    const params = new URLSearchParams(location.search);
+    const requestedLang = params.get('lang');
+    const storedLang = localStorage.getItem('topo_lang') || 'en';
+    const sharedMapState = parseSharedMapHash(location.hash);
+    const initialLang = translations[requestedLang] ? requestedLang : (translations[storedLang] ? storedLang : 'en');
+
+    let initialLayer = localStorage.getItem('topo_layer') || 'opentopo';
+    if (!isSupportedLayer(initialLayer)) {
+        initialLayer = 'opentopo';
+    }
+
+    if (sharedMapState && sharedMapState.layer) {
+        initialLayer = sharedMapState.layer;
+    }
+
+    return {
+        lang: initialLang,
+        lat: sharedMapState ? sharedMapState.lat : parseStoredCoordinate('topo_lat', 67.89),
+        lng: sharedMapState ? sharedMapState.lng : parseStoredCoordinate('topo_lng', 18.52),
+        zoom: sharedMapState ? sharedMapState.zoom : parseStoredZoom('topo_zoom', 11),
+        layer: initialLayer
+    };
+}
+
+const initialAppState = resolveInitialAppState();
+const hasSharedMapView = Boolean(parseSharedMapHash(location.hash));
+let currentLang = initialAppState.lang;
+const savedLat = initialAppState.lat;
+const savedLng = initialAppState.lng;
+const savedZoom = initialAppState.zoom;
+let savedLayer = initialAppState.layer;
 
 if (!layers[savedLayer]) {
     savedLayer = "opentopo";
 }
+
+const initialMapLayer = layers.opentopo;
 
 // Create the map
 const map = L.map('map', {
@@ -166,20 +1337,23 @@ const map = L.map('map', {
     rotate: true,
     touchRotate: true,
     rotateControl: false,
-    bearing: 0
+    bearing: 0,
+    initialTileLayer: initialMapLayer
 }).setView([savedLat, savedLng], savedZoom);
-L.control.zoom({ position: 'bottomright' }).addTo(map);
+map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), 'bottom-right');
 
 // Reset-north compass control
 const ResetNorthControl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function (map) {
-        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control reset-north-control');
+        const container = L.DomUtil.create('div', 'maplibregl-ctrl maplibregl-ctrl-group reset-north-control');
         const btn = L.DomUtil.create('a', 'reset-north-btn', container);
+        const t = translations[currentLang] || {};
+        const resetNorthLabel = t.btn_reset_north || 'Reset North';
         btn.href = '#';
-        btn.title = 'Reset North';
+        btn.title = resetNorthLabel;
         btn.setAttribute('role', 'button');
-        btn.setAttribute('aria-label', 'Reset North');
+        btn.setAttribute('aria-label', resetNorthLabel);
         btn.innerHTML = '<svg class="compass-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="12,2 15,14 12,12 9,14" fill="#e53935"/><polygon points="12,22 9,14 12,12 15,14" fill="#999"/></svg>';
         L.DomEvent.disableClickPropagation(container);
         L.DomEvent.on(btn, 'click', function (e) {
@@ -201,50 +1375,6 @@ const ResetNorthControl = L.Control.extend({
 });
 new ResetNorthControl().addTo(map);
 
-// Ctrl+drag rotation handler (desktop)
-(function () {
-    const mapContainer = map.getContainer();
-    let rotating = false;
-    let startAngle = 0;
-    let startBearing = 0;
-
-    function getAngleFromCenter(e) {
-        const rect = mapContainer.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        return Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
-    }
-
-    mapContainer.addEventListener('mousedown', function (e) {
-        if (e.ctrlKey && e.button === 0) {
-            e.preventDefault();
-            rotating = true;
-            startAngle = getAngleFromCenter(e);
-            startBearing = map.getBearing();
-            mapContainer.style.cursor = 'grabbing';
-            map.dragging.disable();
-        }
-    });
-
-    window.addEventListener('mousemove', function (e) {
-        if (!rotating) return;
-        const delta = getAngleFromCenter(e) - startAngle;
-        map.setBearing(startBearing + delta);
-    });
-
-    window.addEventListener('mouseup', function (e) {
-        if (!rotating) return;
-        rotating = false;
-        mapContainer.style.cursor = '';
-        map.dragging.enable();
-    });
-
-    // Prevent context-menu when ctrl+clicking
-    mapContainer.addEventListener('contextmenu', function (e) {
-        if (e.ctrlKey) e.preventDefault();
-    });
-})();
-
 // ==========================================
 // 5. FUNCTIONS
 // ==========================================
@@ -254,6 +1384,87 @@ function isWaterPixel(r, g, b) {
         Math.abs(g - WATER_COLOR.g) <= WATER_TOLERANCE &&
         Math.abs(b - WATER_COLOR.b) <= WATER_TOLERANCE;
 }
+
+function getCurrentMapHash() {
+    const center = map.getCenter();
+    const zoom = Math.round(map.getZoom());
+    const lat = center.lat.toFixed(5);
+    const lng = center.lng.toFixed(5);
+    const activeLayer = (layerSelect && layerSelect.value) || localStorage.getItem('topo_layer') || savedLayer || 'opentopo';
+    return '#map=' + zoom + '/' + lat + '/' + lng + '/' + activeLayer;
+}
+
+function getCurrentShareLink() {
+    const params = new URLSearchParams();
+    params.set('lang', currentLang);
+    return location.origin + location.pathname + '?' + params.toString() + getCurrentMapHash();
+}
+
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+
+    const selection = document.getSelection();
+    const previousRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, textArea.value.length);
+
+    let didCopy = false;
+    try {
+        didCopy = document.execCommand('copy');
+    } catch (err) {
+        didCopy = false;
+    }
+
+    document.body.removeChild(textArea);
+    if (selection) {
+        selection.removeAllRanges();
+        if (previousRange) {
+            selection.addRange(previousRange);
+        }
+    }
+
+    return didCopy;
+}
+
+async function copyTextToClipboard(text, successMessage, errorMessage) {
+    let didCopy = false;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            didCopy = true;
+        } catch (err) {
+            didCopy = fallbackCopyTextToClipboard(text);
+        }
+    } else {
+        didCopy = fallbackCopyTextToClipboard(text);
+    }
+
+    if (didCopy) {
+        statusDiv.textContent = successMessage;
+        return;
+    }
+
+    window.prompt('Copy this link:', text);
+    statusDiv.textContent = errorMessage;
+}
+
+window.generateShareLink = function () {
+    const t = translations[currentLang];
+    copyTextToClipboard(
+        getCurrentShareLink(),
+        t.status_link_copied || 'Link copied to clipboard.',
+        t.status_clipboard_error || 'Could not copy link.'
+    );
+};
 
 function updateLanguage() {
     const t = translations[currentLang];
@@ -271,6 +1482,10 @@ function updateLanguage() {
         document.getElementById('lbl-points').textContent = t.lbl_points;
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
+        if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
+        if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
+        if (document.getElementById('lbl-enable-3d')) document.getElementById('lbl-enable-3d').textContent = t.lbl_enable_3d;
+        if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
         document.getElementById('scan-btn').textContent = t.btn_scan;
         document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
@@ -294,6 +1509,7 @@ function updateLanguage() {
         if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
+        if (document.getElementById('lbl-peak-min-pixels')) document.getElementById('lbl-peak-min-pixels').textContent = t.lbl_peak_min_pixels;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
         if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
         if (document.getElementById('lbl-slope-filter')) document.getElementById('lbl-slope-filter').textContent = t.lbl_slope_filter;
@@ -319,6 +1535,8 @@ function updateLanguage() {
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
         if (stepInput) stepInput.value = climbStepRes;
+        const peakMinPixelInput = document.getElementById('peakMinPixelDistInput');
+        if (peakMinPixelInput) peakMinPixelInput.value = peakMinPixelDistance;
         const anglesInput = document.getElementById('scanAnglesInput');
         if (anglesInput) anglesInput.value = climbScanAngles;
         document.getElementById('info-close').textContent = t.btn_close;
@@ -351,6 +1569,56 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
+        const languageBtn = document.querySelector('.header-buttons .circle-btn:not(#share-map-btn):not(.info-btn)');
+        if (languageBtn) {
+            const label = t.btn_switch_language || 'Switch Language';
+            languageBtn.title = label;
+            languageBtn.setAttribute('aria-label', label);
+        }
+        const infoBtn = document.querySelector('.info-btn');
+        if (infoBtn) {
+            const label = t.btn_info_panel || 'Info';
+            infoBtn.title = label;
+            infoBtn.setAttribute('aria-label', label);
+        }
+        const toggleBtn = document.querySelector('.toggle-btn');
+        if (toggleBtn) {
+            const toggleLabel = getControlsToggleLabel(isControlsMinimized);
+            toggleBtn.title = toggleLabel;
+            toggleBtn.setAttribute('aria-label', toggleLabel);
+        }
+        const editKeyBtn = document.getElementById('edit-key-btn');
+        if (editKeyBtn) {
+            const label = t.btn_api_key || 'API';
+            editKeyBtn.title = label;
+            editKeyBtn.setAttribute('aria-label', label);
+        }
+        const gpsBtn = document.querySelector('.search-group .icon-btn[onclick="locateUser()"]');
+        if (gpsBtn) {
+            const label = t.btn_gps || 'GPS';
+            gpsBtn.title = label;
+            gpsBtn.setAttribute('aria-label', label);
+        }
+        const searchBtn = document.querySelector('.search-group .icon-btn[onclick="searchLocation()"]');
+        if (searchBtn) {
+            const label = t.btn_search || 'Search';
+            searchBtn.title = label;
+            searchBtn.setAttribute('aria-label', label);
+        }
+        const lockRadiusLabel = document.getElementById('lbl-lock-circle');
+        if (lockRadiusLabel) {
+            lockRadiusLabel.title = t.lbl_lock_radius_title || 'Lock';
+        }
+        const resetNorthBtn = document.querySelector('.reset-north-btn');
+        if (resetNorthBtn) {
+            const label = t.btn_reset_north || 'Reset North';
+            resetNorthBtn.title = label;
+            resetNorthBtn.setAttribute('aria-label', label);
+        }
+        if (shareMapBtn) {
+            shareMapBtn.title = t.btn_share_map_title || 'Share Map View';
+            shareMapBtn.setAttribute('aria-label', t.btn_share_map_title || 'Share Map View');
+        }
     }
 }
 
@@ -377,6 +1645,54 @@ function handleLayerChange(layerKey) {
     } else {
         if (editKeyBtn) editKeyBtn.style.display = 'none';
         switchLayerTo(layerKey);
+    }
+}
+
+function getCurrentLayerBaseMaxZoom() {
+    if (currentLayer && currentLayer.options) {
+        return currentLayer.options.maxZoom || 19;
+    }
+    const activeLayerKey = layerSelect && layers[layerSelect.value]
+        ? layerSelect.value
+        : savedLayer;
+    const activeLayer = layers[activeLayerKey] || layers.opentopo;
+    return activeLayer && activeLayer.options ? (activeLayer.options.maxZoom || 19) : 19;
+}
+
+function applyCurrentLayerMaxZoom() {
+    map.setMaxZoom(getCurrentLayerBaseMaxZoom());
+}
+
+function getTerrainExaggeration() {
+    return exaggerationSlider ? (parseFloat(exaggerationSlider.value) || DEFAULT_TERRAIN_EXAGGERATION) : DEFAULT_TERRAIN_EXAGGERATION;
+}
+
+function syncTerrainControls() {
+    if (exaggerationValue && exaggerationSlider) {
+        exaggerationValue.textContent = exaggerationSlider.value;
+    }
+    if (exaggerationRow && enable3dCheckbox) {
+        exaggerationRow.style.display = enable3dCheckbox.checked ? 'flex' : 'none';
+    }
+}
+
+function setTerrainEnabled(enabled) {
+    syncTerrainControls();
+    if (!map) return;
+    if (enabled) {
+        map.setTerrain({ exaggeration: getTerrainExaggeration() });
+        map.easeTo({ pitch: 60, duration: 1000 });
+        return;
+    }
+    map.setTerrain(null);
+    map.easeTo({ pitch: 0, duration: 1000 });
+}
+
+function setTiltEnabled(enabled) {
+    if (!map) return;
+    map.setTiltEnabled(enabled);
+    if (!enabled && enable3dCheckbox && !enable3dCheckbox.checked && map.getPitch() > 0) {
+        map.easeTo({ pitch: 0, duration: 300 });
     }
 }
 
@@ -459,25 +1775,53 @@ function showInfo() { document.getElementById('info-modal').style.display = 'fle
 function closeInfo() { document.getElementById('info-modal').style.display = 'none'; }
 
 function toggleControls() {
+    if (!controls) return;
+    setControlsMinimized(!controls.classList.contains('minimized'));
+}
+
+function getControlsToggleLabel(minimized) {
+    const t = translations[currentLang] || {};
+    return minimized
+        ? (t.btn_maximize_panel || 'Maximize')
+        : (t.btn_minimize_panel || 'Minimize');
+}
+
+function setControlsMinimized(minimized) {
     const btn = document.querySelector('.toggle-btn');
-    isControlsMinimized = !isControlsMinimized;
-    if (isControlsMinimized) {
-        controls.classList.add('minimized');
-        btn.textContent = '➕';
-    } else {
-        controls.classList.remove('minimized');
-        btn.textContent = '➖';
+    isControlsMinimized = minimized;
+    if (controls) {
+        controls.classList.toggle('minimized', minimized);
     }
-};
+    if (btn) {
+        btn.textContent = minimized ? '➕' : '➖';
+        const label = getControlsToggleLabel(minimized);
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+    }
+}
+
+const tutorialSectionIds = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
+
+function setSectionExpanded(sectionId, expanded) {
+    const content = document.getElementById(sectionId);
+    if (!content) return;
+
+    const header = content.previousElementSibling;
+    const toggle = header ? header.querySelector('.section-toggle') : null;
+    content.style.display = expanded ? 'block' : 'none';
+    if (toggle) {
+        toggle.textContent = expanded ? '➖' : '➕';
+    }
+}
+
+function collapseTutorialSections() {
+    tutorialSectionIds.forEach((sectionId) => setSectionExpanded(sectionId, false));
+}
 
 window.toggleSection = function (sectionId) {
     const content = document.getElementById(sectionId);
     if (!content) return;
-    const header = content.previousElementSibling;
-    const toggle = header ? header.querySelector('.section-toggle') : null;
-    const isHidden = content.style.display === 'none' || content.style.display === '';
-    content.style.display = isHidden ? 'block' : 'none';
-    if (toggle) toggle.textContent = isHidden ? '➖' : '➕';
+    setSectionExpanded(sectionId, content.style.display !== 'block');
 };
 
 async function searchLocation() {
@@ -510,20 +1854,54 @@ function locateUser() {
     );
 }
 
+function clearSlopeMapState(preserveStatus = false) {
+    if (slopeOverlay) {
+        map.removeLayer(slopeOverlay);
+        slopeOverlay = null;
+    }
+    removeLegendControl(slopeLegend);
+    slopeLegend = null;
+    slopeMapCenter = null;
+    slopeMapRadius = 0;
+    slopeMapUsesRadius = false;
+    updateUI();
+    if (!preserveStatus) {
+        statusDiv.textContent = translations[currentLang].status_cleared;
+    }
+}
+
+function invalidateSlopeMapIfSearchAreaChanged() {
+    if (!slopeOverlay || !slopeMapCenter) return;
+
+    const searchCenter = getSearchCenter();
+    const radiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+    const centerShiftMeters = searchCenter.distanceTo(slopeMapCenter);
+
+    if (centerShiftMeters <= 1 && Math.abs(radiusMeters - slopeMapRadius) <= 0.5) {
+        return;
+    }
+
+    clearSlopeMapState(true);
+}
+
 window.clearResults = function () {
     markers.forEach(m => map.removeLayer(m));
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
     polylines = [];
-    if (slopeOverlay) { map.removeLayer(slopeOverlay); slopeOverlay = null; }
-    if (slopeLegend) { map.removeControl(slopeLegend); slopeLegend = null; }
-    slopeMapCenter = null;
-    slopeMapRadius = 0;
+    clearSlopeMapState(true);
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
 window.clearGpxRoute = function () {
-    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+    clearGpxTrackSourceAndLayers();
+    clearMarkerCollection(currentMarkers);
+    currentMarkers = [];
+    clearMarkerCollection(currentKmMarkers);
+    currentKmMarkers = [];
+    removeLegendControl(gpxSlopeLegend);
+    gpxSlopeLegend = null;
+    gpxLayer = null;
     gpxTrackData = null;
     const clearBtn = document.getElementById('gpx-clear-btn');
     if (clearBtn) clearBtn.style.display = 'none';
@@ -654,7 +2032,6 @@ function computeDynamicStep(totalLengthMeters, visibleLengthMeters) {
 
 function buildKmLabels(allSegments) {
     const labels = [];
-    // compute total length first
     let totalLength = 0;
     for (const seg of allSegments) {
         for (let i = 1; i < seg.length; i++) {
@@ -675,8 +2052,15 @@ function buildKmLabels(allSegments) {
                 const lat = seg[i - 1].lat + frac * (seg[i].lat - seg[i - 1].lat);
                 const lon = seg[i - 1].lon + frac * (seg[i].lon - seg[i - 1].lon);
                 const displayVal = Number.isInteger(nextMark) ? nextMark : nextMark.toFixed(1);
-                const icon = L.divIcon({ className: 'gpx-km-label', html: `${displayVal} ${unitLabel}`, iconSize: null });
-                labels.push(L.marker([lat, lon], { icon, interactive: false }));
+
+                const el = document.createElement('div');
+                el.className = 'gpx-km-label';
+                el.innerHTML = `${displayVal} ${unitLabel}`;
+
+                labels.push(new maplibregl.Marker({ element: el, anchor: 'center' })
+                    .setLngLat([lon, lat])
+                    .addTo(map._map));
+
                 nextMark += step;
             }
         }
@@ -687,6 +2071,16 @@ function buildKmLabels(allSegments) {
 function getGpxColorBySlope() {
     const el = document.getElementById('gpxColorBySlope');
     return el ? el.checked : false;
+}
+
+function slopeToColorHex(slopeDeg, baseColor) {
+    const rgb = slopeToColor(slopeDeg, baseColor);
+    const match = rgb.match(/rgb\((\d+),(\d+),(\d+)\)/);
+    if (!match) return baseColor;
+    const r = parseInt(match[1], 10);
+    const g = parseInt(match[2], 10);
+    const b = parseInt(match[3], 10);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
 function slopeToColor(slopeDeg, baseColor) {
@@ -726,8 +2120,8 @@ function slopeToColor(slopeDeg, baseColor) {
     return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
 }
 
-function buildSlopeColoredTrack(seg, weight, baseColor) {
-    const lines = [];
+function buildSlopeColoredGeoJSON(seg, baseColor) {
+    const features = [];
     for (let i = 1; i < seg.length; i++) {
         const p0 = seg[i - 1], p1 = seg[i];
         const dist = haversineDistance(p0.lat, p0.lon, p1.lat, p1.lon);
@@ -735,11 +2129,18 @@ function buildSlopeColoredTrack(seg, weight, baseColor) {
         if (dist > 0 && p0.ele !== null && p1.ele !== null) {
             slopeDeg = Math.atan2(p1.ele - p0.ele, dist) * (180 / Math.PI);
         }
-        lines.push(L.polyline([[p0.lat, p0.lon], [p1.lat, p1.lon]], {
-            color: slopeToColor(slopeDeg, baseColor), weight, opacity: 0.9
-        }));
+        features.push({
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: [[p0.lon, p0.lat], [p1.lon, p1.lat]]
+            },
+            properties: {
+                color: slopeToColorHex(slopeDeg, baseColor)
+            }
+        });
     }
-    return lines;
+    return features;
 }
 
 function findMinMaxElevPoints(allSegments) {
@@ -776,81 +2177,244 @@ function getGpxShowMinMax() {
     return el ? el.checked : true;
 }
 
-function rebuildGpxLayer() {
-    // re-render with current settings; requires stored parse data
-    if (!gpxTrackData) return;
-    const wasFitted = !gpxLayer;
-    if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+function clearMarkerCollection(markers) {
+    markers.forEach(marker => marker.remove());
+}
 
-    const color = getGpxTrackColor();
-    const weight = getGpxTrackWidth();
-    const showKm = getGpxShowKmLabels();
-    const colorBySlope = getGpxColorBySlope();
-    const showWaypoints = getGpxShowWaypoints();
-    const showMinMax = getGpxShowMinMax();
-    const mapLayers = [];
+function removeLegendControl(control) {
+    if (!control) return;
+    if (typeof control.remove === 'function') {
+        control.remove();
+    } else {
+        map.removeControl(control);
+    }
+}
+
+function getSlopeMapLegendItems() {
+    return [
+        { label: '0-9°', color: '#FFFFFF' },
+        { label: '10-29°', color: '#247400' },
+        { label: '30-34°', color: '#ffff00' },
+        { label: '35-39°', color: '#ffa900' },
+        { label: '40-44°', color: '#ff5500' },
+        { label: '45-49°', color: '#e60000' },
+        { label: '50°+', color: '#740000' }
+    ];
+}
+
+function getGpxSlopeLegendItems(baseColor) {
+    return [
+        { label: '<= -20°', color: slopeToColorHex(-20, baseColor) },
+        { label: '-20° to -10°', color: slopeToColorHex(-15, baseColor) },
+        { label: '-10° to 0°', color: slopeToColorHex(-5, baseColor) },
+        { label: '0°', color: slopeToColorHex(0, baseColor) },
+        { label: '0° to 10°', color: slopeToColorHex(5, baseColor) },
+        { label: '10° to 20°', color: slopeToColorHex(15, baseColor) },
+        { label: '>= 20°', color: slopeToColorHex(20, baseColor) }
+    ];
+}
+
+function createSlopeLegendControl(legendItems) {
     const t = translations[currentLang];
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'slope-legend');
+        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
+        for (const item of legendItems) {
+            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
+        }
+        div.innerHTML = html;
+        return div;
+    };
+    return legend;
+}
+
+function clearGpxTrackSourceAndLayers() {
+    const nativeMap = map._map;
+    if (nativeMap.getLayer('gpx-line-0')) {
+        let i = 0;
+        while (nativeMap.getLayer(`gpx-line-${i}`)) {
+            nativeMap.removeLayer(`gpx-line-${i}`);
+            i++;
+        }
+    }
+    if (nativeMap.getSource('gpx-track')) {
+        nativeMap.removeSource('gpx-track');
+    }
+}
+
+function buildGpxTrackFeatures() {
+    const color = getGpxTrackColor();
+    const colorBySlope = getGpxColorBySlope();
+    const gpxFeatures = [];
 
     for (const seg of gpxTrackData.segments) {
         if (seg.length < 2) continue;
         if (colorBySlope) {
-            mapLayers.push(...buildSlopeColoredTrack(seg, weight, color));
+            gpxFeatures.push(...buildSlopeColoredGeoJSON(seg, color));
         } else {
-            const coords = seg.map(p => [p.lat, p.lon]);
-            mapLayers.push(L.polyline(coords, { color, weight, opacity: 0.85 }));
+            gpxFeatures.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: seg.map(p => [p.lon, p.lat])
+                },
+                properties: { color: color }
+            });
         }
     }
+
+    return gpxFeatures;
+}
+
+function updateGpxTrackLine() {
+    const nativeMap = map._map;
+    const gpxFeatures = buildGpxTrackFeatures();
+    const weight = getGpxTrackWidth();
+
+    if (gpxFeatures.length === 0) {
+        clearGpxTrackSourceAndLayers();
+        return;
+    }
+
+    const sourceData = {
+        type: 'FeatureCollection',
+        features: gpxFeatures
+    };
+
+    const existingSource = nativeMap.getSource('gpx-track');
+    if (existingSource) {
+        existingSource.setData(sourceData);
+    } else {
+        nativeMap.addSource('gpx-track', {
+            type: 'geojson',
+            data: sourceData
+        });
+    }
+
+    if (nativeMap.getLayer('gpx-line-0')) {
+        nativeMap.setPaintProperty('gpx-line-0', 'line-color', ['get', 'color']);
+        nativeMap.setPaintProperty('gpx-line-0', 'line-width', weight);
+        nativeMap.setPaintProperty('gpx-line-0', 'line-opacity', 0.85);
+        return;
+    }
+
+    nativeMap.addLayer({
+        id: 'gpx-line-0',
+        type: 'line',
+        source: 'gpx-track',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+            'line-color': ['get', 'color'],
+            'line-width': weight,
+            'line-opacity': 0.85
+        }
+    });
+}
+
+function rebuildGpxMarkers() {
+    clearMarkerCollection(currentMarkers);
+    currentMarkers = [];
+
+    const showWaypoints = getGpxShowWaypoints();
+    const showMinMax = getGpxShowMinMax();
+    const t = translations[currentLang];
 
     if (showWaypoints) {
         for (const wp of gpxTrackData.waypoints) {
             const label = wp.name || '•';
-            const icon = L.divIcon({ className: 'gpx-waypoint-label', html: label, iconSize: null });
-            mapLayers.push(L.marker([wp.lat, wp.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-waypoint-label';
+            el.innerHTML = label;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([wp.lon, wp.lat])
+                .addTo(map._map));
         }
     }
 
-    // Start / End markers
     const { startPt, endPt } = getTrackEndpoints(gpxTrackData.segments);
-    const OVERLAP_THRESHOLD = 50; // meters
+    const OVERLAP_THRESHOLD = 50;
     const startEndOverlap = startPt && endPt &&
         haversineDistance(startPt.lat, startPt.lon, endPt.lat, endPt.lon) < OVERLAP_THRESHOLD;
 
     if (startEndOverlap) {
         const label = `▶ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
-        const icon = L.divIcon({ className: 'gpx-start-end-label', html: label, iconSize: null });
-        mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+        const el = document.createElement('div');
+        el.className = 'gpx-start-end-label';
+        el.innerHTML = label;
+        currentMarkers.push(new maplibregl.Marker({ element: el })
+            .setLngLat([startPt.lon, startPt.lat])
+            .addTo(map._map));
     } else {
         if (startPt) {
-            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `▶ ${t.gpx_start || 'Start'}`, iconSize: null });
-            mapLayers.push(L.marker([startPt.lat, startPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-start-end-label';
+            el.innerHTML = `▶ ${t.gpx_start || 'Start'}`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([startPt.lon, startPt.lat])
+                .addTo(map._map));
         }
         if (endPt) {
-            const icon = L.divIcon({ className: 'gpx-start-end-label', html: `⏹ ${t.gpx_end || 'End'}`, iconSize: null });
-            mapLayers.push(L.marker([endPt.lat, endPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-start-end-label';
+            el.innerHTML = `⏹ ${t.gpx_end || 'End'}`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([endPt.lon, endPt.lat])
+                .addTo(map._map));
         }
     }
 
-    // Min / Max elevation labels
     if (showMinMax) {
         const { minPt, maxPt } = findMinMaxElevPoints(gpxTrackData.segments);
         if (maxPt) {
-            const icon = L.divIcon({ className: 'gpx-elev-label', html: `▲ ${Math.round(maxPt.ele)} m`, iconSize: null });
-            mapLayers.push(L.marker([maxPt.lat, maxPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-elev-label';
+            el.innerHTML = `▲ ${Math.round(maxPt.ele)} m`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([maxPt.lon, maxPt.lat])
+                .addTo(map._map));
         }
         if (minPt) {
-            const icon = L.divIcon({ className: 'gpx-elev-label min-elev', html: `▼ ${Math.round(minPt.ele)} m`, iconSize: null });
-            mapLayers.push(L.marker([minPt.lat, minPt.lon], { icon, interactive: false }));
+            const el = document.createElement('div');
+            el.className = 'gpx-elev-label min-elev';
+            el.innerHTML = `▼ ${Math.round(minPt.ele)} m`;
+            currentMarkers.push(new maplibregl.Marker({ element: el })
+                .setLngLat([minPt.lon, minPt.lat])
+                .addTo(map._map));
         }
     }
+}
 
-    if (showKm) {
-        const kmLabels = buildKmLabels(gpxTrackData.segments);
-        mapLayers.push(...kmLabels);
+function refreshGpxKmLabels() {
+    clearMarkerCollection(currentKmMarkers);
+    currentKmMarkers = [];
+
+    if (!gpxTrackData || !getGpxShowKmLabels()) {
+        return;
     }
 
-    if (mapLayers.length > 0) {
-        gpxLayer = L.layerGroup(mapLayers).addTo(map);
+    currentKmMarkers = buildKmLabels(gpxTrackData.segments);
+}
+
+function syncGpxSlopeLegend() {
+    removeLegendControl(gpxSlopeLegend);
+    gpxSlopeLegend = null;
+
+    if (!gpxTrackData || !getGpxColorBySlope()) {
+        return;
     }
+
+    gpxSlopeLegend = createSlopeLegendControl(getGpxSlopeLegendItems(getGpxTrackColor()));
+    gpxSlopeLegend.addTo(map);
+}
+
+function rebuildGpxLayer() {
+    if (!gpxTrackData) return;
+
+    updateGpxTrackLine();
+    rebuildGpxMarkers();
+    refreshGpxKmLabels();
+    syncGpxSlopeLegend();
 }
 
 document.getElementById('gpx-file-input').addEventListener('change', function (e) {
@@ -867,8 +2431,14 @@ document.getElementById('gpx-file-input').addEventListener('change', function (e
                 return;
             }
 
-            // Remove previous GPX layer
-            if (gpxLayer) { map.removeLayer(gpxLayer); gpxLayer = null; }
+            clearGpxTrackSourceAndLayers();
+            clearMarkerCollection(currentMarkers);
+            currentMarkers = [];
+            clearMarkerCollection(currentKmMarkers);
+            currentKmMarkers = [];
+            removeLegendControl(gpxSlopeLegend);
+            gpxSlopeLegend = null;
+            gpxLayer = null;
 
             const allSegments = [];
             const waypoints = [];
@@ -934,13 +2504,11 @@ document.getElementById('gpx-file-input').addEventListener('change', function (e
             updateGpxTrackInfo();
 
             // Fit map
-            if (gpxLayer) {
-                const allCoords = [];
-                allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
-                waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
-                if (allCoords.length > 0) {
-                    map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
-                }
+            const allCoords = [];
+            allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
+            waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
+            if (allCoords.length > 0) {
+                map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
             }
 
             const clearBtn = document.getElementById('gpx-clear-btn');
@@ -984,6 +2552,103 @@ window.copyCoords = function (lat, lng, btnElement) {
 
 function getSearchCenter() { return isLocked && lockedCenterCoords ? lockedCenterCoords : map.getCenter(); }
 
+function toRgba(hexColor, opacity) {
+    const normalized = hexColor.replace('#', '');
+    const value = normalized.length === 3
+        ? normalized.split('').map((char) => char + char).join('')
+        : normalized;
+    const red = parseInt(value.slice(0, 2), 16);
+    const green = parseInt(value.slice(2, 4), 16);
+    const blue = parseInt(value.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
+
+function ensureSearchOverlay() {
+    const mapContainer = map.getContainer();
+    const canvasContainer = mapContainer.querySelector('.maplibregl-canvas-container');
+    const canvas = canvasContainer ? canvasContainer.querySelector('.maplibregl-canvas, canvas') : null;
+    const overlayParent = canvasContainer || mapContainer;
+    let overlay = document.getElementById('search-overlay');
+    const placeOverlayAboveMapBelowMarkers = () => {
+        if (!canvasContainer || !canvas) {
+            if (overlay.parentElement !== overlayParent) {
+                overlayParent.appendChild(overlay);
+            }
+            return;
+        }
+        const nextSibling = canvas.nextSibling;
+        if (nextSibling === overlay) return;
+        overlayParent.insertBefore(overlay, nextSibling);
+    };
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'search-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.inset = '0';
+        overlay.style.pointerEvents = 'none';
+
+        const circleEl = document.createElement('div');
+        circleEl.style.position = 'absolute';
+        circleEl.style.transform = 'translate(-50%, -50%)';
+        circleEl.style.borderRadius = '50%';
+        circleEl.style.boxSizing = 'border-box';
+        circleEl.style.display = 'none';
+
+        const markerEl = document.createElement('div');
+        markerEl.style.position = 'absolute';
+        markerEl.style.transform = 'translate(-50%, -50%)';
+        markerEl.style.borderRadius = '50%';
+        markerEl.style.boxSizing = 'border-box';
+        markerEl.style.width = '8px';
+        markerEl.style.height = '8px';
+        markerEl.style.background = '#ffffff';
+        markerEl.style.display = 'none';
+
+        overlay.appendChild(circleEl);
+        overlay.appendChild(markerEl);
+        overlay._circle = circleEl;
+        overlay._marker = markerEl;
+        placeOverlayAboveMapBelowMarkers();
+    } else {
+        if (overlay.parentElement !== overlayParent) {
+            overlayParent.appendChild(overlay);
+        }
+        placeOverlayAboveMapBelowMarkers();
+    }
+    return overlay;
+}
+
+function updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity) {
+    const overlay = ensureSearchOverlay();
+    const point = map._map.project([searchCenter.lng, searchCenter.lat]);
+    const edgeLatLng = moveLatLng(searchCenter, radiusM, 0);
+    const edgePoint = map._map.project([edgeLatLng.lng, edgeLatLng.lat]);
+    const radiusPx = Math.hypot(edgePoint.x - point.x, edgePoint.y - point.y);
+
+    const markerEl = overlay._marker;
+    markerEl.style.display = 'block';
+    markerEl.style.left = `${point.x}px`;
+    markerEl.style.top = `${point.y}px`;
+    markerEl.style.border = `2px solid ${markerColor}`;
+
+    const circleEl = overlay._circle;
+    if (showCircle) {
+        const sizePx = Math.max(radiusPx * 2, 2);
+        circleEl.style.display = 'block';
+        circleEl.style.left = `${point.x}px`;
+        circleEl.style.top = `${point.y}px`;
+        circleEl.style.width = `${sizePx}px`;
+        circleEl.style.height = `${sizePx}px`;
+        circleEl.style.border = '1px solid #007bff';
+        circleEl.style.background = toRgba('#007bff', fillOpacity);
+    } else {
+        circleEl.style.display = 'none';
+    }
+
+    searchCircle = circleEl;
+    centerMarker = markerEl;
+}
+
 window.adjustNumber = function (inputId, amount) {
     const input = document.getElementById(inputId);
     if (!input) return;
@@ -1009,27 +2674,21 @@ function updateUI() {
     zoomLabel.innerText = 'Zoom: ' + displayZoom;
     const searchCenter = getSearchCenter();
     const radiusKm = parseFloat(radiusInput.value) || 5;
-
-    if (searchCircle) map.removeLayer(searchCircle);
-    if (centerMarker) map.removeLayer(centerMarker);
-
-    centerMarker = L.circleMarker(searchCenter, {
-        radius: 4, color: isLocked ? '#e67e22' : '#007bff', fillColor: '#ffffff', fillOpacity: 1, weight: 2, interactive: false
-    }).addTo(map);
+    const markerColor = isLocked ? '#e67e22' : '#007bff';
 
     // Show circle when checkbox is checked OR when a slope map is active
     const radiusM = radiusKm * 1000;
+    const slopeMapHasRadiusArea = slopeMapCenter !== null && slopeMapUsesRadius;
     // Circle is completely outside the generated slope area when there is no overlap at all
-    const completelyOutsideSlopeArea = slopeMapCenter !== null &&
+    const completelyOutsideSlopeArea = slopeMapHasRadiusArea &&
         searchCenter.distanceTo(slopeMapCenter) > slopeMapRadius + radiusM;
-    const showCircle = circleCheckbox.checked || slopeMapCenter !== null;
+    const showCircle = circleCheckbox.checked || slopeMapHasRadiusArea;
+    let fillOpacity = 0;
     if (showCircle) {
         // No fill when slope map is active and circle overlaps generated area; fill 0.1 when fully outside
-        const fillOpacity = isLocked ? 0 : (slopeMapCenter !== null ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
-        searchCircle = L.circle(searchCenter, {
-            color: '#007bff', fillColor: '#007bff', fillOpacity, weight: 1, radius: radiusM, interactive: false
-        }).addTo(map);
     }
+    fillOpacity = isLocked ? 0 : (slopeMapHasRadiusArea ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
+    updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity);
 }
 
 async function updateCenterElevation() {
@@ -1040,7 +2699,7 @@ async function updateCenterElevation() {
     if (slopeBtn) slopeBtn.disabled = true;
     centerHeightDisplay.textContent = "...";
 
-    const zoom = Math.min(Math.floor(map.getZoom()), 15);
+    const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
     const point = map.project(center, zoom);
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
@@ -1080,23 +2739,25 @@ async function updateCenterElevation() {
 
 // Updated function that fetches both elevation and water tiles
 async function fetchAnalysisData() {
-    const size = map.getSize();
-    canvas.width = size.x;
-    canvas.height = size.y;
-    waterCanvas.width = size.x;
-    waterCanvas.height = size.y;
+    const bounds = map.getBounds();
+    const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
+    analysisZoom = zoom;
+    analysisBounds = bounds;
+    const nw = map.project(bounds.getNorthWest(), zoom);
+    const se = map.project(bounds.getSouthEast(), zoom);
+    const analysisSize = se.subtract(nw);
+
+    canvas.width = Math.max(1, Math.ceil(analysisSize.x));
+    canvas.height = Math.max(1, Math.ceil(analysisSize.y));
+    waterCanvas.width = canvas.width;
+    waterCanvas.height = canvas.height;
 
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     waterCtx.imageSmoothingEnabled = false;
     waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
 
-    const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 15);
-    analysisZoom = zoom;
-    const nw = map.project(bounds.getNorthWest(), zoom);
     analysisNwOrigin = nw;
-    const se = map.project(bounds.getSouthEast(), zoom);
     const tileMin = nw.divideBy(256).floor();
     const tileMax = se.divideBy(256).floor();
 
@@ -1263,38 +2924,17 @@ function _renderSlopeMap() {
     outCtx.putImageData(outImgData, 0, 0);
     const dataUrl = outCanvas.toDataURL();
 
-    const nwLatLng = canvasPointToLatLng(0, 0);
-    const seLatLng = canvasPointToLatLng(w, h);
-    const bounds = L.latLngBounds(nwLatLng, seLatLng);
+    const bounds = analysisBounds || L.latLngBounds(canvasPointToLatLng(0, 0), canvasPointToLatLng(w, h));
 
     slopeOverlay = L.imageOverlay(dataUrl, bounds, { opacity: overlayOpacity }).addTo(map);
 
-    // Build legend
-    const legendItems = [
-        { label: '0–9°',   color: '#FFFFFF' },
-        { label: '10–29°', color: '#247400' },
-        { label: '30–34°', color: '#ffff00' },
-        { label: '35–39°', color: '#ffa900' },
-        { label: '40–44°', color: '#ff5500' },
-        { label: '45–49°', color: '#e60000' },
-        { label: '50°+',   color: '#740000' }
-    ];
-
-    slopeLegend = L.control({ position: 'bottomleft' });
-    slopeLegend.onAdd = function () {
-        const div = L.DomUtil.create('div', 'slope-legend');
-        let html = `<div class="slope-legend-title">${t.slope_legend_title}</div>`;
-        for (const item of legendItems) {
-            html += `<div class="slope-legend-item"><span class="slope-legend-color" style="background:${item.color}"></span>${item.label}</div>`;
-        }
-        div.innerHTML = html;
-        return div;
-    };
+    slopeLegend = createSlopeLegendControl(getSlopeMapLegendItems());
     slopeLegend.addTo(map);
 
     // Store generated area so the radius circle can be shown as overlay
     slopeMapCenter = searchCenterLatLng;
     slopeMapRadius = searchRadiusMeters;
+    slopeMapUsesRadius = useRadius;
     updateUI();
 
     statusDiv.textContent = t.status_slope_done;
@@ -1310,7 +2950,7 @@ function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
             img.onload = () => {
                 const tilePos = new L.Point(t.x * 256, t.y * 256);
                 const offset = tilePos.subtract(nwPixelOrigin);
-                targetCtx.drawImage(img, Math.floor(offset.x), Math.floor(offset.y), 256, 256);
+                targetCtx.drawImage(img, offset.x, offset.y, 256, 256);
                 resolve();
             };
             img.onerror = () => resolve();
@@ -1362,7 +3002,7 @@ function findPeaks() {
     validPeaks.sort((a, b) => b.h - a.h);
     const finalPoints = [];
     const limit = parseInt(document.getElementById('numPoints').value) || 5;
-    const minPixelDist = 40;
+    const minPixelDist = peakMinPixelDistance;
     for (let p of validPeaks) {
         if (finalPoints.length >= limit) break;
         let tooClose = false;
@@ -1706,28 +3346,102 @@ window.addEventListener('appinstalled', () => {
 
 let tutorialStep = 0;
 let _tutorialOverlayClickHandler = null;
+let _tutorialKeydownHandler = null;
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
     { targetSelector: '.circle-btn:not(.info-btn)', titleKey: 'tutorial_language_title', textKey: 'tutorial_language_text' },
+    { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
-    { targetSelector: '.live-height-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
-    { targetSelector: '#layerSelect', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text' },
-    { targetSelector: '.search-group', titleKey: 'tutorial_search_title', textKey: 'tutorial_search_text' },
-    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text' },
-    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandSection: 'section-points' },
-    { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandSection: 'section-climbs' },
-    { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandSection: 'section-slope' },
-    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandSection: 'section-routes' },
+    { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_text', expandControls: true },
+    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true },
+    { targetSelector: '.map-tools-group', titleKey: 'tutorial_map_tools_title', textKey: 'tutorial_map_tools_text', expandControls: true },
+    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
+    { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
+    { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
+    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 ];
 
-function startTutorial() {
-    // Expand controls panel so UI elements are visible
-    if (controls && controls.classList.contains('minimized')) {
-        toggleControls();
+function isTutorialVisible() {
+    const overlay = document.getElementById('tutorial-overlay');
+    return Boolean(overlay) && overlay.style.display === 'block';
+}
+
+function syncTutorialUiState(step) {
+    setControlsMinimized(!step.expandControls);
+    collapseTutorialSections();
+    if (step.expandSection) {
+        setSectionExpanded(step.expandSection, true);
     }
+}
+
+function getTutorialTargetRect(step) {
+    if (!step.targetSelector) return null;
+
+    const startEl = document.querySelector(step.targetSelector);
+    if (!startEl) return null;
+
+    let rect = startEl.getBoundingClientRect();
+    if (!step.targetSelectorEnd) {
+        return rect;
+    }
+
+    const endEl = document.querySelector(step.targetSelectorEnd);
+    if (!endEl) {
+        return rect;
+    }
+
+    const endRect = endEl.getBoundingClientRect();
+    const left = Math.min(rect.left, endRect.left);
+    const top = Math.min(rect.top, endRect.top);
+    const right = Math.max(rect.right, endRect.right);
+    const bottom = Math.max(rect.bottom, endRect.bottom);
+    rect = {
+        left,
+        top,
+        right,
+        bottom,
+        width: right - left,
+        height: bottom - top
+    };
+
+    return rect;
+}
+
+function attachTutorialKeyboardNavigation() {
+    if (_tutorialKeydownHandler) {
+        document.removeEventListener('keydown', _tutorialKeydownHandler, true);
+    }
+
+    _tutorialKeydownHandler = function (e) {
+        if (!isTutorialVisible() || e.repeat) return;
+
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            e.stopPropagation();
+            tutorialNext();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            e.stopPropagation();
+            tutorialPrev();
+        }
+    };
+
+    document.addEventListener('keydown', _tutorialKeydownHandler, true);
+}
+
+function detachTutorialKeyboardNavigation() {
+    if (_tutorialKeydownHandler) {
+        document.removeEventListener('keydown', _tutorialKeydownHandler, true);
+        _tutorialKeydownHandler = null;
+    }
+}
+
+function startTutorial() {
+    setControlsMinimized(true);
+    collapseTutorialSections();
     tutorialStep = 0;
     const overlay = document.getElementById('tutorial-overlay');
     overlay.style.display = 'block';
@@ -1742,12 +3456,12 @@ function startTutorial() {
         if (e.target === overlay) finishTutorial();
     };
     overlay.addEventListener('click', _tutorialOverlayClickHandler);
+    attachTutorialKeyboardNavigation();
 }
 
 function renderTutorialStep() {
     const t = translations[currentLang];
     const step = tutorialSteps[tutorialStep];
-    const overlay = document.getElementById('tutorial-overlay');
     const spotlight = document.getElementById('tutorial-spotlight');
     const tooltip = document.getElementById('tutorial-tooltip');
     const titleEl = document.getElementById('tutorial-title');
@@ -1755,6 +3469,9 @@ function renderTutorialStep() {
     const prevBtn = document.getElementById('tutorial-prev');
     const nextBtn = document.getElementById('tutorial-next');
     const progressEl = document.getElementById('tutorial-progress');
+
+    syncTutorialUiState(step);
+    tooltip.style.transform = '';
 
     titleEl.textContent = t[step.titleKey] || '';
     textEl.textContent = t[step.textKey] || '';
@@ -1764,19 +3481,10 @@ function renderTutorialStep() {
     nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? (t.tutorial_btn_finish || 'Finish') : (t.tutorial_btn_next || 'Next');
     prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
 
-    // Expand the section if the step requires it
-    if (step.expandSection) {
-        const sectionContent = document.getElementById(step.expandSection);
-        if (sectionContent && (sectionContent.style.display === 'none' || sectionContent.style.display === '')) {
-            toggleSection(step.expandSection);
-        }
-    }
-
     const PAD = 8;
     if (step.targetSelector) {
-        const el = document.querySelector(step.targetSelector);
-        if (el) {
-            const rect = el.getBoundingClientRect();
+        const rect = getTutorialTargetRect(step);
+        if (rect) {
             spotlight.style.display = 'block';
             spotlight.style.left = (rect.left - PAD) + 'px';
             spotlight.style.top = (rect.top - PAD) + 'px';
@@ -1845,8 +3553,11 @@ function finishTutorial() {
         overlay.removeEventListener('click', _tutorialOverlayClickHandler);
         _tutorialOverlayClickHandler = null;
     }
+    detachTutorialKeyboardNavigation();
     overlay.style.display = 'none';
     overlay.style.pointerEvents = 'none';
+    collapseTutorialSections();
+    setControlsMinimized(true);
 }
 
 // ==========================================
@@ -1854,10 +3565,8 @@ function finishTutorial() {
 // ==========================================
 
 // Event Listeners
-if (scanBtn) scanBtn.addEventListener('click', analyzeTerrain); // ADDED BACK THIS Event Listener
-if (climbBtn) climbBtn.addEventListener('click', findSteepestClimb); // ADDED BACK THIS Event Listener
 if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
-if (radiusInput) radiusInput.addEventListener('input', updateUI);
+if (radiusInput) radiusInput.addEventListener('input', () => { invalidateSlopeMapIfSearchAreaChanged(); updateUI(); });
 if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
 if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     isLocked = e.target.checked;
@@ -1868,8 +3577,39 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
         lockedCenterCoords = null;
         crosshair.style.display = 'none';
     }
+    invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
 });
+if (overzoomCheckbox) {
+    overzoomCheckbox.checked = isOverzoomEnabled();
+    overzoomCheckbox.addEventListener('change', (e) => {
+        localStorage.setItem(OVERZOOM_STORAGE_KEY, e.target.checked);
+        applyCurrentLayerMaxZoom();
+    });
+}
+if (tiltCheckbox) {
+    tiltCheckbox.checked = true;
+    tiltCheckbox.addEventListener('change', (e) => {
+        setTiltEnabled(e.target.checked);
+    });
+}
+if (enable3dCheckbox) {
+    enable3dCheckbox.checked = false;
+    enable3dCheckbox.addEventListener('change', (e) => {
+        setTerrainEnabled(e.target.checked);
+    });
+}
+if (exaggerationSlider) {
+    exaggerationSlider.value = DEFAULT_TERRAIN_EXAGGERATION.toFixed(1);
+    exaggerationSlider.addEventListener('input', () => {
+        syncTerrainControls();
+        if (enable3dCheckbox && enable3dCheckbox.checked) {
+            map.setTerrain({ exaggeration: getTerrainExaggeration() });
+        }
+    });
+}
+setTiltEnabled(!(tiltCheckbox && tiltCheckbox.checked === false));
+syncTerrainControls();
 
 const waterToggle = document.getElementById('water-analysis-toggle');
 if (waterToggle) {
@@ -1907,6 +3647,16 @@ if (stepInput) {
     });
 }
 
+const peakMinPixelInput = document.getElementById('peakMinPixelDistInput');
+if (peakMinPixelInput) {
+    peakMinPixelInput.value = peakMinPixelDistance;
+    peakMinPixelInput.addEventListener('change', (e) => {
+        peakMinPixelDistance = normalizePeakMinPixelDistance(e.target.value);
+        e.target.value = peakMinPixelDistance;
+        localStorage.setItem('topo_peak_min_pixel_dist', peakMinPixelDistance);
+    });
+}
+
 const anglesInput = document.getElementById('scanAnglesInput');
 if (anglesInput) {
     anglesInput.value = climbScanAngles;
@@ -1916,8 +3666,11 @@ if (anglesInput) {
 }
 
 // Map Events
-map.on('zoomend', () => { updateUI(); updateCenterElevation(); rebuildGpxLayer(); });
-map.on('move', () => { updateUI(); }); // UI (circle) updates directly
+map.on('zoomend', () => { updateUI(); updateCenterElevation(); refreshGpxKmLabels(); });
+map.on('move', () => {
+    invalidateSlopeMapIfSearchAreaChanged();
+    updateUI();
+});
 map.on('moveend', () => { // Data saved/fetched at end of movement
     const center = map.getCenter();
     localStorage.setItem('topo_lat', center.lat);
@@ -1944,11 +3697,19 @@ if (savedUnit) {
     const unitSel = document.getElementById('distanceUnit');
     if (unitSel) unitSel.value = savedUnit;
 }
-handleLayerChange(savedLayer); // Now everything is loaded, so this works!
-updateUI();
-updateCenterElevation();
+
+let initialMapStateApplied = false;
+function applyInitialMapState() {
+    if (initialMapStateApplied) return;
+    initialMapStateApplied = true;
+    handleLayerChange(savedLayer);
+    updateUI();
+    updateCenterElevation();
+}
+
+applyInitialMapState();
 
 // Auto-start tutorial for new visitors
-if (!localStorage.getItem('topo_tutorial_done')) {
+if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView) {
     setTimeout(() => startTutorial(), 1000);
 }

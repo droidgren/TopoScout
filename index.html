@@ -11,7 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="apple-touch-icon" href="icon.svg">
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.0/dist/maplibre-gl.css" />
 
     <link rel="stylesheet" href="style.css">
 </head>
@@ -24,8 +24,8 @@
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
 
-            <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, and visualize slope steepness within a given area.<br>The application works on mobile devices, but is best experienced on larger
-                screens.</p>
+            <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, visualize slope steepness, and overlay GPX routes on the map.<br>The application works on mobile devices, but is best experienced on larger
+                screens. Also check out <a href="https://github.com/droidgren/topo_gpx_viewer/" target="_blank" rel="noopener noreferrer">Topo GPX Viewer</a>, a companion project focused on advanced GPX viewing.</p>
 
             <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;">🎓 Start Tutorial</button>
 
@@ -35,7 +35,7 @@
                     target="_blank">droidgren.github.io</a></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">1.8.2</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">2.0</span>
             </p>
 
             <details
@@ -43,6 +43,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.0:</strong> Migrated frontend map rendering to MapLibre GL JS and added overzoom, tilt, 3D terrain, and shareable map views.</li>
                     <li><strong>v1.8.2:</strong> Added Norgeskart (Norway) map layer.</li>
                     <li><strong>v1.8.1:</strong> Added map rotation with Ctrl+drag and two-finger touch support, compass indicator with reset-north button.</li>
                     <li><strong>v1.8:</strong> Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.</li>
@@ -86,6 +87,11 @@
                         <input type="number" id="stepSizeInput" value="10" min="2" max="50" step="1"
                             style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
                     </label>
+                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span id="lbl-peak-min-pixels" style="font-size: 13px; min-width: 140px;">Peak Min Dist. (px):</span>
+                        <input type="number" id="peakMinPixelDistInput" value="40" min="1" max="200" step="1"
+                            style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                    </label>
                     <label style="display: flex; align-items: center; gap: 8px;">
                         <span id="lbl-scan-angles" style="font-size: 13px; min-width: 140px;">Scan Angles:</span>
                         <input type="number" id="scanAnglesInput" value="32" min="8" max="72" step="4"
@@ -118,6 +124,7 @@
                 <button class="circle-btn" onclick="toggleLanguage()" title="Switch Language">
                     <img id="flag-icon" class="flag-img" src="" alt="Flag">
                 </button>
+                <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View">🔗</button>
                 <button class="circle-btn info-btn" onclick="showInfo()" title="Info">i</button>
                 <button class="toggle-btn" onclick="toggleControls()" title="Minimize">➖</button>
             </div>
@@ -176,6 +183,28 @@
                         <input type="checkbox" id="lock-circle">
                         <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
                     </div>
+                </div>
+            </div>
+
+            <div class="map-tools-group">
+                <div class="checkbox-group map-toggle-group">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="enableOverzoom">
+                        <label id="lbl-enable-overzoom" for="enableOverzoom">Overzoom</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="enableTilt" checked>
+                        <label id="lbl-enable-tilt" for="enableTilt">Enable tilt</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="enable3dView">
+                        <label id="lbl-enable-3d" for="enable3dView">Enable 3D</label>
+                    </div>
+                </div>
+                <div class="control-row exaggeration-row" id="exaggeration-row">
+                    <span id="lbl-3d-exaggeration" class="control-label">Exaggeration:</span>
+                    <input type="range" id="exaggerationSlider" min="0" max="3" value="1.5" step="0.1">
+                    <span id="exaggerationVal" class="range-value">1.5</span>
                 </div>
             </div>
 
@@ -351,8 +380,7 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.3.0/dist/maplibre-gl.js"></script>
     <script src="lang/en.js"></script>
     <script src="lang/sv.js"></script>
     <script src="script.js"></script>
