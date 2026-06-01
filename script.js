@@ -35,6 +35,11 @@ const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Worl
 const NORGES_MAP_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
 const WORKER_URL = "https://lm.clackspark.workers.dev";
+const ELEVATION_TILE_MAX_ZOOM = 15;
+const OVERZOOM_STORAGE_KEY = 'topo_overzoom';
+const OVERZOOM_MAX_ZOOM = 22;
+const TERRAIN_SOURCE_ID = 'elevation-dem';
+const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
@@ -44,11 +49,34 @@ const MAP_SOURCES = {
     "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 18 },
     "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
     "satellite": { url: SATELLITE_URL, attribution: 'Esri', maxZoom: 19 },
-    "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: 15, opacity: 1 }
+    "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: ELEVATION_TILE_MAX_ZOOM, opacity: 1 }
 };
 
 const EARTH_RADIUS_M = 6371000;
 let mapOverlayId = 0;
+
+function isOverzoomEnabled() {
+    try {
+        return localStorage.getItem(OVERZOOM_STORAGE_KEY) === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+function getEffectiveLayerMaxZoom(maxZoom) {
+    const resolvedMaxZoom = Number(maxZoom) || 19;
+    return isOverzoomEnabled() ? Math.max(resolvedMaxZoom, OVERZOOM_MAX_ZOOM) : resolvedMaxZoom;
+}
+
+function getTerrainSourceDefinition() {
+    return {
+        type: 'raster-dem',
+        tiles: getTileUrls(DATA_TILE_URL),
+        encoding: 'terrarium',
+        tileSize: 512,
+        maxzoom: ELEVATION_TILE_MAX_ZOOM
+    };
+}
 
 function getTileUrls(urlTemplate) {
     if (!urlTemplate) return [];
@@ -518,6 +546,9 @@ function fromNativeZoom(nativeZoom) {
 
 function createMapAdapter(containerId, options) {
     const initialTileLayer = options.initialTileLayer || null;
+    const initialMaxZoom = initialTileLayer
+        ? (initialTileLayer.options.maxZoom || 19)
+        : 19;
     const initialStyle = initialTileLayer ? {
         version: 8,
         sources: {
@@ -549,12 +580,12 @@ function createMapAdapter(containerId, options) {
         style: initialStyle,
         center: [options.center.lng, options.center.lat],
         zoom: toNativeZoom(options.zoom),
-        maxZoom: initialTileLayer ? toNativeZoom(initialTileLayer.options.maxZoom || 19) : toNativeZoom(19),
+        maxZoom: toNativeZoom(getEffectiveLayerMaxZoom(initialMaxZoom)),
         bearing: options.bearing || 0,
         pitch: 0,
         dragRotate: true,
-        pitchWithRotate: false,
-        touchPitch: false,
+        pitchWithRotate: true,
+        touchPitch: true,
         boxZoom: options.boxZoom !== false,
         cooperativeGestures: false
     });
@@ -571,6 +602,9 @@ function createMapAdapter(containerId, options) {
         _pendingTileLayer: null,
         _pendingOverlayLayers: new Set(),
         _tileLayer: null,
+        _terrain: null,
+        _tiltEnabled: options.tiltEnabled !== false,
+        _maxZoom: initialMaxZoom,
         _controls: [],
         _overlayOrder: [],
         getContainer() {
@@ -674,7 +708,7 @@ function createMapAdapter(containerId, options) {
                 nativeMap.addLayer(basemapLayer);
             }
 
-            nativeMap.setMaxZoom(toNativeZoom(layer.options.maxZoom || 19));
+            this.setMaxZoom(layer.options.maxZoom || 19);
             this._tileLayer = layer;
         },
         _renderOverlay(layer) {
@@ -848,12 +882,85 @@ function createMapAdapter(containerId, options) {
         getZoom() {
             return fromNativeZoom(nativeMap.getZoom());
         },
+        setMaxZoom(maxZoom) {
+            const nextMaxZoom = Number(maxZoom) || 19;
+            this._maxZoom = nextMaxZoom;
+            const effectiveMaxZoom = getEffectiveLayerMaxZoom(nextMaxZoom);
+            nativeMap.setMaxZoom(toNativeZoom(effectiveMaxZoom));
+            if (this.getZoom() > effectiveMaxZoom) {
+                nativeMap.jumpTo({ zoom: toNativeZoom(effectiveMaxZoom) });
+            }
+            return this;
+        },
+        getMaxZoom() {
+            return getEffectiveLayerMaxZoom(this._maxZoom);
+        },
         setBearing(bearing) {
             nativeMap.rotateTo(bearing, { duration: 0 });
             return this;
         },
         getBearing() {
             return nativeMap.getBearing();
+        },
+        setTerrain(terrainOptions) {
+            if (!terrainOptions) {
+                this._terrain = null;
+                if (this._styleReady) {
+                    nativeMap.setTerrain(null);
+                }
+                return this;
+            }
+            const exaggeration = typeof terrainOptions.exaggeration === 'number'
+                ? terrainOptions.exaggeration
+                : DEFAULT_TERRAIN_EXAGGERATION;
+            this._terrain = {
+                source: TERRAIN_SOURCE_ID,
+                exaggeration
+            };
+            if (this._styleReady) {
+                ensureTerrainSource();
+                nativeMap.setTerrain(this._terrain);
+            }
+            return this;
+        },
+        getPitch() {
+            return nativeMap.getPitch();
+        },
+        setTiltEnabled(enabled) {
+            this._tiltEnabled = enabled !== false;
+            if (nativeMap.dragRotate) {
+                if (this._tiltEnabled && typeof nativeMap.dragRotate.enable === 'function') {
+                    nativeMap.dragRotate.enable();
+                }
+                if (!this._tiltEnabled && typeof nativeMap.dragRotate.disable === 'function') {
+                    nativeMap.dragRotate.disable();
+                }
+            }
+            if (nativeMap.touchPitch) {
+                if (this._tiltEnabled && typeof nativeMap.touchPitch.enable === 'function') {
+                    nativeMap.touchPitch.enable();
+                }
+                if (!this._tiltEnabled && typeof nativeMap.touchPitch.disable === 'function') {
+                    nativeMap.touchPitch.disable();
+                }
+            }
+            return this;
+        },
+        isTiltEnabled() {
+            return this._tiltEnabled;
+        },
+        easeTo(options) {
+            if (!options) return this;
+            const nextOptions = { ...options };
+            if (typeof nextOptions.zoom === 'number') {
+                nextOptions.zoom = toNativeZoom(nextOptions.zoom);
+            }
+            if (nextOptions.center) {
+                const center = toLngLat(nextOptions.center);
+                nextOptions.center = [center.lng, center.lat];
+            }
+            nativeMap.easeTo(nextOptions);
+            return this;
         },
         project(latlng, zoom = fromNativeZoom(nativeMap.getZoom())) {
             return projectToWorldPoint(latlng, zoom);
@@ -886,8 +993,24 @@ function createMapAdapter(containerId, options) {
         }
     };
 
+    function ensureTerrainSource() {
+        if (!adapter._styleReady) return false;
+        if (nativeMap.getSource(TERRAIN_SOURCE_ID)) {
+            return true;
+        }
+        nativeMap.addSource(TERRAIN_SOURCE_ID, getTerrainSourceDefinition());
+        return true;
+    }
+
+    function syncTerrain() {
+        if (!adapter._styleReady) return;
+        ensureTerrainSource();
+        nativeMap.setTerrain(adapter._terrain);
+    }
+
     function flushPendingStyleLayers() {
         if (!adapter._styleReady) return;
+        ensureTerrainSource();
         if (adapter._pendingTileLayer) {
             adapter._setTileLayer(adapter._pendingTileLayer);
             adapter._pendingTileLayer = null;
@@ -901,6 +1024,7 @@ function createMapAdapter(containerId, options) {
                 }
             }
         }
+        syncTerrain();
     }
 
     function markStyleReady() {
@@ -935,6 +1059,7 @@ function createMapAdapter(containerId, options) {
         nativeMap.resize();
         markStyleReady();
     });
+    adapter.setTiltEnabled(adapter._tiltEnabled);
     pollStyleReady();
 
     return adapter;
@@ -1035,6 +1160,12 @@ const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
 const shareMapBtn = document.getElementById('share-map-btn');
+const overzoomCheckbox = document.getElementById('enableOverzoom');
+const tiltCheckbox = document.getElementById('enableTilt');
+const enable3dCheckbox = document.getElementById('enable3dView');
+const exaggerationRow = document.getElementById('exaggeration-row');
+const exaggerationSlider = document.getElementById('exaggerationSlider');
+const exaggerationValue = document.getElementById('exaggerationVal');
 
 // ==========================================
 // 3. LANGUAGE & TRANSLATIONS
@@ -1242,50 +1373,6 @@ const ResetNorthControl = L.Control.extend({
 });
 new ResetNorthControl().addTo(map);
 
-// Ctrl+drag rotation handler (desktop)
-(function () {
-    const mapContainer = map.getContainer();
-    let rotating = false;
-    let startAngle = 0;
-    let startBearing = 0;
-
-    function getAngleFromCenter(e) {
-        const rect = mapContainer.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        return Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
-    }
-
-    mapContainer.addEventListener('mousedown', function (e) {
-        if (e.ctrlKey && e.button === 0) {
-            e.preventDefault();
-            rotating = true;
-            startAngle = getAngleFromCenter(e);
-            startBearing = map.getBearing();
-            mapContainer.style.cursor = 'grabbing';
-            map.dragging.disable();
-        }
-    });
-
-    window.addEventListener('mousemove', function (e) {
-        if (!rotating) return;
-        const delta = getAngleFromCenter(e) - startAngle;
-        map.setBearing(startBearing + delta);
-    });
-
-    window.addEventListener('mouseup', function (e) {
-        if (!rotating) return;
-        rotating = false;
-        mapContainer.style.cursor = '';
-        map.dragging.enable();
-    });
-
-    // Prevent context-menu when ctrl+clicking
-    mapContainer.addEventListener('contextmenu', function (e) {
-        if (e.ctrlKey) e.preventDefault();
-    });
-})();
-
 // ==========================================
 // 5. FUNCTIONS
 // ==========================================
@@ -1393,6 +1480,10 @@ function updateLanguage() {
         document.getElementById('lbl-points').textContent = t.lbl_points;
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
+        if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
+        if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
+        if (document.getElementById('lbl-enable-3d')) document.getElementById('lbl-enable-3d').textContent = t.lbl_enable_3d;
+        if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
         document.getElementById('scan-btn').textContent = t.btn_scan;
         document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
@@ -1506,6 +1597,54 @@ function handleLayerChange(layerKey) {
     } else {
         if (editKeyBtn) editKeyBtn.style.display = 'none';
         switchLayerTo(layerKey);
+    }
+}
+
+function getCurrentLayerBaseMaxZoom() {
+    if (currentLayer && currentLayer.options) {
+        return currentLayer.options.maxZoom || 19;
+    }
+    const activeLayerKey = layerSelect && layers[layerSelect.value]
+        ? layerSelect.value
+        : savedLayer;
+    const activeLayer = layers[activeLayerKey] || layers.opentopo;
+    return activeLayer && activeLayer.options ? (activeLayer.options.maxZoom || 19) : 19;
+}
+
+function applyCurrentLayerMaxZoom() {
+    map.setMaxZoom(getCurrentLayerBaseMaxZoom());
+}
+
+function getTerrainExaggeration() {
+    return exaggerationSlider ? (parseFloat(exaggerationSlider.value) || DEFAULT_TERRAIN_EXAGGERATION) : DEFAULT_TERRAIN_EXAGGERATION;
+}
+
+function syncTerrainControls() {
+    if (exaggerationValue && exaggerationSlider) {
+        exaggerationValue.textContent = exaggerationSlider.value;
+    }
+    if (exaggerationRow && enable3dCheckbox) {
+        exaggerationRow.style.display = enable3dCheckbox.checked ? 'flex' : 'none';
+    }
+}
+
+function setTerrainEnabled(enabled) {
+    syncTerrainControls();
+    if (!map) return;
+    if (enabled) {
+        map.setTerrain({ exaggeration: getTerrainExaggeration() });
+        map.easeTo({ pitch: 60, duration: 1000 });
+        return;
+    }
+    map.setTerrain(null);
+    map.easeTo({ pitch: 0, duration: 1000 });
+}
+
+function setTiltEnabled(enabled) {
+    if (!map) return;
+    map.setTiltEnabled(enabled);
+    if (!enabled && enable3dCheckbox && !enable3dCheckbox.checked && map.getPitch() > 0) {
+        map.easeTo({ pitch: 0, duration: 300 });
     }
 }
 
@@ -2484,7 +2623,7 @@ async function updateCenterElevation() {
     if (slopeBtn) slopeBtn.disabled = true;
     centerHeightDisplay.textContent = "...";
 
-    const zoom = Math.min(Math.floor(map.getZoom()), 15);
+    const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
     const point = map.project(center, zoom);
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
@@ -2525,7 +2664,7 @@ async function updateCenterElevation() {
 // Updated function that fetches both elevation and water tiles
 async function fetchAnalysisData() {
     const bounds = map.getBounds();
-    const zoom = Math.min(Math.floor(map.getZoom()), 15);
+    const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
     analysisZoom = zoom;
     analysisBounds = bounds;
     const nw = map.project(bounds.getNorthWest(), zoom);
@@ -3295,6 +3434,36 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
 });
+if (overzoomCheckbox) {
+    overzoomCheckbox.checked = isOverzoomEnabled();
+    overzoomCheckbox.addEventListener('change', (e) => {
+        localStorage.setItem(OVERZOOM_STORAGE_KEY, e.target.checked);
+        applyCurrentLayerMaxZoom();
+    });
+}
+if (tiltCheckbox) {
+    tiltCheckbox.checked = true;
+    tiltCheckbox.addEventListener('change', (e) => {
+        setTiltEnabled(e.target.checked);
+    });
+}
+if (enable3dCheckbox) {
+    enable3dCheckbox.checked = false;
+    enable3dCheckbox.addEventListener('change', (e) => {
+        setTerrainEnabled(e.target.checked);
+    });
+}
+if (exaggerationSlider) {
+    exaggerationSlider.value = DEFAULT_TERRAIN_EXAGGERATION.toFixed(1);
+    exaggerationSlider.addEventListener('input', () => {
+        syncTerrainControls();
+        if (enable3dCheckbox && enable3dCheckbox.checked) {
+            map.setTerrain({ exaggeration: getTerrainExaggeration() });
+        }
+    });
+}
+setTiltEnabled(!(tiltCheckbox && tiltCheckbox.checked === false));
+syncTerrainControls();
 
 const waterToggle = document.getElementById('water-analysis-toggle');
 if (waterToggle) {
