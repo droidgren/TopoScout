@@ -3149,10 +3149,13 @@ function calculateMaxClimb() {
                     }
 
                     if (cumulativeAscent > 1) {
+                        const endLatLng = canvasPointToLatLng(x2, y2);
+                        if (searchCenterLatLng.distanceTo(endLatLng) > searchRadiusMeters) continue;
+
                         candidates.push({
                             diff: cumulativeAscent,
                             start: { x: x, y: y, h: h1, latlng: startLatLng },
-                            end: { x: x2, y: y2, h: h2, latlng: canvasPointToLatLng(x2, y2) }
+                            end: { x: x2, y: y2, h: h2, latlng: endLatLng }
                         });
                     }
                 }
