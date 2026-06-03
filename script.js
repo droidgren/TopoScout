@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.0";
+const APP_VERSION = "2.0.1";
 const APP_REFRESH_PARAM = 'app-refresh';
 
 // Water analysis (CartoDB Light No Labels)
@@ -1237,6 +1237,10 @@ const redIcon = new L.Icon({
 
 let markers = [];
 let polylines = [];
+let manualClimbMode = false;
+let manualClimbPoints = [];    // L.latLng objects
+let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
+let manualClimbPolyline = null; // L.polyline (blue preview line)
 let slopeOverlay = null;
 let slopeLegend = null;
 let gpxSlopeLegend = null;
@@ -1525,6 +1529,15 @@ function updateLanguage() {
         if (document.getElementById('section-routes-title')) document.getElementById('section-routes-title').textContent = t.section_routes_title;
         if (document.getElementById('gpx-btn')) document.getElementById('gpx-btn').textContent = t.btn_gpx;
         if (document.getElementById('gpx-clear-btn')) document.getElementById('gpx-clear-btn').textContent = t.btn_gpx_clear;
+        const mcToggle = document.getElementById('manual-climb-toggle-btn');
+        if (mcToggle && !mcToggle.classList.contains('active')) {
+            mcToggle.textContent = t.btn_manual_climb;
+        }
+        const mcCalc = document.getElementById('manual-climb-calc-btn');
+        if (mcCalc) mcCalc.textContent = t.btn_manual_climb_calculate;
+        const mcCancel = document.getElementById('manual-climb-cancel-btn');
+        if (mcCancel) mcCancel.textContent = t.btn_manual_climb_cancel;
+        _updateManualClimbUI();
         if (document.getElementById('lbl-track-color')) document.getElementById('lbl-track-color').textContent = t.lbl_track_color;
         if (document.getElementById('lbl-track-width')) document.getElementById('lbl-track-width').textContent = t.lbl_track_width;
         if (document.getElementById('lbl-km-labels')) document.getElementById('lbl-km-labels').textContent = t.lbl_km_labels;
@@ -1890,6 +1903,7 @@ function invalidateSlopeMapIfSearchAreaChanged() {
 }
 
 window.clearResults = function () {
+    if (manualClimbMode) cancelManualClimbMode();
     markers.forEach(m => map.removeLayer(m));
     polylines.forEach(p => map.removeLayer(p));
     markers = [];
@@ -3691,6 +3705,235 @@ function finishTutorial() {
 }
 
 // ==========================================
+// 5c. MANUAL CLIMB
+// ==========================================
+
+window.toggleManualClimbMode = function () {
+    manualClimbMode ? cancelManualClimbMode() : enterManualClimbMode();
+};
+
+function enterManualClimbMode() {
+    manualClimbMode = true;
+    manualClimbPoints = [];
+    manualClimbMarkers = [];
+    manualClimbPolyline = null;
+
+    document.getElementById('manual-climb-toggle-btn').classList.add('active');
+    document.getElementById('manual-climb-ui').style.display = 'block';
+    document.getElementById('map').classList.add('manual-climb-active');
+    _updateManualClimbUI();
+    statusDiv.textContent = translations[currentLang].status_manual_climb_active;
+}
+
+window.cancelManualClimbMode = function () {
+    manualClimbMode = false;
+
+    manualClimbMarkers.forEach(m => m.remove());
+    manualClimbMarkers = [];
+    manualClimbPoints = [];
+
+    if (manualClimbPolyline) {
+        map.removeLayer(manualClimbPolyline);
+        manualClimbPolyline = null;
+    }
+
+    const tb = document.getElementById('manual-climb-toggle-btn');
+    if (tb) tb.classList.remove('active');
+    const ui = document.getElementById('manual-climb-ui');
+    if (ui) ui.style.display = 'none';
+    document.getElementById('map').classList.remove('manual-climb-active');
+
+    statusDiv.textContent = translations[currentLang].status_ready;
+};
+
+function addManualClimbPoint(lat, lng) {
+    manualClimbPoints.push(L.latLng(lat, lng));
+
+    const el = document.createElement('div');
+    el.className = 'manual-climb-dot' + (manualClimbPoints.length === 1 ? ' first' : '');
+
+    manualClimbMarkers.push(
+        new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([lng, lat])
+            .addTo(map._map)
+    );
+
+    _refreshManualClimbPolyline();
+    _updateManualClimbUI();
+}
+
+window.undoManualClimbPoint = function () {
+    if (!manualClimbPoints.length) return;
+    manualClimbPoints.pop();
+    manualClimbMarkers.pop().remove();
+    _refreshManualClimbPolyline();
+    _updateManualClimbUI();
+};
+
+function _refreshManualClimbPolyline() {
+    if (manualClimbPolyline) {
+        map.removeLayer(manualClimbPolyline);
+        manualClimbPolyline = null;
+    }
+    if (manualClimbPoints.length >= 2) {
+        manualClimbPolyline = L.polyline(manualClimbPoints,
+            { color: '#1565C0', weight: 3, opacity: 0.7 }).addTo(map);
+    }
+}
+
+function _updateManualClimbUI() {
+    const t = translations[currentLang];
+    const n = manualClimbPoints.length;
+    const hint = document.getElementById('manual-climb-hint');
+    const count = document.getElementById('manual-climb-count');
+    const calc = document.getElementById('manual-climb-calc-btn');
+    const undo = document.getElementById('manual-climb-undo-btn');
+
+    if (hint) hint.textContent = t.lbl_manual_climb_hint;
+    if (count) {
+        count.textContent =
+            n === 0 ? t.lbl_manual_climb_none
+                : n === 1 ? t.lbl_manual_climb_one
+                    : (t.lbl_manual_climb_many || '{n} points placed').replace('{n}', n);
+    }
+    if (calc) calc.disabled = n < 2;
+    if (undo) undo.disabled = n === 0;
+}
+
+window.runManualClimbCalculation = async function () {
+    if (manualClimbPoints.length < 2) return;
+    const t = translations[currentLang];
+
+    const calcBtn = document.getElementById('manual-climb-calc-btn');
+    if (calcBtn) calcBtn.disabled = true;
+    statusDiv.textContent = t.status_loading;
+
+    try {
+        // Keep the full route in view before building DEM analysis canvas.
+        const routeBounds = L.latLngBounds(manualClimbPoints);
+        map.fitBounds(routeBounds.pad(0.15));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        await fetchAnalysisData();
+        statusDiv.textContent = t.status_calc;
+
+        const ptElevs = manualClimbPoints.map(_elevationAtLatLng);
+        if (ptElevs.some((elev) => elev === null)) {
+            statusDiv.textContent = t.status_no_data;
+            if (calcBtn) calcBtn.disabled = false;
+            return;
+        }
+
+        let totalAscent = 0;
+        let totalDist = 0;
+
+        for (let i = 0; i < manualClimbPoints.length - 1; i++) {
+            const segA = manualClimbPoints[i];
+            const segB = manualClimbPoints[i + 1];
+            totalDist += segA.distanceTo(segB);
+
+            const elevs = _sampleSegmentElevations(segA, segB);
+            if (!elevs || elevs.length < 2) continue;
+
+            const smoothed = _smoothElevations(elevs);
+            for (let j = 1; j < smoothed.length; j++) {
+                if (smoothed[j] > smoothed[j - 1]) totalAscent += smoothed[j] - smoothed[j - 1];
+            }
+        }
+
+        const startElev = ptElevs[0];
+        const endElev = ptElevs[ptElevs.length - 1];
+        const vertDrop = Math.round(endElev - startElev);
+        const slopePct = totalDist > 0 ? ((vertDrop / totalDist) * 100).toFixed(1) : 0;
+        const distStr = totalDist >= 1000
+            ? (totalDist / 1000).toFixed(2) + ' km'
+            : Math.round(totalDist) + ' m';
+
+        _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slopePct, distStr, t);
+        cancelManualClimbMode();
+        statusDiv.textContent = t.status_done;
+
+    } catch (err) {
+        console.error(err);
+        statusDiv.textContent = (t.status_error || 'Error: ') + err.message;
+        if (calcBtn) calcBtn.disabled = false;
+    }
+};
+
+function _elevationAtLatLng(latlng) {
+    const p = map.project(latlng, analysisZoom).subtract(analysisNwOrigin);
+    const px = Math.round(p.x);
+    const py = Math.round(p.y);
+    if (px < 0 || px >= canvas.width || py < 0 || py >= canvas.height) return null;
+    const d = ctx.getImageData(px, py, 1, 1).data;
+    if (d[3] < 255) return null;
+    return (d[0] * 256 + d[1] + d[2] / 256) - 32768;
+}
+
+function _sampleSegmentElevations(a, b) {
+    const p1 = map.project(a, analysisZoom).subtract(analysisNwOrigin);
+    const p2 = map.project(b, analysisZoom).subtract(analysisNwOrigin);
+    const w = canvas.width;
+    const h = canvas.height;
+    const res = parseInt(document.getElementById('stepSizeInput').value, 10) || 10;
+    const numSteps = Math.max(1, Math.floor(a.distanceTo(b) / res));
+    const all = ctx.getImageData(0, 0, w, h).data;
+    const elevs = [];
+
+    for (let s = 0; s <= numSteps; s++) {
+        const f = s / numSteps;
+        const px = Math.round(p1.x + (p2.x - p1.x) * f);
+        const py = Math.round(p1.y + (p2.y - p1.y) * f);
+        if (px < 0 || px >= w || py < 0 || py >= h) return null;
+        const i = (py * w + px) * 4;
+        if (all[i + 3] < 255) return null;
+        elevs.push((all[i] * 256 + all[i + 1] + all[i + 2] / 256) - 32768);
+    }
+    return elevs;
+}
+
+function _smoothElevations(arr) {
+    if (arr.length <= 2) return arr;
+    return arr.map((v, i, a) => {
+        if (i === 0 || i === a.length - 1) return v;
+        return (a[i - 1] + a[i] + a[i + 1]) / 3;
+    });
+}
+
+function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slopePct, distStr, t) {
+    const line = L.polyline(manualClimbPoints, { color: 'red', weight: 5, opacity: 0.8 }).addTo(map);
+    polylines.push(line);
+
+    const s = manualClimbPoints[0];
+    const e = manualClimbPoints[manualClimbPoints.length - 1];
+
+    const startM = L.marker(s, { icon: greenIcon }).addTo(map).bindPopup(`
+        <span class="popup-header">${t.res_start}</span>
+        <span class="popup-height">${t.res_elev}: ${Math.round(startElev)} m</span>
+        <div class="coord-box">
+            <span>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
+            <button class="copy-btn"
+                    onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">📋</button>
+        </div>`);
+    markers.push(startM);
+
+    const endM = L.marker(e, { icon: redIcon }).addTo(map).bindPopup(`
+        <span class="popup-header">📏 Manual Climb</span>
+        <span class="popup-height">${t.res_climb}: +${Math.round(totalAscent)} m</span>
+        <span class="popup-meta">${t.res_elev}: ${Math.round(endElev)} m</span>
+        <span class="popup-meta">${t.res_vertical_drop}: ${vertDrop >= 0 ? '+' : ''}${vertDrop} m</span>
+        <span class="popup-meta">${t.res_dist_start_end}: ${distStr}</span>
+        <span class="popup-meta">${t.res_slope}: ${slopePct}%</span>
+        <div class="coord-box">
+            <span>${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span>
+            <button class="copy-btn"
+                    onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">📋</button>
+        </div>`);
+    markers.push(endM);
+    endM.openPopup();
+}
+
+// ==========================================
 // 6. START LOGIC (Event Listeners & Init)
 // ==========================================
 
@@ -3810,7 +4053,14 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
 });
 
 // Minimize controls on mobile when clicking the map
-map.on('click', () => {
+map.on('click', (e) => {
+    if (manualClimbMode) {
+        if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest && e.originalEvent.target.closest('.maplibregl-marker')) {
+            return;
+        }
+        if (e.lngLat) addManualClimbPoint(e.lngLat.lat, e.lngLat.lng);
+        return;
+    }
     if (window.innerWidth <= 600 && !isControlsMinimized) {
         toggleControls();
     }
