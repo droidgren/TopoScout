@@ -3893,9 +3893,9 @@ function _sampleSegmentElevations(a, b) {
 }
 
 function _smoothElevations(arr) {
+    if (arr.length <= 2) return arr;
     return arr.map((v, i, a) => {
-        if (i === 0) return (a[0] + (a[1] ?? a[0])) / 2;
-        if (i === a.length - 1) return (a[i - 1] + a[i]) / 2;
+        if (i === 0 || i === a.length - 1) return v;
         return (a[i - 1] + a[i] + a[i + 1]) / 3;
     });
 }
