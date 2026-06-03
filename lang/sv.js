@@ -118,7 +118,7 @@ const LANG_SV = {
     lbl_manual_climb_one: "1 punkt — lägg till minst 1 till",
     lbl_manual_climb_many: "{n} punkter placerade",
     tutorial_climb_title: "Hitta stigningar",
-    tutorial_climb_text: "Den här sektionen har två stigningslägen.\n• Hitta stigningar: automatisk skanning som testar många riktningar och returnerar de brantaste stigningarna.\n• Manuellt läge: du ritar din egen rutt genom att klicka ut punkter på kartan och beräknar statistik för den.",
+    tutorial_climb_text: "Hitta stigningar: Detta försöker hitta de brantaste stigningarna utifrån avståndet ovan och inom sökradien.\nManuellt läge: Rita din egen rutt genom att klicka punkter på kartan och beräkna statistik för stigningen.",
     tutorial_manual_mode_title: "Manuellt läge",
     tutorial_manual_mode_text: "Använd detta när du vill testa en specifik rutt.\n1. Klicka på Manuellt läge.\n2. Klicka på kartan för att placera ruttpunkter (2 eller fler).\n3. Använd ↩ för att ångra senaste punkten vid behov.\n4. Klicka på Beräkna för att få Total stigning, Höjd, Fallhöjd, Sträcka och Lutning.",
     tutorial_slope_title: "Lutningskarta",
