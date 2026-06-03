@@ -11,7 +11,7 @@ const LANG_SV = {
     lbl_enable_3d: "Aktivera 3D",
     lbl_3d_exaggeration: "Förstärkning:",
     btn_scan: "📍 Hitta högsta punkter",
-    btn_manual_climb: "📏 Manuell stigning",
+    btn_manual_climb: "📏 Manuellt läge",
     btn_manual_climb_calculate: "Beräkna",
     btn_manual_climb_cancel: "✕",
     btn_manual_climb_undo: "↩",

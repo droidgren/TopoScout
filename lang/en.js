@@ -11,7 +11,7 @@ const LANG_EN = {
     lbl_enable_3d: "Enable 3D",
     lbl_3d_exaggeration: "Exaggeration:",
     btn_scan: "📍 Find Highest Points",
-    btn_manual_climb: "📏 Manual Climb",
+    btn_manual_climb: "📏 Manual mode",
     btn_manual_climb_calculate: "Calculate",
     btn_manual_climb_cancel: "✕",
     btn_manual_climb_undo: "↩",
