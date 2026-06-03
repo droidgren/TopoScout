@@ -254,19 +254,19 @@
                             <button class="num-btn" onclick="adjustNumber('numClimbsInput', 1)">+</button>
                         </div>
                     </div>
-                    <button id="climb-btn" class="climb-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
 
-                    <!-- Manual Mode subsection -->
-                    <div id="manual-climb-section"
-                        style="border-top:1px solid #e8e8e8; margin-top:10px; padding-top:8px;">
-
+                    <div class="climb-mode-toggle-row">
+                        <button id="climb-btn" class="climb-btn climb-mode-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
                         <button id="manual-climb-toggle-btn"
-                            class="manual-climb-toggle-btn"
+                            class="manual-climb-toggle-btn climb-mode-btn"
                             onclick="toggleManualClimbMode()">
                             📏 Manual mode
                         </button>
+                    </div>
 
-                        <div id="manual-climb-ui" style="display:none; margin-top:8px;">
+                    <!-- Manual Mode subsection -->
+                    <div id="manual-climb-section" style="margin-top:8px;">
+                        <div id="manual-climb-ui" style="display:none;">
                             <p id="manual-climb-hint" class="manual-climb-hint"></p>
                             <p id="manual-climb-count" class="manual-climb-count"></p>
                             <div class="manual-climb-btns">
@@ -284,7 +284,6 @@
                                     onclick="cancelManualClimbMode()">✕</button>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
