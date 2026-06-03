@@ -118,7 +118,7 @@ const LANG_EN = {
     lbl_manual_climb_one: "1 point — add at least 1 more",
     lbl_manual_climb_many: "{n} points placed",
     tutorial_climb_title: "Find Climbs",
-    tutorial_climb_text: "Find Climbs: This will try to find the steepest climbs given the distance above and in Search Radius.\nManual mode: Draw your own route by clicking points on the map and calculate its ascent stats.",
+    tutorial_climb_text: "* Find Climbs: This will try to find the steepest climbs given the distance above in the Search Radius.\n* Manual mode: Draw your own route by clicking points on the map and calculate its ascent stats.",
     tutorial_manual_mode_title: "Manual mode",
     tutorial_manual_mode_text: "Use this when you want to test a specific route.\n1. Click Manual mode.\n2. Click on the map to place route points (2 or more).\n3. Use ↩ to undo the last point if needed.\n4. Click Calculate to get Total Ascent, Elevation, Vertical drop, Distance, and Slope.",
     tutorial_slope_title: "Slope Map",
