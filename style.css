@@ -328,6 +328,20 @@ button {
     cursor: not-allowed;
 }
 
+.climb-mode-toggle-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+.climb-mode-btn {
+    flex: 1;
+    width: auto;
+    margin-top: 0;
+    padding: 10px;
+    font-size: 13px;
+}
+
 .slope-btn {
     background-color: #8E24AA;
     color: white;
