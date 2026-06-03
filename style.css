@@ -802,6 +802,7 @@ select {
     color: #d9534f;
     font-weight: 800;
     display: block;
+    white-space: nowrap;
     margin-bottom: 2px;
 }
 
