@@ -227,6 +227,37 @@
                         </div>
                     </div>
                     <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
+
+                    <!-- Manual Climb subsection -->
+                    <div id="manual-climb-section"
+                        style="border-top:1px solid #e8e8e8; margin-top:10px; padding-top:8px;">
+
+                        <button id="manual-climb-toggle-btn"
+                            class="manual-climb-toggle-btn"
+                            onclick="toggleManualClimbMode()">
+                            📏 Manual Climb
+                        </button>
+
+                        <div id="manual-climb-ui" style="display:none; margin-top:8px;">
+                            <p id="manual-climb-hint" class="manual-climb-hint"></p>
+                            <p id="manual-climb-count" class="manual-climb-count"></p>
+                            <div class="manual-climb-btns">
+                                <button id="manual-climb-undo-btn"
+                                    class="icon-btn"
+                                    onclick="undoManualClimbPoint()"
+                                    title="Undo last point"
+                                    disabled>↩</button>
+                                <button id="manual-climb-calc-btn"
+                                    class="action-btn manual-climb-calc"
+                                    onclick="runManualClimbCalculation()"
+                                    disabled>Calculate</button>
+                                <button id="manual-climb-cancel-btn"
+                                    class="cancel-btn manual-climb-cancel-btn"
+                                    onclick="cancelManualClimbMode()">✕</button>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
             </div>
 
