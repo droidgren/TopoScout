@@ -35,6 +35,7 @@ const LANG_SV = {
     status_found_climbs: "Hittade {n} stigningar.",
     status_manual_climb_active: "Manuellt stigningsläge — klicka på kartan för att lägga till punkter",
     status_no_data: "Ingen data hittades.",
+    status_elevation: "Höjd",
     input_search_ph: "Sök plats",
     info_title: "Om Höjdsökaren",
     info_desc: "Detta verktyg hjälper dig att analysera terräng för att hitta de högsta punkterna, beräkna maximal stigning, visualisera lutning och lägga GPX-spår ovanpå kartan. Appen fungerar på mobila enheter, men gör sig bäst på större skärmar. Kolla även in <a href='https://github.com/droidgren/topo_gpx_viewer/' target='_blank' rel='noopener noreferrer'>Topo GPX Viewer</a>, ett systerprojekt med fokus på avancerad GPX-visning.",
