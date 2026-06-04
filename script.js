@@ -1,7 +1,9 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.0.1";
+const APP_VERSION = "2.0.2";
+const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
+const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
 
 // Water analysis (CartoDB Light No Labels)
@@ -1835,12 +1837,50 @@ function setSectionExpanded(sectionId, expanded) {
 
 function collapseTutorialSections() {
     tutorialSectionIds.forEach((sectionId) => setSectionExpanded(sectionId, false));
+    retractRadiusControls();
+}
+
+function moveRadiusControlsIntoSection(sectionContentId) {
+    const controls = document.getElementById('radius-controls');
+    const sectionContent = document.getElementById(sectionContentId);
+    if (!controls || !sectionContent) return;
+    sectionContent.insertBefore(controls, sectionContent.firstChild);
+    controls.style.display = '';
+}
+
+function retractRadiusControls() {
+    const controls = document.getElementById('radius-controls');
+    const anchor = document.getElementById('radius-controls-anchor');
+    if (!controls || !anchor || !anchor.parentNode) return;
+    anchor.parentNode.insertBefore(controls, anchor.nextSibling);
+    controls.style.display = 'none';
 }
 
 window.toggleSection = function (sectionId) {
     const content = document.getElementById(sectionId);
     if (!content) return;
-    setSectionExpanded(sectionId, content.style.display !== 'block');
+
+    const isCurrentlyOpen = content.style.display === 'block';
+
+    ALL_SECTION_IDS.forEach(function (id) {
+        if (id !== sectionId) setSectionExpanded(id, false);
+    });
+    retractRadiusControls();
+
+    if (isCurrentlyOpen) {
+        setSectionExpanded(sectionId, false);
+        return;
+    }
+
+    setSectionExpanded(sectionId, true);
+
+    if (ANALYSIS_SECTION_IDS.includes(sectionId)) {
+        moveRadiusControlsIntoSection(sectionId);
+        if (circleCheckbox) {
+            circleCheckbox.checked = true;
+            updateUI();
+        }
+    }
 };
 
 async function searchLocation() {
@@ -3461,7 +3501,7 @@ const tutorialSteps = [
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true },
-    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true },
+    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
@@ -3479,6 +3519,9 @@ function syncTutorialUiState(step) {
     collapseTutorialSections();
     if (step.expandSection) {
         setSectionExpanded(step.expandSection, true);
+        if (ANALYSIS_SECTION_IDS.includes(step.expandSection)) {
+            moveRadiusControlsIntoSection(step.expandSection);
+        }
     }
 }
 

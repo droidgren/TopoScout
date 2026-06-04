@@ -1123,3 +1123,12 @@ details[open] summary {
 .manual-climb-dot.first {
     background: #2AAD27;
 }
+
+/* Radius controls injected inside an analysis section */
+.section-content > #radius-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}

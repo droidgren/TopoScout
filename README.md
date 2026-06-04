@@ -8,17 +8,6 @@ Repository: [droidgren/elevation_finder](https://github.com/droidgren/elevation_
 
 Companion project: [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer/)
 
-## What Is New In v2.0.1
-
-- Added Manual mode tutorial guidance, including a dedicated spotlight step and usage instructions.
-- Clarified the difference between automatic Find Climbs and route-based Manual mode in tutorial copy.
-- Fixed manual-route ascent smoothing so multi-point routes do not under-report Total Ascent.
-
-## What Was New In v2.0
-
-- Migrated frontend map rendering to MapLibre GL JS.
-- Added map tools for overzoom, tilt, 3D terrain, and shareable map views.
-- Kept the terrain-analysis workflow, slope overlay, GPX route overlay, and bilingual UI in the same static deployment model.
 
 ## Core Capabilities
 
@@ -172,6 +161,7 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ## Changelog
 
+- **v2.0.2:** Reworked the analysis section accordion so only one section stays open at a time, moved the Search Radius / Show Radius / Lock Radius controls into the active analysis section, and auto-enabled Show Radius when opening analysis sections.
 - **v2.0.1:** Added Manual mode tutorial guidance (including a spotlight step), explained the difference between automatic and manual climb modes in the tutorial, and fixed manual-route ascent smoothing for multi-point routes.
 - **v2.0:** Migrated frontend map rendering to MapLibre GL JS and added overzoom, tilt, 3D terrain, and shareable map views.
 - **v1.8.2:** Added Norgeskart (Norway) map layer.
