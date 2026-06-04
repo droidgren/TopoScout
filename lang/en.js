@@ -35,6 +35,7 @@ const LANG_EN = {
     status_found_climbs: "Found {n} climbs.",
     status_manual_climb_active: "Manual climb mode — click map to add points",
     status_no_data: "No data found.",
+    status_elevation: "Elevation",
     input_search_ph: "Search location",
     info_title: "About Elevation Finder",
     info_desc: "This tool helps you analyze terrain to find highest points, calculate maximum ascent, visualize slope steepness, and overlay GPX routes on the map. The app works on mobile devices, but is best experienced on larger screens. Also check out <a href='https://github.com/droidgren/topo_gpx_viewer/' target='_blank' rel='noopener noreferrer'>Topo GPX Viewer</a>, a companion project focused on advanced GPX viewing.",

@@ -36,6 +36,10 @@ body {
         right: 10px;
         top: 10px;
     }
+
+    .live-height-box {
+        display: none;
+    }
 }
 
 #controls.minimized #controls-content {

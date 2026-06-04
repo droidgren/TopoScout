@@ -1181,6 +1181,7 @@ clearRefreshUrlFlag();
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
+let mobileElevationText = null;
 let peakMinPixelDistance = normalizePeakMinPixelDistance(localStorage.getItem('topo_peak_min_pixel_dist'));
 
 function normalizePeakMinPixelDistance(value) {
@@ -2698,6 +2699,7 @@ function updateUI() {
 
 async function updateCenterElevation() {
     if (!centerHeightDisplay) return;
+    const useCompactElevationStatus = window.innerWidth <= 600;
     const center = map.getCenter();
     if (scanBtn) scanBtn.disabled = true;
     if (climbBtn) climbBtn.disabled = true;
@@ -2729,17 +2731,41 @@ async function updateCenterElevation() {
 
             if (pData[3] === 0) { // UPDATED: Handle transparent pixels (no data)
                 centerHeightDisplay.textContent = "N/A";
+                if (useCompactElevationStatus) {
+                    mobileElevationText = "N/A";
+                    const t = translations[currentLang];
+                    statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
+                }
             } else {
                 const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
                 centerHeightDisplay.textContent = Math.round(h) + " m";
+                if (useCompactElevationStatus) {
+                    const t = translations[currentLang];
+                    mobileElevationText = Math.round(h) + " m";
+                    statusDiv.textContent = (t.status_elevation || "Elevation") + ": " + mobileElevationText;
+                }
             }
 
             if (scanBtn) scanBtn.disabled = false;
             if (climbBtn) climbBtn.disabled = false;
             if (slopeBtn) slopeBtn.disabled = false;
         };
-        img.onerror = () => { centerHeightDisplay.textContent = "N/A"; };
-    } catch (err) { centerHeightDisplay.textContent = "N/A"; }
+        img.onerror = () => {
+            centerHeightDisplay.textContent = "N/A";
+            if (useCompactElevationStatus) {
+                mobileElevationText = "N/A";
+                const t = translations[currentLang];
+                statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
+            }
+        };
+    } catch (err) {
+        centerHeightDisplay.textContent = "N/A";
+        if (useCompactElevationStatus) {
+            mobileElevationText = "N/A";
+            const t = translations[currentLang];
+            statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
+        }
+    }
 }
 
 // Updated function that fetches both elevation and water tiles
@@ -2791,12 +2817,12 @@ async function analyzeTerrain() {
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             findPeaks();
-            updateCenterElevation();
+            if (window.innerWidth > 600) updateCenterElevation();
         });
     } catch (err) {
         console.error(err);
         statusDiv.textContent = t.status_error + err.message;
-        updateCenterElevation();
+        if (window.innerWidth > 600) updateCenterElevation();
     }
 }
 
@@ -2810,11 +2836,11 @@ async function findSteepestClimb() {
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             calculateMaxClimb();
-            updateCenterElevation();
+            if (window.innerWidth > 600) updateCenterElevation();
         });
     } catch (err) {
         statusDiv.textContent = t.status_error + err.message;
-        updateCenterElevation();
+        if (window.innerWidth > 600) updateCenterElevation();
     }
 }
 
@@ -2828,11 +2854,11 @@ window.generateSlopeMap = async function () {
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
             _renderSlopeMap();
-            updateCenterElevation();
+            if (window.innerWidth > 600) updateCenterElevation();
         });
     } catch (err) {
         statusDiv.textContent = t.status_error + err.message;
-        updateCenterElevation();
+        if (window.innerWidth > 600) updateCenterElevation();
     }
 };
 
