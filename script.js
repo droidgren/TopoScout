@@ -1880,6 +1880,9 @@ window.toggleSection = function (sectionId) {
             circleCheckbox.checked = true;
             updateUI();
         }
+    } else if (sectionId === 'section-routes' && circleCheckbox) {
+        circleCheckbox.checked = false;
+        updateUI();
     }
 };
 
@@ -3521,6 +3524,9 @@ function syncTutorialUiState(step) {
         setSectionExpanded(step.expandSection, true);
         if (ANALYSIS_SECTION_IDS.includes(step.expandSection)) {
             moveRadiusControlsIntoSection(step.expandSection);
+        } else if (step.expandSection === 'section-routes' && circleCheckbox) {
+            circleCheckbox.checked = false;
+            updateUI();
         }
     }
 }
