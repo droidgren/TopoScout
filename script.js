@@ -1888,20 +1888,6 @@ function clearSlopeMapState(preserveStatus = false) {
     }
 }
 
-function invalidateSlopeMapIfSearchAreaChanged() {
-    if (!slopeOverlay || !slopeMapCenter) return;
-
-    const searchCenter = getSearchCenter();
-    const radiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
-    const centerShiftMeters = searchCenter.distanceTo(slopeMapCenter);
-
-    if (centerShiftMeters <= 1 && Math.abs(radiusMeters - slopeMapRadius) <= 0.5) {
-        return;
-    }
-
-    clearSlopeMapState(true);
-}
-
 window.clearResults = function () {
     if (manualClimbMode) cancelManualClimbMode();
     markers.forEach(m => map.removeLayer(m));
@@ -3939,7 +3925,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
 
 // Event Listeners
 if (searchInput) searchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchLocation(); });
-if (radiusInput) radiusInput.addEventListener('input', () => { invalidateSlopeMapIfSearchAreaChanged(); updateUI(); });
+if (radiusInput) radiusInput.addEventListener('input', () => { updateUI(); });
 if (circleCheckbox) circleCheckbox.addEventListener('change', updateUI);
 if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     isLocked = e.target.checked;
@@ -3950,7 +3936,6 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
         lockedCenterCoords = null;
         crosshair.style.display = 'none';
     }
-    invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
 });
 if (overzoomCheckbox) {
@@ -4041,7 +4026,6 @@ if (anglesInput) {
 // Map Events
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); refreshGpxKmLabels(); });
 map.on('move', () => {
-    invalidateSlopeMapIfSearchAreaChanged();
     updateUI();
 });
 map.on('moveend', () => { // Data saved/fetched at end of movement
