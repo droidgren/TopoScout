@@ -7,6 +7,8 @@ const LANG_EN = {
     lbl_show_circle: "Show Radius",
     lbl_lock_circle: "🔒 Lock Radius",
     lbl_enable_overzoom: "Overzoom",
+    lbl_extra_layer: "Extra layer",
+    lbl_extra_layer_select: "Overlay:",
     lbl_enable_tilt: "Enable tilt",
     lbl_enable_3d: "Enable 3D",
     lbl_3d_exaggeration: "Exaggeration:",

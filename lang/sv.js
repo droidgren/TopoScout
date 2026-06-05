@@ -7,6 +7,8 @@ const LANG_SV = {
     lbl_show_circle: "Visa radie",
     lbl_lock_circle: "🔒 Lås radie",
     lbl_enable_overzoom: "Överzoom",
+    lbl_extra_layer: "Extra lager",
+    lbl_extra_layer_select: "Overlay:",
     lbl_enable_tilt: "Aktivera tilt",
     lbl_enable_3d: "Aktivera 3D",
     lbl_3d_exaggeration: "Förstärkning:",
