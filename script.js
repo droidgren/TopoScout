@@ -4147,6 +4147,9 @@ function applyInitialMapState() {
 }
 
 applyInitialMapState();
+if (isMobileDevice()) {
+    setControlsMinimized(true);
+}
 
 // Auto-start tutorial for new visitors
 if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView) {
