@@ -55,6 +55,15 @@ const MAP_SOURCES = {
     "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: ELEVATION_TILE_MAX_ZOOM, opacity: 1 }
 };
 
+const WAYMARKED_ATTRIBUTION = '&copy; <a href="https://waymarkedtrails.org/">Waymarked Trails</a> (CC-BY-SA)';
+const OVERLAY_SOURCES = {
+    "waymarked_hiking": { url: 'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_cycling": { url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_mtb": { url: 'https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 }
+};
+const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
+
 const EARTH_RADIUS_M = 6371000;
 let mapOverlayId = 0;
 
@@ -223,6 +232,8 @@ function getOverlayIds(baseId, kind) {
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-line` };
         case 'image':
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
+        case 'tileOverlay':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
         default:
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-layer` };
     }
@@ -334,6 +345,23 @@ function createTileLayer(url, options = {}) {
             this.url = nextUrl;
             return this;
         },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createTileOverlayLayer(url, options = {}) {
+    return {
+        type: 'tileOverlay',
+        _url: url,
+        _options: { ...options },
         addTo(mapInstance) {
             mapInstance.addLayer(this);
             return this;
@@ -855,6 +883,26 @@ function createMapAdapter(containerId, options) {
                         'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                     }
                 });
+                return;
+            }
+
+            if (layer.type === 'tileOverlay') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'raster',
+                    tiles: getTileUrls(layer._url),
+                    tileSize: 256,
+                    maxzoom: layer._options.maxZoom || 19,
+                    attribution: layer._options.attribution || ''
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'raster',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
             }
         },
         addControl(control, position) {
@@ -1070,6 +1118,7 @@ function createMapAdapter(containerId, options) {
 
 const L = {
     tileLayer: createTileLayer,
+    tileOverlay: createTileOverlayLayer,
     Icon: function Icon(options) { this.options = options; },
     divIcon(options) {
         return { type: 'divIcon', options };
@@ -1163,6 +1212,9 @@ const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
 const shareMapBtn = document.getElementById('share-map-btn');
+const extraLayerCheckbox = document.getElementById('enableExtraLayer');
+const extraLayerRow = document.getElementById('extra-layer-row');
+const extraLayerSelect = document.getElementById('extraLayerSelect');
 const overzoomCheckbox = document.getElementById('enableOverzoom');
 const tiltCheckbox = document.getElementById('enableTilt');
 const enable3dCheckbox = document.getElementById('enable3dView');
@@ -1245,6 +1297,7 @@ let manualClimbPoints = [];    // L.latLng objects
 let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
 let manualClimbPolyline = null; // L.polyline (blue preview line)
 let slopeOverlay = null;
+let extraOverlayLayer = null;
 let slopeLegend = null;
 let gpxSlopeLegend = null;
 let slopeMapCenter = null;
@@ -1493,6 +1546,8 @@ function updateLanguage() {
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
+        if (document.getElementById('lbl-extra-layer')) document.getElementById('lbl-extra-layer').textContent = t.lbl_extra_layer;
+        if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
         if (document.getElementById('lbl-enable-3d')) document.getElementById('lbl-enable-3d').textContent = t.lbl_enable_3d;
         if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
@@ -1723,6 +1778,27 @@ function switchLayerTo(layerKey) {
     if (currentLayer) {
         map.addLayer(currentLayer);
         previousLayerValue = layerKey;
+    }
+}
+
+function applyExtraOverlay(key) {
+    removeExtraOverlay();
+    const cfg = OVERLAY_SOURCES[key];
+    if (!cfg) return;
+    extraOverlayLayer = L.tileOverlay(cfg.url, { attribution: cfg.attribution, maxZoom: cfg.maxZoom, opacity: 1 }).addTo(map);
+}
+
+function removeExtraOverlay() {
+    if (extraOverlayLayer) {
+        map.removeLayer(extraOverlayLayer);
+        extraOverlayLayer = null;
+    }
+}
+
+function handleExtraLayerChange(key) {
+    if (extraLayerCheckbox && extraLayerCheckbox.checked) {
+        applyExtraOverlay(key);
+        localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
     }
 }
 
@@ -4020,6 +4096,25 @@ if (overzoomCheckbox) {
         applyCurrentLayerMaxZoom();
     });
 }
+if (extraLayerCheckbox) {
+    const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
+    const startOn = !!OVERLAY_SOURCES[savedExtra];
+    extraLayerCheckbox.checked = startOn;
+    if (extraLayerRow) extraLayerRow.style.display = startOn ? '' : 'none';
+    if (startOn && extraLayerSelect) extraLayerSelect.value = savedExtra;
+    extraLayerCheckbox.addEventListener('change', (e) => {
+        const on = e.target.checked;
+        if (extraLayerRow) extraLayerRow.style.display = on ? '' : 'none';
+        if (on) {
+            const key = (extraLayerSelect && extraLayerSelect.value) || 'waymarked_hiking';
+            applyExtraOverlay(key);
+            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
+        } else {
+            removeExtraOverlay();
+            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
+        }
+    });
+}
 if (tiltCheckbox) {
     tiltCheckbox.checked = true;
     tiltCheckbox.addEventListener('change', (e) => {
@@ -4142,6 +4237,8 @@ function applyInitialMapState() {
     if (initialMapStateApplied) return;
     initialMapStateApplied = true;
     handleLayerChange(savedLayer);
+    const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
+    if (OVERLAY_SOURCES[savedExtra]) applyExtraOverlay(savedExtra);
     updateUI();
     updateCenterElevation();
 }

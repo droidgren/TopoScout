@@ -162,6 +162,22 @@
                     </div>
                 </div>
 
+                <div class="checkbox-row">
+                    <input type="checkbox" id="enableExtraLayer">
+                    <label id="lbl-extra-layer" for="enableExtraLayer">Extra layer</label>
+                </div>
+                <div class="control-row layer-row" id="extra-layer-row" style="display:none;">
+                    <span id="lbl-extra-layer-select" class="control-label">Overlay:</span>
+                    <div class="select-container">
+                        <select id="extraLayerSelect" onchange="handleExtraLayerChange(this.value)">
+                            <option value="waymarked_hiking" selected>Waymarkedtrails (Hiking)</option>
+                            <option value="waymarked_cycling">Waymarkedtrails (Cycling)</option>
+                            <option value="waymarked_mtb">Waymarkedtrails (MTB)</option>
+                            <option value="waymarked_skating">Waymarkedtrails (Skating)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="map-tools-group">
                     <div class="checkbox-group map-toggle-group">
                         <div class="checkbox-row">
