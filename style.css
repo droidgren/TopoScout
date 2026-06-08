@@ -685,6 +685,8 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .layer-row select {
     min-width: 0;
+    flex: 1 1 0;
+    box-sizing: border-box;
 }
 
 select {
