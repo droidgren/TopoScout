@@ -683,7 +683,7 @@ input[type="number"]::-webkit-inner-spin-button {
     flex: 0 0 200px;
 }
 
-.layer-row #layerSelect {
+.layer-row select {
     min-width: 0;
 }
 
