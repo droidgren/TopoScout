@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.0.2";
+const APP_VERSION = "2.1";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1888,10 +1888,17 @@ async function doRouteLegendFetch() {
         const byName = new Map();
         for (const r of (data.results || [])) {
             const name = r.name || r.ref || '(unnamed)';
-            if (!byName.has(name)) byName.set(name, wmtGroupColor(r.group));
+            if (!byName.has(name)) {
+                byName.set(name, {
+                    color: wmtGroupColor(r.group),
+                    symbol: r.symbol_id
+                        ? `https://${activity}.waymarkedtrails.org/api/v1/symbols/id/${encodeURIComponent(r.symbol_id)}.svg`
+                        : null
+                });
+            }
         }
         const items = [...byName.entries()]
-            .map(([name, color]) => ({ name, color }))
+            .map(([name, v]) => ({ name, color: v.color, symbol: v.symbol }))
             .sort((a, b) => a.name.localeCompare(b.name));
         renderRouteLegend({ status: items.length ? 'list' : 'empty', items });
     } catch (err) {
@@ -1918,7 +1925,10 @@ function renderRouteLegend(state) {
             html += `<div class="route-legend-msg">${msg}</div>`;
         } else {
             for (const item of state.items) {
-                html += `<div class="route-legend-item"><span class="route-legend-color" style="background:${item.color}"></span><span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
+                const badge = item.symbol
+                    ? `<img class="route-legend-symbol" src="${item.symbol}" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : `<span class="route-legend-color" style="background:${item.color}"></span>`;
+                html += `<div class="route-legend-item">${badge}<span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
             }
             if (state.extra > 0) html += `<div class="route-legend-msg">+${state.extra}…</div>`;
         }
@@ -1934,6 +1944,13 @@ function removeRouteLegend() {
     if (routeFetchAbort) { routeFetchAbort.abort(); routeFetchAbort = null; }
     removeLegendControl(routeLegend);
     routeLegend = null;
+}
+
+// Hide the zoom controls while the route-names legend is shown (overlay on +
+// route names enabled), so the legend has the bottom-right corner to itself.
+function updateZoomControlVisibility() {
+    const legendActive = routeNamesOn && !!(extraLayerCheckbox && extraLayerCheckbox.checked);
+    document.body.classList.toggle('route-legend-on', legendActive);
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -4240,6 +4257,7 @@ if (extraLayerCheckbox) {
 
     routeNamesOn = startOn && localStorage.getItem(ROUTE_NAMES_STORAGE_KEY) === 'true';
     if (routeNamesCheckbox) routeNamesCheckbox.checked = routeNamesOn;
+    updateZoomControlVisibility();
 
     extraLayerCheckbox.addEventListener('change', (e) => {
         const on = e.target.checked;
@@ -4254,6 +4272,7 @@ if (extraLayerCheckbox) {
             localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
             removeRouteLegend();
         }
+        updateZoomControlVisibility();
     });
 }
 if (routeNamesCheckbox) {
@@ -4265,6 +4284,7 @@ if (routeNamesCheckbox) {
         } else {
             removeRouteLegend();
         }
+        updateZoomControlVisibility();
     });
 }
 if (tiltCheckbox) {
