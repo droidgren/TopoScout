@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.0.2";
+const APP_VERSION = "2.1";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -54,6 +54,29 @@ const MAP_SOURCES = {
     "satellite": { url: SATELLITE_URL, attribution: 'Esri', maxZoom: 19 },
     "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: ELEVATION_TILE_MAX_ZOOM, opacity: 1 }
 };
+
+const WAYMARKED_ATTRIBUTION = '&copy; <a href="https://waymarkedtrails.org/">Waymarked Trails</a> (CC-BY-SA)';
+const OVERLAY_SOURCES = {
+    "waymarked_hiking": { url: 'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_cycling": { url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_mtb": { url: 'https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 }
+};
+const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
+
+// Map each Waymarkedtrails overlay to its API activity subdomain. The route-names
+// legend lists the routes in the current viewport via that activity's by_area API
+// (https://<activity>.waymarkedtrails.org/api/v1/list/by_area) — the same data the
+// overlay tiles are rendered from, and far faster than a generic Overpass query.
+const OVERLAY_WMT_ACTIVITY = {
+    "waymarked_hiking": 'hiking',
+    "waymarked_cycling": 'cycling',
+    "waymarked_mtb": 'mtb',
+    "waymarked_skating": 'skating'
+    // (extend with 'riding'/'slopes' if those overlays are added later)
+};
+const ROUTE_NAMES_STORAGE_KEY = 'topo_route_names'; // 'true' when the legend toggle is on
+const ROUTE_LEGEND_MIN_ZOOM = 12;                   // below this, prompt to zoom in
 
 const EARTH_RADIUS_M = 6371000;
 let mapOverlayId = 0;
@@ -223,6 +246,8 @@ function getOverlayIds(baseId, kind) {
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-line` };
         case 'image':
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
+        case 'tileOverlay':
+            return { sourceId: `${baseId}-source`, layerId: `${baseId}-raster` };
         default:
             return { sourceId: `${baseId}-source`, layerId: `${baseId}-layer` };
     }
@@ -334,6 +359,23 @@ function createTileLayer(url, options = {}) {
             this.url = nextUrl;
             return this;
         },
+        addTo(mapInstance) {
+            mapInstance.addLayer(this);
+            return this;
+        },
+        remove() {
+            if (this._map) {
+                this._map.removeLayer(this);
+            }
+        }
+    };
+}
+
+function createTileOverlayLayer(url, options = {}) {
+    return {
+        type: 'tileOverlay',
+        _url: url,
+        _options: { ...options },
         addTo(mapInstance) {
             mapInstance.addLayer(this);
             return this;
@@ -855,6 +897,26 @@ function createMapAdapter(containerId, options) {
                         'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                     }
                 });
+                return;
+            }
+
+            if (layer.type === 'tileOverlay') {
+                nativeMap.addSource(layer._ids.sourceId, {
+                    type: 'raster',
+                    tiles: getTileUrls(layer._url),
+                    tileSize: 256,
+                    maxzoom: layer._options.maxZoom || 19,
+                    attribution: layer._options.attribution || ''
+                });
+                nativeMap.addLayer({
+                    id: layer._ids.layerId,
+                    type: 'raster',
+                    source: layer._ids.sourceId,
+                    paint: {
+                        'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
+                    }
+                });
+                return;
             }
         },
         addControl(control, position) {
@@ -1070,6 +1132,7 @@ function createMapAdapter(containerId, options) {
 
 const L = {
     tileLayer: createTileLayer,
+    tileOverlay: createTileOverlayLayer,
     Icon: function Icon(options) { this.options = options; },
     divIcon(options) {
         return { type: 'divIcon', options };
@@ -1163,6 +1226,11 @@ const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
 const shareMapBtn = document.getElementById('share-map-btn');
+const extraLayerCheckbox = document.getElementById('enableExtraLayer');
+const extraLayerRow = document.getElementById('extra-layer-row');
+const extraLayerSelect = document.getElementById('extraLayerSelect');
+const routeNamesCheckbox = document.getElementById('enableRouteNames');
+const routeNamesRow = document.getElementById('route-names-row');
 const overzoomCheckbox = document.getElementById('enableOverzoom');
 const tiltCheckbox = document.getElementById('enableTilt');
 const enable3dCheckbox = document.getElementById('enable3dView');
@@ -1245,8 +1313,13 @@ let manualClimbPoints = [];    // L.latLng objects
 let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
 let manualClimbPolyline = null; // L.polyline (blue preview line)
 let slopeOverlay = null;
+let extraOverlayLayer = null;
 let slopeLegend = null;
 let gpxSlopeLegend = null;
+let routeLegend = null;        // L.control instance for the route-names legend
+let routeNamesOn = false;      // "Show route names" toggle state
+let routeFetchAbort = null;    // AbortController for the in-flight Overpass request
+let routeRefreshTimer = null;  // debounce timer for legend refresh
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
 let slopeMapUsesRadius = false;
@@ -1493,6 +1566,10 @@ function updateLanguage() {
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
+        if (document.getElementById('lbl-extra-layer')) document.getElementById('lbl-extra-layer').textContent = t.lbl_extra_layer;
+        if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
+        if (document.getElementById('lbl-route-names')) document.getElementById('lbl-route-names').textContent = t.lbl_route_names;
+        if (routeLegend) refreshRouteLegend();
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
         if (document.getElementById('lbl-enable-3d')) document.getElementById('lbl-enable-3d').textContent = t.lbl_enable_3d;
         if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
@@ -1724,6 +1801,156 @@ function switchLayerTo(layerKey) {
         map.addLayer(currentLayer);
         previousLayerValue = layerKey;
     }
+}
+
+function applyExtraOverlay(key) {
+    removeExtraOverlay();
+    const cfg = OVERLAY_SOURCES[key];
+    if (!cfg) return;
+    extraOverlayLayer = L.tileOverlay(cfg.url, { attribution: cfg.attribution, maxZoom: cfg.maxZoom, opacity: 1 }).addTo(map);
+    refreshRouteLegend();
+}
+
+function removeExtraOverlay() {
+    if (extraOverlayLayer) {
+        map.removeLayer(extraOverlayLayer);
+        extraOverlayLayer = null;
+    }
+}
+
+function handleExtraLayerChange(key) {
+    if (extraLayerCheckbox && extraLayerCheckbox.checked) {
+        applyExtraOverlay(key);
+        localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
+        refreshRouteLegend();
+    }
+}
+
+// --- Route-names legend (Waymarkedtrails by_area API) ----------------------
+// Swatch color by network level (Waymarkedtrails "group": INT/NAT/REG/LOC).
+const WMT_GROUP_COLORS = { INT: '#e6194B', NAT: '#f58231', REG: '#3cb44b', LOC: '#4363d8' };
+
+function escapeHtmlText(value) {
+    return String(value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function wmtGroupColor(group) {
+    return WMT_GROUP_COLORS[(group || '').toUpperCase()] || '#888888';
+}
+
+// WGS84 lon/lat -> EPSG:3857 (Web Mercator) metres; the by_area API takes a 3857 bbox.
+function lonLatToMerc(lon, lat) {
+    const R = 6378137;
+    const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, lat));
+    const x = R * lon * Math.PI / 180;
+    const y = R * Math.log(Math.tan(Math.PI / 4 + (clampedLat * Math.PI / 180) / 2));
+    return [x, y];
+}
+
+// The Waymarkedtrails activity subdomain for the overlay currently shown, or null
+// when the legend should not query (legend off, overlay off, or unmapped overlay).
+function activeWmtActivity() {
+    if (!routeNamesOn || !extraOverlayLayer) return null;
+    const key = extraLayerSelect ? extraLayerSelect.value : '';
+    return OVERLAY_WMT_ACTIVITY[key] || null;
+}
+
+// Debounced entry point: call on overlay change, toggle, or map move.
+function refreshRouteLegend() {
+    if (routeRefreshTimer) clearTimeout(routeRefreshTimer);
+    routeRefreshTimer = setTimeout(doRouteLegendFetch, 400);
+}
+
+async function doRouteLegendFetch() {
+    const activity = activeWmtActivity();
+    if (!activity) { removeRouteLegend(); return; }
+    if (map.getZoom() < ROUTE_LEGEND_MIN_ZOOM) { renderRouteLegend({ status: 'zoom' }); return; }
+
+    if (routeFetchAbort) routeFetchAbort.abort();
+    routeFetchAbort = new AbortController();
+    const signal = routeFetchAbort.signal;
+    renderRouteLegend({ status: 'loading' });
+
+    const b = map.getBounds();
+    const sw = b.getSouthWest();
+    const ne = b.getNorthEast();
+    const [minx, miny] = lonLatToMerc(sw.lng, sw.lat);
+    const [maxx, maxy] = lonLatToMerc(ne.lng, ne.lat);
+    const bbox = `${minx.toFixed(1)},${miny.toFixed(1)},${maxx.toFixed(1)},${maxy.toFixed(1)}`;
+    const url = `https://${activity}.waymarkedtrails.org/api/v1/list/by_area?bbox=${bbox}&limit=100`;
+
+    try {
+        const res = await fetch(url, { signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const byName = new Map();
+        for (const r of (data.results || [])) {
+            const name = r.name || r.ref || '(unnamed)';
+            if (!byName.has(name)) {
+                byName.set(name, {
+                    color: wmtGroupColor(r.group),
+                    symbol: r.symbol_id
+                        ? `https://${activity}.waymarkedtrails.org/api/v1/symbols/id/${encodeURIComponent(r.symbol_id)}.svg`
+                        : null
+                });
+            }
+        }
+        const items = [...byName.entries()]
+            .map(([name, v]) => ({ name, color: v.color, symbol: v.symbol }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        renderRouteLegend({ status: items.length ? 'list' : 'empty', items });
+    } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        renderRouteLegend({ status: 'error' });
+    }
+}
+
+function renderRouteLegend(state) {
+    removeLegendControl(routeLegend);
+    routeLegend = null;
+    const t = translations[currentLang];
+    routeLegend = L.control({ position: 'bottomright' });
+    routeLegend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'route-legend');
+        let html = `<div class="route-legend-title">${t.route_legend_title}</div>`;
+        const msg = {
+            loading: t.route_legend_loading,
+            zoom: t.route_legend_zoom,
+            error: t.route_legend_error,
+            empty: t.route_legend_empty
+        }[state.status];
+        if (msg) {
+            html += `<div class="route-legend-msg">${msg}</div>`;
+        } else {
+            for (const item of state.items) {
+                const badge = item.symbol
+                    ? `<img class="route-legend-symbol" src="${item.symbol}" alt="" loading="lazy" onerror="this.style.display='none'">`
+                    : `<span class="route-legend-color" style="background:${item.color}"></span>`;
+                html += `<div class="route-legend-item">${badge}<span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
+            }
+            if (state.extra > 0) html += `<div class="route-legend-msg">+${state.extra}…</div>`;
+        }
+        html += `<div class="route-legend-footer">&copy; <a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">Waymarked Trails</a> / OSM</div>`;
+        div.innerHTML = html;
+        return div;
+    };
+    routeLegend.addTo(map);
+}
+
+function removeRouteLegend() {
+    if (routeRefreshTimer) { clearTimeout(routeRefreshTimer); routeRefreshTimer = null; }
+    if (routeFetchAbort) { routeFetchAbort.abort(); routeFetchAbort = null; }
+    removeLegendControl(routeLegend);
+    routeLegend = null;
+}
+
+// Hide the zoom controls while the route-names legend is shown (overlay on +
+// route names enabled), so the legend has the bottom-right corner to itself.
+function updateZoomControlVisibility() {
+    const legendActive = routeNamesOn && !!(extraLayerCheckbox && extraLayerCheckbox.checked);
+    document.body.classList.toggle('route-legend-on', legendActive);
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -4020,6 +4247,46 @@ if (overzoomCheckbox) {
         applyCurrentLayerMaxZoom();
     });
 }
+if (extraLayerCheckbox) {
+    const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
+    const startOn = !!OVERLAY_SOURCES[savedExtra];
+    extraLayerCheckbox.checked = startOn;
+    if (extraLayerRow) extraLayerRow.style.display = startOn ? '' : 'none';
+    if (routeNamesRow) routeNamesRow.style.display = startOn ? '' : 'none';
+    if (startOn && extraLayerSelect) extraLayerSelect.value = savedExtra;
+
+    routeNamesOn = startOn && localStorage.getItem(ROUTE_NAMES_STORAGE_KEY) === 'true';
+    if (routeNamesCheckbox) routeNamesCheckbox.checked = routeNamesOn;
+    updateZoomControlVisibility();
+
+    extraLayerCheckbox.addEventListener('change', (e) => {
+        const on = e.target.checked;
+        if (extraLayerRow) extraLayerRow.style.display = on ? '' : 'none';
+        if (routeNamesRow) routeNamesRow.style.display = on ? '' : 'none';
+        if (on) {
+            const key = (extraLayerSelect && extraLayerSelect.value) || 'waymarked_hiking';
+            applyExtraOverlay(key);
+            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
+        } else {
+            removeExtraOverlay();
+            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
+            removeRouteLegend();
+        }
+        updateZoomControlVisibility();
+    });
+}
+if (routeNamesCheckbox) {
+    routeNamesCheckbox.addEventListener('change', (e) => {
+        routeNamesOn = e.target.checked;
+        localStorage.setItem(ROUTE_NAMES_STORAGE_KEY, routeNamesOn);
+        if (routeNamesOn) {
+            refreshRouteLegend();
+        } else {
+            removeRouteLegend();
+        }
+        updateZoomControlVisibility();
+    });
+}
 if (tiltCheckbox) {
     tiltCheckbox.checked = true;
     tiltCheckbox.addEventListener('change', (e) => {
@@ -4109,6 +4376,7 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
     localStorage.setItem('topo_lng', center.lng);
     localStorage.setItem('topo_zoom', map.getZoom());
     updateCenterElevation();
+    if (routeNamesOn) refreshRouteLegend();
 });
 
 // Minimize controls on mobile when clicking the map
@@ -4142,6 +4410,9 @@ function applyInitialMapState() {
     if (initialMapStateApplied) return;
     initialMapStateApplied = true;
     handleLayerChange(savedLayer);
+    const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
+    if (OVERLAY_SOURCES[savedExtra]) applyExtraOverlay(savedExtra);
+    if (routeNamesOn) refreshRouteLegend();
     updateUI();
     updateCenterElevation();
 }
