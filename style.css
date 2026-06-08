@@ -538,6 +538,75 @@ button {
     display: inline-block;
 }
 
+/* While the route-names legend is shown, hide the zoom controls so the legend
+   occupies the bottom-right corner on its own. */
+body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+    display: none;
+}
+
+.route-legend {
+    margin: 0 10px 10px 0; /* match the zoom controls' inset from the map edges */
+    background: rgba(255, 255, 255, 0.92);
+    padding: 8px 10px;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 40vh;
+    max-width: 220px;
+    overflow-y: auto;
+}
+
+.route-legend-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.route-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0;
+}
+
+.route-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.25);
+    flex: 0 0 12px;
+}
+
+.route-legend-symbol {
+    width: 24px;
+    height: 18px;
+    flex: 0 0 24px;
+    object-fit: contain;
+    object-position: center;
+}
+
+.route-legend-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-legend-msg {
+    color: #555;
+    font-style: italic;
+    margin: 2px 0;
+}
+
+.route-legend-footer {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #666;
+}
+
+.route-legend-footer a {
+    color: inherit;
+}
+
 .clear-btn {
     background-color: #6c757d;
     color: white;
@@ -683,8 +752,10 @@ input[type="number"]::-webkit-inner-spin-button {
     flex: 0 0 200px;
 }
 
-.layer-row #layerSelect {
+.layer-row select {
     min-width: 0;
+    flex: 1 1 0;
+    box-sizing: border-box;
 }
 
 select {
@@ -728,6 +799,20 @@ select {
     font-size: 13px;
     cursor: pointer;
     user-select: none;
+}
+
+#extra-layer-row {
+    margin-bottom: 10px;
+}
+
+.extra-layer-toggles {
+    justify-content: space-between;
+}
+
+.checkbox-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .exaggeration-row {
