@@ -15,6 +15,7 @@ const LANG_EN = {
     route_legend_empty: "No named routes here",
     route_legend_zoom: "Zoom in to list routes",
     route_legend_error: "Could not load routes",
+    route_legend_refresh: "Refresh",
     lbl_enable_tilt: "Enable tilt",
     lbl_enable_3d: "Enable 3D",
     lbl_3d_exaggeration: "Exaggeration:",

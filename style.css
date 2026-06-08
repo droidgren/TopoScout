@@ -539,12 +539,19 @@ button {
 }
 
 /* While the route-names legend is shown, hide the zoom controls so the legend
-   occupies the bottom-right corner on its own. */
+   occupies the bottom-right corner on its own, and lift the legend above the
+   right-docked controls panel (#controls, z-index 2000) so its refresh button
+   stays clickable where the two overlap. */
 body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: none;
 }
 
+body.route-legend-on .maplibregl-ctrl-bottom-right {
+    z-index: 2001;
+}
+
 .route-legend {
+    pointer-events: auto; /* the bottom-right ctrl container is none; re-enable so the refresh button is clickable */
     margin: 0 10px 10px 0; /* match the zoom controls' inset from the map edges */
     background: rgba(255, 255, 255, 0.92);
     padding: 8px 10px;
@@ -557,9 +564,45 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     overflow-y: auto;
 }
 
+.route-legend-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
 .route-legend-title {
     font-weight: 600;
-    margin-bottom: 4px;
+}
+
+.route-legend-refresh {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 22px;
+    flex: 0 0 24px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: #43a047;
+    color: #fff;
+    cursor: pointer;
+}
+
+.route-legend-refresh:hover {
+    background: #2e7d32;
+}
+
+.route-legend-refresh svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+.route-legend.stale .route-legend-refresh {
+    display: inline-flex;
 }
 
 .route-legend-item {

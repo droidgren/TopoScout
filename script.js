@@ -1317,6 +1317,7 @@ let extraOverlayLayer = null;
 let slopeLegend = null;
 let gpxSlopeLegend = null;
 let routeLegend = null;        // L.control instance for the route-names legend
+let routeLegendEl = null;      // live .route-legend DOM element (for the stale/refresh state)
 let routeNamesOn = false;      // "Show route names" toggle state
 let routeFetchAbort = null;    // AbortController for the in-flight Overpass request
 let routeRefreshTimer = null;  // debounce timer for legend refresh
@@ -1914,7 +1915,14 @@ function renderRouteLegend(state) {
     routeLegend = L.control({ position: 'bottomright' });
     routeLegend.onAdd = function () {
         const div = L.DomUtil.create('div', 'route-legend');
-        let html = `<div class="route-legend-title">${t.route_legend_title}</div>`;
+        const showRefresh = state.status !== 'loading';
+        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}</span>`;
+        if (showRefresh) {
+            html += `<button class="route-legend-refresh" title="${t.route_legend_refresh}" aria-label="${t.route_legend_refresh}">`
+                  + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>`
+                  + `</button>`;
+        }
+        html += `</div>`;
         const msg = {
             loading: t.route_legend_loading,
             zoom: t.route_legend_zoom,
@@ -1934,6 +1942,9 @@ function renderRouteLegend(state) {
         }
         html += `<div class="route-legend-footer">&copy; <a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">Waymarked Trails</a> / OSM</div>`;
         div.innerHTML = html;
+        const refreshBtn = div.querySelector('.route-legend-refresh');
+        if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); doRouteLegendFetch(); });
+        routeLegendEl = div;
         return div;
     };
     routeLegend.addTo(map);
@@ -1944,6 +1955,15 @@ function removeRouteLegend() {
     if (routeFetchAbort) { routeFetchAbort.abort(); routeFetchAbort = null; }
     removeLegendControl(routeLegend);
     routeLegend = null;
+    routeLegendEl = null;
+}
+
+// On map movement the legend is not re-queried automatically; instead reveal the
+// refresh icon so the user can pull an updated list for the new view on demand.
+function markRouteLegendStale() {
+    if (routeLegendEl && routeLegendEl.querySelector('.route-legend-refresh')) {
+        routeLegendEl.classList.add('stale');
+    }
 }
 
 // Hide the zoom controls while the route-names legend is shown (overlay on +
@@ -4376,7 +4396,7 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
     localStorage.setItem('topo_lng', center.lng);
     localStorage.setItem('topo_zoom', map.getZoom());
     updateCenterElevation();
-    if (routeNamesOn) refreshRouteLegend();
+    if (routeNamesOn) markRouteLegendStale();
 });
 
 // Minimize controls on mobile when clicking the map
