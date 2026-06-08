@@ -538,7 +538,14 @@ button {
     display: inline-block;
 }
 
+/* While the route-names legend is shown, hide the zoom controls so the legend
+   occupies the bottom-right corner on its own. */
+body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+    display: none;
+}
+
 .route-legend {
+    margin: 0 10px 10px 0; /* match the zoom controls' inset from the map edges */
     background: rgba(255, 255, 255, 0.92);
     padding: 8px 10px;
     border-radius: 6px;
@@ -568,6 +575,14 @@ button {
     border-radius: 2px;
     border: 1px solid rgba(0,0,0,0.25);
     flex: 0 0 12px;
+}
+
+.route-legend-symbol {
+    width: 24px;
+    height: 18px;
+    flex: 0 0 24px;
+    object-fit: contain;
+    object-position: center;
 }
 
 .route-legend-name {
@@ -784,6 +799,20 @@ select {
     font-size: 13px;
     cursor: pointer;
     user-select: none;
+}
+
+#extra-layer-row {
+    margin-bottom: 10px;
+}
+
+.extra-layer-toggles {
+    justify-content: space-between;
+}
+
+.checkbox-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .exaggeration-row {
