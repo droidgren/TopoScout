@@ -539,15 +539,10 @@ button {
 }
 
 /* While the route-names legend is shown, hide the zoom controls so the legend
-   occupies the bottom-right corner on its own, and lift the legend above the
-   right-docked controls panel (#controls, z-index 2000) so its refresh button
-   stays clickable where the two overlap. */
+   occupies the bottom-right corner on its own. The legend stays below the
+   right-docked controls panel (#controls, z-index 2000), which is always on top. */
 body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: none;
-}
-
-body.route-legend-on .maplibregl-ctrl-bottom-right {
-    z-index: 2001;
 }
 
 .route-legend {

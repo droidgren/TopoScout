@@ -1318,6 +1318,7 @@ let slopeLegend = null;
 let gpxSlopeLegend = null;
 let routeLegend = null;        // L.control instance for the route-names legend
 let routeLegendEl = null;      // live .route-legend DOM element (for the stale/refresh state)
+let routeLegendStatus = null;  // last rendered legend status ('list'|'zoom'|'empty'|'error'|'loading')
 let routeNamesOn = false;      // "Show route names" toggle state
 let routeFetchAbort = null;    // AbortController for the in-flight Overpass request
 let routeRefreshTimer = null;  // debounce timer for legend refresh
@@ -1611,7 +1612,7 @@ function updateLanguage() {
         if (document.getElementById('gpx-btn')) document.getElementById('gpx-btn').textContent = t.btn_gpx;
         if (document.getElementById('gpx-clear-btn')) document.getElementById('gpx-clear-btn').textContent = t.btn_gpx_clear;
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
-        if (mcToggle && !mcToggle.classList.contains('active')) {
+        if (mcToggle) {
             mcToggle.textContent = t.btn_manual_climb;
         }
         const mcCalc = document.getElementById('manual-climb-calc-btn');
@@ -1911,6 +1912,7 @@ async function doRouteLegendFetch() {
 function renderRouteLegend(state) {
     removeLegendControl(routeLegend);
     routeLegend = null;
+    routeLegendStatus = state.status;
     const t = translations[currentLang];
     routeLegend = L.control({ position: 'bottomright' });
     routeLegend.onAdd = function () {
@@ -1956,6 +1958,7 @@ function removeRouteLegend() {
     removeLegendControl(routeLegend);
     routeLegend = null;
     routeLegendEl = null;
+    routeLegendStatus = null;
 }
 
 // On map movement the legend is not re-queried automatically; instead reveal the
@@ -1968,9 +1971,24 @@ function markRouteLegendStale() {
 
 // Hide the zoom controls while the route-names legend is shown (overlay on +
 // route names enabled), so the legend has the bottom-right corner to itself.
+// While shown, the compass also moves to the bottom-left (above the attribution)
+// so it doesn't collide with the legend; otherwise it stays bottom-right.
 function updateZoomControlVisibility() {
     const legendActive = routeNamesOn && !!(extraLayerCheckbox && extraLayerCheckbox.checked);
     document.body.classList.toggle('route-legend-on', legendActive);
+    moveCompassControl(legendActive);
+}
+
+function moveCompassControl(toLeft) {
+    const compass = document.querySelector('.reset-north-control');
+    if (!compass) return;
+    const target = document.querySelector(toLeft ? '.maplibregl-ctrl-bottom-left' : '.maplibregl-ctrl-bottom-right');
+    if (!target) return;
+    // Keep the compass at the top of the corner: above the zoom controls on the
+    // right, above the attribution on the left.
+    if (compass.parentElement !== target || target.firstChild !== compass) {
+        target.insertBefore(compass, target.firstChild);
+    }
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -3751,8 +3769,7 @@ const tutorialSteps = [
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true },
-    { targetSelector: '#radius-controls', titleKey: 'tutorial_scan_title', textKey: 'tutorial_scan_text', expandControls: true, expandSection: 'section-points' },
-    { targetSelector: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
+    { targetSelector: '#radius-controls', targetSelectorEnd: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
     { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
@@ -4029,6 +4046,10 @@ function enterManualClimbMode() {
     document.getElementById('manual-climb-toggle-btn').classList.add('active');
     document.getElementById('manual-climb-ui').style.display = 'block';
     document.getElementById('map').classList.add('manual-climb-active');
+    if (circleCheckbox && circleCheckbox.checked) {
+        circleCheckbox.checked = false;
+        updateUI();
+    }
     _updateManualClimbUI();
     statusDiv.textContent = translations[currentLang].status_manual_climb_active;
 }
@@ -4396,7 +4417,13 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
     localStorage.setItem('topo_lng', center.lng);
     localStorage.setItem('topo_zoom', map.getZoom());
     updateCenterElevation();
-    if (routeNamesOn) markRouteLegendStale();
+    if (routeNamesOn) {
+        // While the list is gated behind the min-zoom message, keep auto-updating so
+        // zooming in loads the list without a manual refresh; once a list is shown,
+        // movement only flags it stale (the green refresh button drives the update).
+        if (routeLegendStatus === 'list') markRouteLegendStale();
+        else refreshRouteLegend();
+    }
 });
 
 // Minimize controls on mobile when clicking the map
