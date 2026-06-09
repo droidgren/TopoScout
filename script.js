@@ -28,6 +28,12 @@ const lockedServices = {
         storageKey: 'thunderforest_key',
         link: 'https://www.thunderforest.com/',
         urlTemplate: 'https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}'
+    },
+    'jawg_terrain': {
+        name: 'Jawg Terrain',
+        storageKey: 'jawg_key',
+        link: 'https://www.jawg.io/',
+        urlTemplate: 'https://tile.jawg.io/jawg-terrain/{z}/{x}/{y}.png?access-token={key}'
     }
 };
 
@@ -48,6 +54,9 @@ const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
     "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 19 },
     "thunderforest": { url: '', attribution: 'ThunderForest', maxZoom: 22 },
+    "jawg_terrain": { url: '', attribution: '&copy; <a href="https://www.jawg.io/">Jawg</a> &copy; OpenStreetMap contributors', maxZoom: 22 },
+    "carto_voyager": { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
+    "carto_positron": { url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
     "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 17 },
     "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 18 },
     "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
