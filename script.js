@@ -435,9 +435,16 @@ function createCircleLayer(center, options = {}, isMarker = false) {
 }
 
 function createPolylineLayer(latlngs, options = {}) {
+    // Accept either a flat array of points (single line) or a nested array of
+    // lines (multi-line), mirroring real Leaflet. A multi-line is detected when
+    // the first element is itself an array of points (its first element is an array).
+    const isMulti = Array.isArray(latlngs[0]) && Array.isArray(latlngs[0][0]);
     return {
         type: 'polyline',
-        _latlngs: latlngs.map(toLngLat),
+        _multi: isMulti,
+        _latlngs: isMulti
+            ? latlngs.map((line) => line.map(toLngLat))
+            : latlngs.map(toLngLat),
         _options: { ...options },
         addTo(mapInstance) {
             mapInstance.addLayer(this);
@@ -850,14 +857,20 @@ function createMapAdapter(containerId, options) {
             ensureRemoved(nativeMap, layer);
 
             if (layer.type === 'polyline') {
+                const geometry = layer._multi
+                    ? {
+                        type: 'MultiLineString',
+                        coordinates: layer._latlngs.map((line) => line.map((point) => [point.lng, point.lat]))
+                    }
+                    : {
+                        type: 'LineString',
+                        coordinates: layer._latlngs.map((point) => [point.lng, point.lat])
+                    };
                 nativeMap.addSource(layer._ids.sourceId, {
                     type: 'geojson',
                     data: {
                         type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: layer._latlngs.map((point) => [point.lng, point.lat])
-                        }
+                        geometry
                     }
                 });
                 nativeMap.addLayer({
@@ -2049,17 +2062,24 @@ async function fetchAndDrawTrail(id) {
         if (id !== isolatedRouteId) return; // cleared/switched while fetching
         isolatedTrailLayers.forEach((l) => { try { map.removeLayer(l); } catch (e) { /* ignore */ } });
         isolatedTrailLayers = [];
+        // Collect every line part into one multi-line so the whole trail draws as
+        // just two layers (white casing + colored line), regardless of how many
+        // disconnected segments the relation has. Drawing one polyline per part
+        // would create thousands of MapLibre layers for fragmented routes (e.g.
+        // Kungsleden has ~1000 parts), locking the browser and rendering spotty.
+        const allLines = [];
         for (const feature of (data.features || [])) {
             const geom = feature.geometry;
             if (!geom) continue;
             const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
             for (const coords of lines) {
-                const latlngs = coords
-                    .map(([x, y]) => { const [lon, lat] = mercToLonLat(x, y); return [lat, lon]; });
-                if (latlngs.length < 2) continue;
-                isolatedTrailLayers.push(L.polyline(latlngs, { color: '#ffffff', weight: 8, opacity: 0.9 }).addTo(map));
-                isolatedTrailLayers.push(L.polyline(latlngs, { color: isolatedColor, weight: 5, opacity: 0.95 }).addTo(map));
+                if (!coords || coords.length < 2) continue;
+                allLines.push(coords.map(([x, y]) => { const [lon, lat] = mercToLonLat(x, y); return [lat, lon]; }));
             }
+        }
+        if (allLines.length) {
+            isolatedTrailLayers.push(L.polyline(allLines, { color: '#ffffff', weight: 8, opacity: 0.9 }).addTo(map));
+            isolatedTrailLayers.push(L.polyline(allLines, { color: isolatedColor, weight: 5, opacity: 0.95 }).addTo(map));
         }
     } catch (err) {
         if (err && err.name === 'AbortError') return;
