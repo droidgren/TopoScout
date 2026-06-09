@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.1";
+const APP_VERSION = "2.1.1";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1319,6 +1319,11 @@ let gpxSlopeLegend = null;
 let routeLegend = null;        // L.control instance for the route-names legend
 let routeLegendEl = null;      // live .route-legend DOM element (for the stale/refresh state)
 let routeLegendStatus = null;  // last rendered legend status ('list'|'zoom'|'empty'|'error'|'loading')
+let lastRouteItems = [];       // last rendered list items (for re-render on isolate/clear)
+let isolatedRouteId = null;    // relation id of the trail isolated on the map, or null
+let isolatedColor = '#1565C0'; // draw color for the isolated trail
+let isolatedTrailLayers = [];  // drawn L.polyline layers for the isolated trail
+let isolatedFetchAbort = null; // AbortController for the segments request
 let routeNamesOn = false;      // "Show route names" toggle state
 let routeFetchAbort = null;    // AbortController for the in-flight Overpass request
 let routeRefreshTimer = null;  // debounce timer for legend refresh
@@ -1851,6 +1856,14 @@ function lonLatToMerc(lon, lat) {
     return [x, y];
 }
 
+// EPSG:3857 (Web Mercator) metres -> WGS84 lon/lat; the segments API returns 3857 coords.
+function mercToLonLat(x, y) {
+    const R = 6378137;
+    const lon = (x / R) * 180 / Math.PI;
+    const lat = (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI;
+    return [lon, lat];
+}
+
 // The Waymarkedtrails activity subdomain for the overlay currently shown, or null
 // when the legend should not query (legend off, overlay off, or unmapped overlay).
 function activeWmtActivity() {
@@ -1892,6 +1905,7 @@ async function doRouteLegendFetch() {
             const name = r.name || r.ref || '(unnamed)';
             if (!byName.has(name)) {
                 byName.set(name, {
+                    id: r.id,
                     color: wmtGroupColor(r.group),
                     symbol: r.symbol_id
                         ? `https://${activity}.waymarkedtrails.org/api/v1/symbols/id/${encodeURIComponent(r.symbol_id)}.svg`
@@ -1900,7 +1914,7 @@ async function doRouteLegendFetch() {
             }
         }
         const items = [...byName.entries()]
-            .map(([name, v]) => ({ name, color: v.color, symbol: v.symbol }))
+            .map(([name, v]) => ({ name, id: v.id, color: v.color, symbol: v.symbol }))
             .sort((a, b) => a.name.localeCompare(b.name));
         renderRouteLegend({ status: items.length ? 'list' : 'empty', items });
     } catch (err) {
@@ -1915,16 +1929,20 @@ function renderRouteLegend(state) {
     routeLegendStatus = state.status;
     const t = translations[currentLang];
     routeLegend = L.control({ position: 'bottomright' });
+    if (state.items) lastRouteItems = state.items;
     routeLegend.onAdd = function () {
-        const div = L.DomUtil.create('div', 'route-legend');
+        const div = L.DomUtil.create('div', 'route-legend' + (isolatedRouteId != null ? ' isolated' : ''));
         const showRefresh = state.status !== 'loading';
-        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}</span>`;
+        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}</span><span class="route-legend-actions">`;
+        if (isolatedRouteId != null) {
+            html += `<button class="route-legend-showall">${escapeHtmlText(t.route_legend_show_all || 'Show all')}</button>`;
+        }
         if (showRefresh) {
             html += `<button class="route-legend-refresh" title="${t.route_legend_refresh}" aria-label="${t.route_legend_refresh}">`
                   + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>`
                   + `</button>`;
         }
-        html += `</div>`;
+        html += `</span></div>`;
         const msg = {
             loading: t.route_legend_loading,
             zoom: t.route_legend_zoom,
@@ -1938,7 +1956,8 @@ function renderRouteLegend(state) {
                 const badge = item.symbol
                     ? `<img class="route-legend-symbol" src="${item.symbol}" alt="" loading="lazy" onerror="this.style.display='none'">`
                     : `<span class="route-legend-color" style="background:${item.color}"></span>`;
-                html += `<div class="route-legend-item">${badge}<span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
+                const active = item.id === isolatedRouteId ? ' active' : '';
+                html += `<div class="route-legend-item${active}" data-route-id="${item.id}" data-route-color="${item.color}">${badge}<span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
             }
             if (state.extra > 0) html += `<div class="route-legend-msg">+${state.extra}…</div>`;
         }
@@ -1946,6 +1965,15 @@ function renderRouteLegend(state) {
         div.innerHTML = html;
         const refreshBtn = div.querySelector('.route-legend-refresh');
         if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); doRouteLegendFetch(); });
+        const showAllBtn = div.querySelector('.route-legend-showall');
+        if (showAllBtn) showAllBtn.addEventListener('click', (e) => { e.stopPropagation(); clearIsolatedTrail(); });
+        div.querySelectorAll('.route-legend-item').forEach((el) => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const rid = Number(el.dataset.routeId);
+                if (Number.isFinite(rid)) toggleIsolateTrail(rid, el.dataset.routeColor);
+            });
+        });
         routeLegendEl = div;
         return div;
     };
@@ -1955,10 +1983,88 @@ function renderRouteLegend(state) {
 function removeRouteLegend() {
     if (routeRefreshTimer) { clearTimeout(routeRefreshTimer); routeRefreshTimer = null; }
     if (routeFetchAbort) { routeFetchAbort.abort(); routeFetchAbort = null; }
+    removeIsolatedTrailLayers();
     removeLegendControl(routeLegend);
     routeLegend = null;
     routeLegendEl = null;
     routeLegendStatus = null;
+}
+
+// --- Trail isolation: show only one trail by drawing its geometry as a vector ---
+// Set the raster overlay's opacity (0 to hide all trails while one is isolated).
+function setExtraOverlayRasterOpacity(opacity) {
+    if (!extraOverlayLayer || !extraOverlayLayer._ids) return;
+    const nativeMap = map._map;
+    const layerId = extraOverlayLayer._ids.layerId;
+    if (nativeMap && nativeMap.getLayer && nativeMap.getLayer(layerId)) {
+        nativeMap.setPaintProperty(layerId, 'raster-opacity', opacity);
+    }
+}
+
+// Remove the drawn polylines and restore the raster (map cleanup only, no re-render).
+function removeIsolatedTrailLayers() {
+    if (isolatedFetchAbort) { isolatedFetchAbort.abort(); isolatedFetchAbort = null; }
+    isolatedTrailLayers.forEach((l) => { try { map.removeLayer(l); } catch (e) { /* ignore */ } });
+    isolatedTrailLayers = [];
+    if (isolatedRouteId != null) setExtraOverlayRasterOpacity(1);
+    isolatedRouteId = null;
+}
+
+function clearIsolatedTrail() {
+    removeIsolatedTrailLayers();
+    if (routeLegendStatus === 'list') renderRouteLegend({ status: 'list', items: lastRouteItems });
+}
+
+function toggleIsolateTrail(id, color) {
+    if (id == null) return;
+    if (isolatedRouteId === id) { clearIsolatedTrail(); return; }
+    // Isolate (or switch to) this trail: drop any existing line, keep the raster hidden.
+    if (isolatedFetchAbort) { isolatedFetchAbort.abort(); isolatedFetchAbort = null; }
+    isolatedTrailLayers.forEach((l) => { try { map.removeLayer(l); } catch (e) { /* ignore */ } });
+    isolatedTrailLayers = [];
+    isolatedRouteId = id;
+    isolatedColor = color || '#1565C0';
+    setExtraOverlayRasterOpacity(0);
+    renderRouteLegend({ status: 'list', items: lastRouteItems });
+    fetchAndDrawTrail(id);
+}
+
+async function fetchAndDrawTrail(id) {
+    const activity = activeWmtActivity();
+    if (!activity) return;
+    if (isolatedFetchAbort) isolatedFetchAbort.abort();
+    isolatedFetchAbort = new AbortController();
+    const signal = isolatedFetchAbort.signal;
+
+    // Fetch the whole route once with a world-extent bbox so it never needs re-fetching
+    // (and never flickers) as the map pans/zooms; the API still simplifies the geometry.
+    const W = 20037508.34;
+    const bbox = `${-W},${-W},${W},${W}`;
+    const url = `https://${activity}.waymarkedtrails.org/api/v1/list/segments?bbox=${bbox}&relations=${id}`;
+
+    try {
+        const res = await fetch(url, { signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (id !== isolatedRouteId) return; // cleared/switched while fetching
+        isolatedTrailLayers.forEach((l) => { try { map.removeLayer(l); } catch (e) { /* ignore */ } });
+        isolatedTrailLayers = [];
+        for (const feature of (data.features || [])) {
+            const geom = feature.geometry;
+            if (!geom) continue;
+            const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
+            for (const coords of lines) {
+                const latlngs = coords
+                    .map(([x, y]) => { const [lon, lat] = mercToLonLat(x, y); return [lat, lon]; });
+                if (latlngs.length < 2) continue;
+                isolatedTrailLayers.push(L.polyline(latlngs, { color: '#ffffff', weight: 8, opacity: 0.9 }).addTo(map));
+                isolatedTrailLayers.push(L.polyline(latlngs, { color: isolatedColor, weight: 5, opacity: 0.95 }).addTo(map));
+            }
+        }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        // leave the raster hidden; the user can click "Show all" to restore
+    }
 }
 
 // On map movement the legend is not re-queried automatically; instead reveal the
@@ -3761,6 +3867,7 @@ window.addEventListener('appinstalled', () => {
 let tutorialStep = 0;
 let _tutorialOverlayClickHandler = null;
 let _tutorialKeydownHandler = null;
+let _routeOverlayBeforeTutorial = false; // "Show route overlay" state to restore when the tutorial ends
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
@@ -3768,7 +3875,8 @@ const tutorialSteps = [
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
-    { targetSelector: '.layer-row', targetSelectorEnd: '.search-group', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true },
+    { targetSelector: '.layer-row', targetSelectorEnd: '.extra-layer-toggles', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true, enableRouteOverlay: true },
+    { targetSelector: '.map-tools-group', targetSelectorEnd: '.search-group', titleKey: 'tutorial_tools_title', textKey: 'tutorial_tools_text', expandControls: true },
     { targetSelector: '#radius-controls', targetSelectorEnd: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
@@ -3784,6 +3892,12 @@ function isTutorialVisible() {
 function syncTutorialUiState(step) {
     setControlsMinimized(!step.expandControls);
     collapseTutorialSections();
+    // Turn the route overlay on for the step that explains it, so the Route Overlay
+    // dropdown and "Show route names" toggle are visible under the spotlight.
+    if (step.enableRouteOverlay && extraLayerCheckbox && !extraLayerCheckbox.checked) {
+        extraLayerCheckbox.checked = true;
+        extraLayerCheckbox.dispatchEvent(new Event('change'));
+    }
     if (step.expandSection) {
         setSectionExpanded(step.expandSection, true);
         if (ANALYSIS_SECTION_IDS.includes(step.expandSection)) {
@@ -3910,6 +4024,7 @@ function detachTutorialKeyboardNavigation() {
 function startTutorial() {
     setControlsMinimized(true);
     collapseTutorialSections();
+    _routeOverlayBeforeTutorial = !!(extraLayerCheckbox && extraLayerCheckbox.checked);
     tutorialStep = 0;
     const overlay = document.getElementById('tutorial-overlay');
     overlay.style.display = 'block';
@@ -4026,6 +4141,11 @@ function finishTutorial() {
     overlay.style.pointerEvents = 'none';
     collapseTutorialSections();
     setControlsMinimized(true);
+    // Restore the "Show route overlay" checkbox to its pre-tutorial state.
+    if (extraLayerCheckbox && extraLayerCheckbox.checked !== _routeOverlayBeforeTutorial) {
+        extraLayerCheckbox.checked = _routeOverlayBeforeTutorial;
+        extraLayerCheckbox.dispatchEvent(new Event('change'));
+    }
     showDeferredInstallUi(1500);
 }
 
@@ -4424,6 +4544,7 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
         if (routeLegendStatus === 'list') markRouteLegendStale();
         else refreshRouteLegend();
     }
+    // The isolated trail is drawn once in full, so map movement needs no re-fetch.
 });
 
 // Minimize controls on mobile when clicking the map

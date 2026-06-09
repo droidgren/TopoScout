@@ -605,6 +605,43 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     align-items: center;
     gap: 6px;
     margin: 2px 0;
+    padding: 1px 3px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.route-legend-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.route-legend-item.active {
+    background: rgba(21, 101, 192, 0.15);
+    font-weight: 600;
+}
+
+.route-legend.isolated .route-legend-item:not(.active) {
+    opacity: 0.45;
+}
+
+.route-legend-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.route-legend-showall {
+    border: none;
+    background: #1565C0;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    border-radius: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+
+.route-legend-showall:hover {
+    background: #0d47a1;
 }
 
 .route-legend-color {
