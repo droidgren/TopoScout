@@ -161,6 +161,7 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ## Changelog
 
+- **v2.1.1:** Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" to restore). Plus compass-placement, tutorial, and Find Climbs refinements.
 - **v2.1:** Added a Waymarkedtrails route overlay (hiking, cycling, MTB, skating) and an optional route-names legend that lists the routes in the current view with their official route symbols.
 - **v2.0.2:** Reworked the analysis section accordion so only one section stays open at a time, moved the Search Radius / Show Radius / Lock Radius controls into the active analysis section, and auto-enabled Show Radius when opening analysis sections.
 - **v2.0.1:** Added Manual mode tutorial guidance (including a spotlight step), explained the difference between automatic and manual climb modes in the tutorial, and fixed manual-route ascent smoothing for multi-point routes.
