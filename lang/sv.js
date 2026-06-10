@@ -17,6 +17,8 @@ const LANG_SV = {
     route_legend_error: "Kunde inte ladda leder",
     route_legend_refresh: "Uppdatera",
     route_legend_show_all: "Visa alla",
+    route_legend_collapse: "Fäll ihop",
+    route_legend_expand: "Visa",
     lbl_enable_tilt: "Aktivera tilt",
     lbl_enable_3d: "Aktivera 3D",
     lbl_3d_exaggeration: "Förstärkning:",

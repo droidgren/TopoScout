@@ -72,6 +72,7 @@ const OVERLAY_SOURCES = {
     "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 }
 };
 const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
+const ROUTE_LEGEND_COLLAPSED_KEY = 'topo_route_legend_collapsed'; // 'true' when the route-names legend is collapsed
 
 // Map each Waymarkedtrails overlay to its API activity subdomain. The route-names
 // legend lists the routes in the current viewport via that activity's by_area API
@@ -1341,6 +1342,7 @@ let gpxSlopeLegend = null;
 let routeLegend = null;        // L.control instance for the route-names legend
 let routeLegendEl = null;      // live .route-legend DOM element (for the stale/refresh state)
 let routeLegendStatus = null;  // last rendered legend status ('list'|'zoom'|'empty'|'error'|'loading')
+let routeLegendCollapsed = localStorage.getItem(ROUTE_LEGEND_COLLAPSED_KEY) === 'true'; // legend collapsed to its title bar
 let lastRouteItems = [];       // last rendered list items (for re-render on isolate/clear)
 let isolatedRouteId = null;    // relation id of the trail isolated on the map, or null
 let isolatedColor = '#1565C0'; // draw color for the isolated trail
@@ -1953,8 +1955,9 @@ function renderRouteLegend(state) {
     routeLegend = L.control({ position: 'bottomright' });
     if (state.items) lastRouteItems = state.items;
     routeLegend.onAdd = function () {
-        const div = L.DomUtil.create('div', 'route-legend' + (isolatedRouteId != null ? ' isolated' : ''));
+        const div = L.DomUtil.create('div', 'route-legend' + (isolatedRouteId != null ? ' isolated' : '') + (routeLegendCollapsed ? ' collapsed' : ''));
         const showRefresh = state.status !== 'loading';
+        const collapseLabel = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
         let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}</span><span class="route-legend-actions">`;
         if (isolatedRouteId != null) {
             html += `<button class="route-legend-showall">${escapeHtmlText(t.route_legend_show_all || 'Show all')}</button>`;
@@ -1964,7 +1967,11 @@ function renderRouteLegend(state) {
                   + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>`
                   + `</button>`;
         }
+        html += `<button class="route-legend-collapse" title="${collapseLabel}" aria-label="${collapseLabel}" aria-expanded="${routeLegendCollapsed ? 'false' : 'true'}">`
+              + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>`
+              + `</button>`;
         html += `</span></div>`;
+        html += `<div class="route-legend-body">`;
         const msg = {
             loading: t.route_legend_loading,
             zoom: t.route_legend_zoom,
@@ -1984,7 +1991,19 @@ function renderRouteLegend(state) {
             if (state.extra > 0) html += `<div class="route-legend-msg">+${state.extra}…</div>`;
         }
         html += `<div class="route-legend-footer">&copy; <a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">Waymarked Trails</a> / OSM</div>`;
+        html += `</div>`; // .route-legend-body
         div.innerHTML = html;
+        const collapseBtn = div.querySelector('.route-legend-collapse');
+        if (collapseBtn) collapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            routeLegendCollapsed = !routeLegendCollapsed;
+            localStorage.setItem(ROUTE_LEGEND_COLLAPSED_KEY, routeLegendCollapsed);
+            div.classList.toggle('collapsed', routeLegendCollapsed);
+            collapseBtn.setAttribute('aria-expanded', routeLegendCollapsed ? 'false' : 'true');
+            const label = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
+            collapseBtn.title = label;
+            collapseBtn.setAttribute('aria-label', label);
+        });
         const refreshBtn = div.querySelector('.route-legend-refresh');
         if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); doRouteLegendFetch(); });
         const showAllBtn = div.querySelector('.route-legend-showall');

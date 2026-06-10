@@ -600,6 +600,45 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: inline-flex;
 }
 
+.route-legend-collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #555;
+    cursor: pointer;
+}
+
+.route-legend-collapse:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.route-legend-collapse svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+    transition: transform 0.15s ease;
+}
+
+/* Caret points up when expanded (click to collapse), down when collapsed. */
+.route-legend.collapsed .route-legend-collapse svg {
+    transform: rotate(180deg);
+}
+
+.route-legend.collapsed .route-legend-header {
+    margin-bottom: 0;
+}
+
+.route-legend.collapsed .route-legend-body {
+    display: none;
+}
+
 .route-legend-item {
     display: flex;
     align-items: center;
