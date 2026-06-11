@@ -122,7 +122,7 @@ const LANG_EN = {
     tutorial_layers_text: "Choose a map layer, then search for a place by name or coordinates. Use the GPS button to jump to your current location. Some map layers require a free API key.",
     tutorial_layers_tools_text: "• Map Layers: Choose your preferred map style. (Note: Some layers require a free API key).\n• Route overlay: Pick a route overlay from the dropdown to draw marked routes over the map; a legend of the routes currently in view appears automatically.\n• Filter a trail: click a route in the legend to show only that trail; click \"Show all\" to bring them back.",
     tutorial_tools_title: "Map Tools",
-    tutorial_tools_text: "• Use the 🔍 search box to find a place by name or coordinates, or click the 📍 button to jump to your current location.\n• Click the 🧊 button to view the terrain in 3D.\n• To tilt and rotate the map, hold Ctrl and drag (or use two fingers on a touch device).\n• More options (Overzoom, Tilt, and 3D exaggeration) are under Advanced settings in the About menu.",
+    tutorial_tools_text: "• Use the 🔍 search box to find a place by name or coordinates, or click the 📍 button to jump to your current location.\n• Click the 3D button to view the terrain in 3D.\n• To tilt and rotate the map, hold Ctrl and drag (or use two fingers on a touch device).\n• More options (Overzoom, Tilt, and 3D exaggeration) are under Advanced settings in the About menu.",
     tutorial_scan_title: "Search Radius",
     tutorial_scan_text: "Set the search radius (km) for all analysis features.\n• Show Radius: toggles the blue circle on the map.\n• Lock Radius: pins the search area to the current position.",
     tutorial_map_tools_title: "Overzoom, Tilt & 3D",
