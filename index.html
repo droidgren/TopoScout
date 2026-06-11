@@ -24,18 +24,16 @@
         <div class="modal-content">
             <h4 id="info-title">About Elevation Finder</h4>
 
-            <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, visualize slope steepness, and overlay GPX routes on the map.<br>The application works on mobile devices, but is best experienced on larger
-                screens. Also check out <a href="https://github.com/droidgren/topo_gpx_viewer/" target="_blank" rel="noopener noreferrer">Topo GPX Viewer</a>, a companion project focused on advanced GPX viewing.</p>
+            <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, visualize slope steepness, and overlay GPX routes on the map. The app is designed to work on mobile devices as well.</p>
 
             <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;">🎓 Start Tutorial</button>
 
             <p><strong><a href="https://github.com/droidgren/elevation_finder">GitHub Project</a></strong></p>
 
-            <p><strong><span id="info-creator">Creator</span>:</strong> <a href="http://droidgren.github.io/"
-                    target="_blank">droidgren.github.io</a></p>
+            <p><strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.1.1</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">2.1.2</span>
             </p>
 
             <details
@@ -43,38 +41,40 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
-                    <li><strong>v2.1.2:</strong> The route-names legend can now be collapsed to its title bar (and remembers the state) to free up the map.</li>
+                    <li><strong>v2.1.2:</strong> Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.</li>
                     <li><strong>v2.1.1:</strong> Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" restores). Plus compass-placement, tutorial, and Find Climbs refinements.</li>
                     <li><strong>v2.1:</strong> Added a Waymarkedtrails route overlay (hiking, cycling, MTB, skating) and an optional route-names legend that lists the routes in view with their official route symbols.</li>
                     <li><strong>v2.0.2:</strong> Reworked the analysis panel accordion so only one section is open at a time, moved the radius controls into the active analysis section, and auto-enabled Show Radius for analysis sections.</li>
                     <li><strong>v2.0.1:</strong> Added Manual mode tutorial guidance with a spotlight step, clarified the difference between automatic and manual climb modes, and fixed manual-route ascent smoothing across multiple points.</li>
-                    <li><strong>v2.0:</strong> Migrated frontend map rendering to MapLibre GL JS and added overzoom, tilt, 3D terrain, and shareable map views.</li>
-                    <li><strong>v1.8.2:</strong> Added Norgeskart (Norway) map layer.</li>
-                    <li><strong>v1.8.1:</strong> Added map rotation with Ctrl+drag and two-finger touch support, compass indicator with reset-north button.</li>
-                    <li><strong>v1.8:</strong> Added GPX file upload with route overlay, track styling, distance labels, slope coloring, waypoints, and elevation stats.</li>
-                    <li><strong>v1.7:</strong> Added Slope Map feature to color-code terrain by steepness, with filter and opacity controls.</li>
-                    <li><strong>v1.6:</strong> Added interactive tutorial, reordered tutorial steps, and added GitHub Project link in the info modal.</li>
-                    <li><strong>v1.5:</strong> Added PWA install button in the info modal and a mobile install prompt bar.</li>
-                    <li><strong>v1.4:</strong> Improved 'Find Climbs' accuracy with cumulative ascent, noise filtering,
-                        and higher scan resolution. Added detailed climb stats (Drop, Slope, Distance) and new debug
-                        settings.</li>
-                    <li><strong>v1.3:</strong> Made app installable (PWA), added custom numbered map pins, improved
-                        touch UI for number inputs, and fixed alignment on high-res screens.</li>
-                    <li><strong>v1.2.1:</strong> Fixed incorrect results at zoom level 15+. Added toggleable water
-                        analysis in debug settings.</li>
-                    <li><strong>v1.2:</strong> Migrated elevation tiles to Mapterhorn (512px resolution).</li>
-                    <li><strong>v1.1:</strong> Added "Find Climbs" feature, Lantmäteriet map, and multi-language
-                        support.</li>
-                    <li><strong>v1.0:</strong> Initial release.</li>
                 </ul>
+                <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/elevation_finder#changelog"
+                        target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
             </details>
 
-            <p id="info-privacy"
-                style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
-                This application is fully client-side. No data saved on server.
-            </p>
-
             <button id="install-app-btn" onclick="triggerInstallPrompt()" style="display:none;">📲 Install as App</button>
+
+            <details
+                style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #555;">
+                <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
+                    id="info-advanced-title">Advanced settings</summary>
+                <div style="margin-top: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="enableOverzoom"
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-enable-overzoom" style="font-size: 13px; line-height: 1;">Overzoom</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="enableTilt" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-enable-tilt" style="font-size: 13px; line-height: 1;">Enable tilt</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <span id="lbl-3d-exaggeration" style="font-size: 13px; min-width: 140px;">3D Exaggeration:</span>
+                        <input type="number" id="exaggerationInput" value="1.5" min="0" max="3" step="0.1"
+                            style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                    </label>
+                </div>
+            </details>
 
             <details
                 style="text-align: left; background: #f0f0f0; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #777;">
@@ -104,6 +104,11 @@
                     </label>
                 </div>
             </details>
+
+            <p id="info-privacy"
+                style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px; margin-top: 15px;">
+                This application is fully client-side. No data saved on server.
+            </p>
 
             <div class="modal-btns">
                 <button id="info-refresh" class="cancel-btn" onclick="refreshApp(this)">Refresh app</button>
@@ -145,6 +150,13 @@
 
         <div id="controls-content">
 
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="Search location">
+                <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
+                <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
+                <button id="enable3dBtn" class="icon-btn" onclick="toggle3dView()" title="Enable 3D">🧊</button>
+            </div>
+
             <!-- Common settings (not collapsible) -->
             <div style="margin-bottom: 10px;">
                 <div class="control-row layer-row">
@@ -168,55 +180,19 @@
                     </div>
                 </div>
 
-                <div class="control-row layer-row" id="extra-layer-row" style="display:none;">
+                <div class="control-row layer-row" id="extra-layer-row">
                     <span id="lbl-extra-layer-select" class="control-label">Route Overlay:</span>
                     <div class="select-container">
                         <select id="extraLayerSelect" onchange="handleExtraLayerChange(this.value)">
-                            <option value="waymarked_hiking" selected>Waymarkedtrails (Hiking)</option>
+                            <option value="none" selected>None</option>
+                            <option value="waymarked_hiking">Waymarkedtrails (Hiking)</option>
                             <option value="waymarked_cycling">Waymarkedtrails (Cycling)</option>
                             <option value="waymarked_mtb">Waymarkedtrails (MTB)</option>
                             <option value="waymarked_skating">Waymarkedtrails (Skating)</option>
                         </select>
                     </div>
                 </div>
-                <div class="checkbox-row extra-layer-toggles">
-                    <span class="checkbox-inline">
-                        <input type="checkbox" id="enableExtraLayer">
-                        <label id="lbl-extra-layer" for="enableExtraLayer">Show route overlay</label>
-                    </span>
-                    <span class="checkbox-inline" id="route-names-row" style="display:none;">
-                        <input type="checkbox" id="enableRouteNames">
-                        <label id="lbl-route-names" for="enableRouteNames">Show route names</label>
-                    </span>
-                </div>
 
-                <div class="map-tools-group">
-                    <div class="checkbox-group map-toggle-group">
-                        <div class="checkbox-row">
-                            <input type="checkbox" id="enableOverzoom">
-                            <label id="lbl-enable-overzoom" for="enableOverzoom">Overzoom</label>
-                        </div>
-                        <div class="checkbox-row">
-                            <input type="checkbox" id="enableTilt" checked>
-                            <label id="lbl-enable-tilt" for="enableTilt">Enable tilt</label>
-                        </div>
-                        <div class="checkbox-row">
-                            <input type="checkbox" id="enable3dView">
-                            <label id="lbl-enable-3d" for="enable3dView">Enable 3D</label>
-                        </div>
-                    </div>
-                    <div class="control-row exaggeration-row" id="exaggeration-row">
-                        <span id="lbl-3d-exaggeration" class="control-label">Exaggeration:</span>
-                        <input type="range" id="exaggerationSlider" min="0" max="3" value="1.5" step="0.1">
-                        <span id="exaggerationVal" class="range-value">1.5</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="search-group">
-                <input type="text" id="searchInput" placeholder="Search location">
-                <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
-                <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
             </div>
 
             <div id="radius-controls-anchor"></div>

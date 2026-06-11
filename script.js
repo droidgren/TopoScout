@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.1.1";
+const APP_VERSION = "2.1.2";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -85,7 +85,6 @@ const OVERLAY_WMT_ACTIVITY = {
     "waymarked_skating": 'skating'
     // (extend with 'riding'/'slopes' if those overlays are added later)
 };
-const ROUTE_NAMES_STORAGE_KEY = 'topo_route_names'; // 'true' when the legend toggle is on
 const ROUTE_LEGEND_MIN_ZOOM = 12;                   // below this, prompt to zoom in
 
 const EARTH_RADIUS_M = 6371000;
@@ -1249,17 +1248,11 @@ const statusDiv = document.getElementById('status');
 const layerSelect = document.getElementById('layerSelect');
 const editKeyBtn = document.getElementById('edit-key-btn');
 const shareMapBtn = document.getElementById('share-map-btn');
-const extraLayerCheckbox = document.getElementById('enableExtraLayer');
-const extraLayerRow = document.getElementById('extra-layer-row');
 const extraLayerSelect = document.getElementById('extraLayerSelect');
-const routeNamesCheckbox = document.getElementById('enableRouteNames');
-const routeNamesRow = document.getElementById('route-names-row');
 const overzoomCheckbox = document.getElementById('enableOverzoom');
 const tiltCheckbox = document.getElementById('enableTilt');
-const enable3dCheckbox = document.getElementById('enable3dView');
-const exaggerationRow = document.getElementById('exaggeration-row');
-const exaggerationSlider = document.getElementById('exaggerationSlider');
-const exaggerationValue = document.getElementById('exaggerationVal');
+const enable3dBtn = document.getElementById('enable3dBtn');
+const exaggerationInput = document.getElementById('exaggerationInput');
 
 // ==========================================
 // 3. LANGUAGE & TRANSLATIONS
@@ -1342,7 +1335,7 @@ let gpxSlopeLegend = null;
 let routeLegend = null;        // L.control instance for the route-names legend
 let routeLegendEl = null;      // live .route-legend DOM element (for the stale/refresh state)
 let routeLegendStatus = null;  // last rendered legend status ('list'|'zoom'|'empty'|'error'|'loading')
-let routeLegendCollapsed = localStorage.getItem(ROUTE_LEGEND_COLLAPSED_KEY) === 'true'; // legend collapsed to its title bar
+let routeLegendCollapsed = localStorage.getItem(ROUTE_LEGEND_COLLAPSED_KEY) !== 'false'; // legend collapsed to its title bar (collapsed by default)
 let lastRouteItems = [];       // last rendered list items (for re-render on isolate/clear)
 let isolatedRouteId = null;    // relation id of the trail isolated on the map, or null
 let isolatedColor = '#1565C0'; // draw color for the isolated trail
@@ -1597,12 +1590,14 @@ function updateLanguage() {
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
-        if (document.getElementById('lbl-extra-layer')) document.getElementById('lbl-extra-layer').textContent = t.lbl_extra_layer;
         if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
-        if (document.getElementById('lbl-route-names')) document.getElementById('lbl-route-names').textContent = t.lbl_route_names;
+        if (extraLayerSelect) {
+            const noneOpt = extraLayerSelect.querySelector('option[value="none"]');
+            if (noneOpt) noneOpt.textContent = t.overlay_none;
+        }
         if (routeLegend) refreshRouteLegend();
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
-        if (document.getElementById('lbl-enable-3d')) document.getElementById('lbl-enable-3d').textContent = t.lbl_enable_3d;
+        if (enable3dBtn) enable3dBtn.title = t.lbl_enable_3d;
         if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
         document.getElementById('scan-btn').textContent = t.btn_scan;
         document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
@@ -1618,12 +1613,11 @@ function updateLanguage() {
 
         const tutBtn = document.getElementById('start-tutorial-btn');
         if (tutBtn) tutBtn.textContent = t.btn_tutorial;
-
-        document.getElementById('info-creator').textContent = t.info_creator;
         document.getElementById('lbl-version').textContent = t.lbl_version;
         document.getElementById('app-version').textContent = APP_VERSION;
         if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
         document.getElementById('info-privacy').textContent = t.info_privacy;
+        if (document.getElementById('info-advanced-title')) document.getElementById('info-advanced-title').textContent = t.advanced_settings;
         if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
@@ -1793,20 +1787,19 @@ function applyCurrentLayerMaxZoom() {
 }
 
 function getTerrainExaggeration() {
-    return exaggerationSlider ? (parseFloat(exaggerationSlider.value) || DEFAULT_TERRAIN_EXAGGERATION) : DEFAULT_TERRAIN_EXAGGERATION;
+    return exaggerationInput ? (parseFloat(exaggerationInput.value) || DEFAULT_TERRAIN_EXAGGERATION) : DEFAULT_TERRAIN_EXAGGERATION;
+}
+
+function is3dEnabled() {
+    return !!(enable3dBtn && enable3dBtn.classList.contains('active'));
 }
 
 function syncTerrainControls() {
-    if (exaggerationValue && exaggerationSlider) {
-        exaggerationValue.textContent = exaggerationSlider.value;
-    }
-    if (exaggerationRow && enable3dCheckbox) {
-        exaggerationRow.style.display = enable3dCheckbox.checked ? 'flex' : 'none';
-    }
+    if (enable3dBtn) enable3dBtn.classList.toggle('active', is3dEnabled());
 }
 
 function setTerrainEnabled(enabled) {
-    syncTerrainControls();
+    if (enable3dBtn) enable3dBtn.classList.toggle('active', enabled);
     if (!map) return;
     if (enabled) {
         map.setTerrain({ exaggeration: getTerrainExaggeration() });
@@ -1820,10 +1813,14 @@ function setTerrainEnabled(enabled) {
 function setTiltEnabled(enabled) {
     if (!map) return;
     map.setTiltEnabled(enabled);
-    if (!enabled && enable3dCheckbox && !enable3dCheckbox.checked && map.getPitch() > 0) {
+    if (!enabled && !is3dEnabled() && map.getPitch() > 0) {
         map.easeTo({ pitch: 0, duration: 300 });
     }
 }
+
+window.toggle3dView = function () {
+    setTerrainEnabled(!is3dEnabled());
+};
 
 function switchLayerTo(layerKey) {
     if (currentLayer) map.removeLayer(currentLayer);
@@ -1849,12 +1846,23 @@ function removeExtraOverlay() {
     }
 }
 
+function isOverlayOn() {
+    return !!(extraLayerSelect && extraLayerSelect.value && extraLayerSelect.value !== 'none');
+}
+
 function handleExtraLayerChange(key) {
-    if (extraLayerCheckbox && extraLayerCheckbox.checked) {
+    if (key && key !== 'none' && OVERLAY_SOURCES[key]) {
         applyExtraOverlay(key);
         localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
+        routeNamesOn = true;
         refreshRouteLegend();
+    } else {
+        removeExtraOverlay();
+        removeRouteLegend();
+        localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
+        routeNamesOn = false;
     }
+    updateZoomControlVisibility();
 }
 
 // --- Route-names legend (Waymarkedtrails by_area API) ----------------------
@@ -2128,7 +2136,7 @@ function markRouteLegendStale() {
 // While shown, the compass also moves to the bottom-left (above the attribution)
 // so it doesn't collide with the legend; otherwise it stays bottom-right.
 function updateZoomControlVisibility() {
-    const legendActive = routeNamesOn && !!(extraLayerCheckbox && extraLayerCheckbox.checked);
+    const legendActive = routeNamesOn && isOverlayOn();
     document.body.classList.toggle('route-legend-on', legendActive);
     moveCompassControl(legendActive);
 }
@@ -3915,7 +3923,7 @@ window.addEventListener('appinstalled', () => {
 let tutorialStep = 0;
 let _tutorialOverlayClickHandler = null;
 let _tutorialKeydownHandler = null;
-let _routeOverlayBeforeTutorial = false; // "Show route overlay" state to restore when the tutorial ends
+let _routeOverlayBeforeTutorial = 'none'; // Route Overlay dropdown value to restore when the tutorial ends
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
@@ -3923,8 +3931,8 @@ const tutorialSteps = [
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
-    { targetSelector: '.layer-row', targetSelectorEnd: '.extra-layer-toggles', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true, enableRouteOverlay: true },
-    { targetSelector: '.map-tools-group', targetSelectorEnd: '.search-group', titleKey: 'tutorial_tools_title', textKey: 'tutorial_tools_text', expandControls: true },
+    { targetSelector: '.search-group', titleKey: 'tutorial_tools_title', textKey: 'tutorial_tools_text', expandControls: true },
+    { targetSelector: '.layer-row', targetSelectorEnd: '#extra-layer-row', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true, enableRouteOverlay: true },
     { targetSelector: '#radius-controls', targetSelectorEnd: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
@@ -3942,9 +3950,9 @@ function syncTutorialUiState(step) {
     collapseTutorialSections();
     // Turn the route overlay on for the step that explains it, so the Route Overlay
     // dropdown and "Show route names" toggle are visible under the spotlight.
-    if (step.enableRouteOverlay && extraLayerCheckbox && !extraLayerCheckbox.checked) {
-        extraLayerCheckbox.checked = true;
-        extraLayerCheckbox.dispatchEvent(new Event('change'));
+    if (step.enableRouteOverlay && extraLayerSelect && extraLayerSelect.value === 'none') {
+        extraLayerSelect.value = 'waymarked_hiking';
+        handleExtraLayerChange('waymarked_hiking');
     }
     if (step.expandSection) {
         setSectionExpanded(step.expandSection, true);
@@ -4072,7 +4080,7 @@ function detachTutorialKeyboardNavigation() {
 function startTutorial() {
     setControlsMinimized(true);
     collapseTutorialSections();
-    _routeOverlayBeforeTutorial = !!(extraLayerCheckbox && extraLayerCheckbox.checked);
+    _routeOverlayBeforeTutorial = extraLayerSelect ? extraLayerSelect.value : 'none';
     tutorialStep = 0;
     const overlay = document.getElementById('tutorial-overlay');
     overlay.style.display = 'block';
@@ -4189,10 +4197,10 @@ function finishTutorial() {
     overlay.style.pointerEvents = 'none';
     collapseTutorialSections();
     setControlsMinimized(true);
-    // Restore the "Show route overlay" checkbox to its pre-tutorial state.
-    if (extraLayerCheckbox && extraLayerCheckbox.checked !== _routeOverlayBeforeTutorial) {
-        extraLayerCheckbox.checked = _routeOverlayBeforeTutorial;
-        extraLayerCheckbox.dispatchEvent(new Event('change'));
+    // Restore the Route Overlay dropdown to its pre-tutorial selection.
+    if (extraLayerSelect && extraLayerSelect.value !== _routeOverlayBeforeTutorial) {
+        extraLayerSelect.value = _routeOverlayBeforeTutorial;
+        handleExtraLayerChange(_routeOverlayBeforeTutorial);
     }
     showDeferredInstallUi(1500);
 }
@@ -4456,45 +4464,18 @@ if (overzoomCheckbox) {
         applyCurrentLayerMaxZoom();
     });
 }
-if (extraLayerCheckbox) {
+if (extraLayerSelect) {
+    // Route names are always shown whenever an overlay is selected; the dropdown's
+    // inline onchange (handleExtraLayerChange) drives all user-initiated changes.
     const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
-    const startOn = !!OVERLAY_SOURCES[savedExtra];
-    extraLayerCheckbox.checked = startOn;
-    if (extraLayerRow) extraLayerRow.style.display = startOn ? '' : 'none';
-    if (routeNamesRow) routeNamesRow.style.display = startOn ? '' : 'none';
-    if (startOn && extraLayerSelect) extraLayerSelect.value = savedExtra;
-
-    routeNamesOn = startOn && localStorage.getItem(ROUTE_NAMES_STORAGE_KEY) === 'true';
-    if (routeNamesCheckbox) routeNamesCheckbox.checked = routeNamesOn;
+    if (OVERLAY_SOURCES[savedExtra]) {
+        extraLayerSelect.value = savedExtra;
+        routeNamesOn = true;
+    } else {
+        extraLayerSelect.value = 'none';
+        routeNamesOn = false;
+    }
     updateZoomControlVisibility();
-
-    extraLayerCheckbox.addEventListener('change', (e) => {
-        const on = e.target.checked;
-        if (extraLayerRow) extraLayerRow.style.display = on ? '' : 'none';
-        if (routeNamesRow) routeNamesRow.style.display = on ? '' : 'none';
-        if (on) {
-            const key = (extraLayerSelect && extraLayerSelect.value) || 'waymarked_hiking';
-            applyExtraOverlay(key);
-            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
-        } else {
-            removeExtraOverlay();
-            localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
-            removeRouteLegend();
-        }
-        updateZoomControlVisibility();
-    });
-}
-if (routeNamesCheckbox) {
-    routeNamesCheckbox.addEventListener('change', (e) => {
-        routeNamesOn = e.target.checked;
-        localStorage.setItem(ROUTE_NAMES_STORAGE_KEY, routeNamesOn);
-        if (routeNamesOn) {
-            refreshRouteLegend();
-        } else {
-            removeRouteLegend();
-        }
-        updateZoomControlVisibility();
-    });
 }
 if (tiltCheckbox) {
     tiltCheckbox.checked = true;
@@ -4502,17 +4483,13 @@ if (tiltCheckbox) {
         setTiltEnabled(e.target.checked);
     });
 }
-if (enable3dCheckbox) {
-    enable3dCheckbox.checked = false;
-    enable3dCheckbox.addEventListener('change', (e) => {
-        setTerrainEnabled(e.target.checked);
-    });
+if (enable3dBtn) {
+    enable3dBtn.classList.remove('active');
 }
-if (exaggerationSlider) {
-    exaggerationSlider.value = DEFAULT_TERRAIN_EXAGGERATION.toFixed(1);
-    exaggerationSlider.addEventListener('input', () => {
-        syncTerrainControls();
-        if (enable3dCheckbox && enable3dCheckbox.checked) {
+if (exaggerationInput) {
+    exaggerationInput.value = DEFAULT_TERRAIN_EXAGGERATION.toFixed(1);
+    exaggerationInput.addEventListener('input', () => {
+        if (is3dEnabled() && map) {
             map.setTerrain({ exaggeration: getTerrainExaggeration() });
         }
     });

@@ -50,8 +50,8 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - Jump to your current position with the GPS button.
 - Rotate the map with `Ctrl` + drag on desktop or two-finger rotation on touch devices.
 - Reset north using the compass control.
-- Enable overzoom to inspect raster layers beyond their standard max zoom.
-- Enable tilt and 3D terrain from the map-tools section.
+- Toggle 3D terrain with the 🧊 button next to the search box.
+- Enable overzoom, tilt, and 3D exaggeration from **Advanced settings** in the About menu.
 - Switch between multiple map layers without leaving the current map state.
 
 ## Map Layers And Data Sources
@@ -114,9 +114,8 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ### 2. Enable map tools when needed
 
-- Turn on **Overzoom** to inspect raster layers more closely.
-- Keep **Tilt** enabled for angled map interaction.
-- Turn on **3D** and adjust exaggeration for terrain relief.
+- Click the **🧊** button next to search to turn on 3D terrain relief.
+- Use **Advanced settings** (in the About menu) for **Overzoom**, **Tilt**, and **3D Exaggeration**.
 
 ### 3. Run analysis
 
@@ -161,6 +160,7 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ## Changelog
 
+- **v2.1.2:** Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.
 - **v2.1.1:** Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" to restore). Plus compass-placement, tutorial, and Find Climbs refinements.
 - **v2.1:** Added a Waymarkedtrails route overlay (hiking, cycling, MTB, skating) and an optional route-names legend that lists the routes in the current view with their official route symbols.
 - **v2.0.2:** Reworked the analysis section accordion so only one section stays open at a time, moved the Search Radius / Show Radius / Lock Radius controls into the active analysis section, and auto-enabled Show Radius when opening analysis sections.
