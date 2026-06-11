@@ -16,7 +16,7 @@ body {
     top: 20px;
     right: 20px;
     z-index: 2000;
-    width: 300px;
+    width: 340px;
     background: rgba(255, 255, 255, 0.5);
     padding: 15px;
     border-radius: 12px;
@@ -753,17 +753,21 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     background: #e2e6ea;
 }
 
+.icon-btn.active {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+}
+
+.icon-btn.active:hover {
+    background: #0d47a1;
+}
+
 .search-group {
     display: flex;
     gap: 5px;
     margin-bottom: 5px;
     align-items: center;
-}
-
-.map-tools-group {
-    border-top: 1px solid #e0e0e0;
-    padding-top: 8px;
-    margin-top: 4px;
 }
 
 #searchInput {
@@ -859,11 +863,18 @@ input[type="number"]::-webkit-inner-spin-button {
 .layer-row {
     margin-bottom: 0;
     gap: 8px;
+    justify-content: flex-start;
+}
+
+.layer-row .control-label {
+    flex: 0 0 110px;
+    white-space: nowrap;
 }
 
 .layer-row .select-container {
     width: auto;
-    flex: 0 0 200px;
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .layer-row select {
@@ -874,7 +885,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 select {
     flex-grow: 1;
-    padding: 8px;
+    padding: 8px 28px 8px 8px;
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 13px;
@@ -896,13 +907,6 @@ select {
     margin-top: 5px;
 }
 
-.map-toggle-group {
-    justify-content: flex-start;
-    gap: 14px;
-    flex-wrap: wrap;
-    margin-top: 0;
-}
-
 .checkbox-row {
     display: flex;
     gap: 6px;
@@ -917,38 +921,6 @@ select {
 
 #extra-layer-row {
     margin-bottom: 10px;
-}
-
-.extra-layer-toggles {
-    justify-content: space-between;
-}
-
-.checkbox-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.exaggeration-row {
-    display: none;
-    gap: 8px;
-    align-items: center;
-    margin-top: 8px;
-    margin-bottom: 0;
-}
-
-.exaggeration-row input[type="range"] {
-    flex: 1;
-    margin: 0;
-    accent-color: #1565c0;
-}
-
-.range-value {
-    min-width: 32px;
-    text-align: right;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    color: #444;
 }
 
 .zoom-badge {
