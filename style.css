@@ -569,6 +569,18 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
 
 .route-legend-title {
     font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-legend-title .route-legend-color,
+.route-legend-title .route-legend-symbol {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
 }
 
 .route-legend-count {
@@ -673,11 +685,11 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
 }
 
 .route-legend-color {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
     border: 1px solid rgba(0,0,0,0.25);
-    flex: 0 0 12px;
+    flex: 0 0 10px;
 }
 
 .route-legend-symbol {
@@ -741,6 +753,19 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
 .icon-btn:hover {
     background: #e2e6ea;
 }
+
+.icon-btn svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+/* 3D toggle: light-blue filled cube with a blue outline when off;
+   outline turns white and the fill drops away when active (3D on). */
+#enable3dBtn { color: #1565c0; }
+#enable3dBtn .cube-face { fill: #e3f2fd; }
+#enable3dBtn.active { color: #fff; }
+#enable3dBtn.active .cube-face { fill: none; }
 
 .icon-btn.active {
     background: #1565c0;

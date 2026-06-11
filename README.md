@@ -50,7 +50,7 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - Jump to your current position with the GPS button.
 - Rotate the map with `Ctrl` + drag on desktop or two-finger rotation on touch devices.
 - Reset north using the compass control.
-- Toggle 3D terrain with the 🧊 button next to the search box.
+- Toggle 3D terrain with the **3D** button next to the search box.
 - Enable overzoom, tilt, and 3D exaggeration from **Advanced settings** in the About menu.
 - Switch between multiple map layers without leaving the current map state.
 
@@ -114,7 +114,7 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ### 2. Enable map tools when needed
 
-- Click the **🧊** button next to search to turn on 3D terrain relief.
+- Click the **3D** button next to search to turn on 3D terrain relief.
 - Use **Advanced settings** (in the About menu) for **Overzoom**, **Tilt**, and **3D Exaggeration**.
 
 ### 3. Run analysis

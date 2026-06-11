@@ -1968,7 +1968,18 @@ function renderRouteLegend(state) {
         const collapseLabel = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
         const count = (state.status === 'list' && state.items) ? state.items.length : 0;
         const countLabel = count > 0 ? ` <span class="route-legend-count">(${count})</span>` : '';
-        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}${countLabel}</span><span class="route-legend-actions">`;
+        const isolatedItem = isolatedRouteId != null ? lastRouteItems.find((it) => it.id === isolatedRouteId) : null;
+        const swatchHtml = (item) => `<span class="route-legend-color" style="background:${item.color}"></span>`;
+        const symbolHtml = (item) => item.symbol
+            ? `<img class="route-legend-symbol" src="${item.symbol}" alt="" loading="lazy" onerror="this.style.display='none'">`
+            : '';
+        const badgeHtml = (item) => item.symbol ? symbolHtml(item) : swatchHtml(item);
+        const defaultTitleHtml = `${t.route_legend_title}${countLabel}`;
+        // When minimized with a single trail isolated, show that trail's color swatch, symbol and name in the header.
+        const collapsedNameHtml = isolatedItem ? `${swatchHtml(isolatedItem)}${symbolHtml(isolatedItem)}${escapeHtmlText(isolatedItem.name)}` : '';
+        const titleHtml = (routeLegendCollapsed && isolatedItem) ? collapsedNameHtml : defaultTitleHtml;
+        const titleAttr = (routeLegendCollapsed && isolatedItem) ? ` title="${escapeHtmlText(isolatedItem.name)}"` : '';
+        let html = `<div class="route-legend-header"><span class="route-legend-title"${titleAttr}>${titleHtml}</span><span class="route-legend-actions">`;
         if (showRefresh) {
             html += `<button class="route-legend-refresh" title="${t.route_legend_refresh}" aria-label="${t.route_legend_refresh}">`
                   + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>`
@@ -1989,11 +2000,9 @@ function renderRouteLegend(state) {
             html += `<div class="route-legend-msg">${msg}</div>`;
         } else {
             for (const item of state.items) {
-                const badge = item.symbol
-                    ? `<img class="route-legend-symbol" src="${item.symbol}" alt="" loading="lazy" onerror="this.style.display='none'">`
-                    : `<span class="route-legend-color" style="background:${item.color}"></span>`;
+                const badge = badgeHtml(item);
                 const active = item.id === isolatedRouteId ? ' active' : '';
-                html += `<div class="route-legend-item${active}" data-route-id="${item.id}" data-route-color="${item.color}">${badge}<span class="route-legend-name">${escapeHtmlText(item.name)}</span></div>`;
+                html += `<div class="route-legend-item${active}" data-route-id="${item.id}" data-route-color="${item.color}">${badge}<span class="route-legend-name" title="${escapeHtmlText(item.name)}">${escapeHtmlText(item.name)}</span></div>`;
             }
             if (state.extra > 0) html += `<div class="route-legend-msg">+${state.extra}…</div>`;
         }
@@ -2006,6 +2015,16 @@ function renderRouteLegend(state) {
             routeLegendCollapsed = !routeLegendCollapsed;
             localStorage.setItem(ROUTE_LEGEND_COLLAPSED_KEY, routeLegendCollapsed);
             div.classList.toggle('collapsed', routeLegendCollapsed);
+            const titleSpan = div.querySelector('.route-legend-title');
+            if (titleSpan) {
+                if (routeLegendCollapsed && isolatedItem) {
+                    titleSpan.innerHTML = collapsedNameHtml;
+                    titleSpan.title = isolatedItem.name;
+                } else {
+                    titleSpan.innerHTML = defaultTitleHtml;
+                    titleSpan.removeAttribute('title');
+                }
+            }
             collapseBtn.setAttribute('aria-expanded', routeLegendCollapsed ? 'false' : 'true');
             const label = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
             collapseBtn.title = label;
