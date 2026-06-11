@@ -1966,10 +1966,9 @@ function renderRouteLegend(state) {
         const div = L.DomUtil.create('div', 'route-legend' + (isolatedRouteId != null ? ' isolated' : '') + (routeLegendCollapsed ? ' collapsed' : ''));
         const showRefresh = state.status !== 'loading';
         const collapseLabel = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
-        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}</span><span class="route-legend-actions">`;
-        if (isolatedRouteId != null) {
-            html += `<button class="route-legend-showall">${escapeHtmlText(t.route_legend_show_all || 'Show all')}</button>`;
-        }
+        const count = (state.status === 'list' && state.items) ? state.items.length : 0;
+        const countLabel = count > 0 ? ` <span class="route-legend-count">(${count})</span>` : '';
+        let html = `<div class="route-legend-header"><span class="route-legend-title">${t.route_legend_title}${countLabel}</span><span class="route-legend-actions">`;
         if (showRefresh) {
             html += `<button class="route-legend-refresh" title="${t.route_legend_refresh}" aria-label="${t.route_legend_refresh}">`
                   + `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>`
@@ -2014,8 +2013,6 @@ function renderRouteLegend(state) {
         });
         const refreshBtn = div.querySelector('.route-legend-refresh');
         if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); doRouteLegendFetch(); });
-        const showAllBtn = div.querySelector('.route-legend-showall');
-        if (showAllBtn) showAllBtn.addEventListener('click', (e) => { e.stopPropagation(); clearIsolatedTrail(); });
         div.querySelectorAll('.route-legend-item').forEach((el) => {
             el.addEventListener('click', (e) => {
                 e.stopPropagation();

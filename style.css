@@ -571,6 +571,10 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     font-weight: 600;
 }
 
+.route-legend-count {
+    font-weight: 400;
+}
+
 .route-legend-refresh {
     display: none;
     align-items: center;
@@ -666,21 +670,6 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-}
-
-.route-legend-showall {
-    border: none;
-    background: #1565C0;
-    color: #fff;
-    font-size: 11px;
-    line-height: 1;
-    border-radius: 10px;
-    padding: 3px 8px;
-    cursor: pointer;
-}
-
-.route-legend-showall:hover {
-    background: #0d47a1;
 }
 
 .route-legend-color {
