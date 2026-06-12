@@ -6,7 +6,8 @@ body {
 }
 
 #map {
-    height: 100vh;
+    height: 100vh; /* fallback for browsers without dvh support */
+    height: 100dvh; /* mobile Chrome: track the visible viewport as the URL bar shows/hides */
     width: 100%;
 }
 
@@ -26,6 +27,7 @@ body {
     gap: 10px;
     backdrop-filter: blur(5px);
     max-height: 90vh;
+    max-height: 90dvh;
     overflow-y: auto;
 }
 
@@ -555,6 +557,7 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     font-size: 12px;
     line-height: 1.5;
     max-height: 40vh;
+    max-height: 40dvh;
     max-width: 220px;
     overflow-y: auto;
 }
