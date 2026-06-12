@@ -565,6 +565,7 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 4px;
+    cursor: pointer;
 }
 
 .route-legend-title {

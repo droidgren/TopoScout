@@ -73,6 +73,8 @@ const OVERLAY_SOURCES = {
 };
 const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
 const ROUTE_LEGEND_COLLAPSED_KEY = 'topo_route_legend_collapsed'; // 'true' when the route-names legend is collapsed
+const ROUTE_ISOLATED_ID_KEY = 'topo_route_isolated_id';       // relation id of the persisted isolated trail
+const ROUTE_ISOLATED_COLOR_KEY = 'topo_route_isolated_color'; // its draw color
 
 // Map each Waymarkedtrails overlay to its API activity subdomain. The route-names
 // legend lists the routes in the current viewport via that activity's by_area API
@@ -1341,6 +1343,7 @@ let isolatedRouteId = null;    // relation id of the trail isolated on the map, 
 let isolatedColor = '#1565C0'; // draw color for the isolated trail
 let isolatedTrailLayers = [];  // drawn L.polyline layers for the isolated trail
 let isolatedFetchAbort = null; // AbortController for the segments request
+let restoreIsolatedPending = null; // { id, color } to re-isolate once the legend list first loads
 let routeNamesOn = false;      // "Show route names" toggle state
 let routeFetchAbort = null;    // AbortController for the in-flight Overpass request
 let routeRefreshTimer = null;  // debounce timer for legend refresh
@@ -1371,10 +1374,11 @@ function isSupportedLayer(layerKey) {
 function parseSharedMapHash(hashValue) {
     const hash = (hashValue || '').replace(/^#/, '');
     if (!hash) return null;
-    const match = hash.match(/^map=(.+)$/);
-    if (!match) return null;
+    const segments = hash.split('&');
+    const mapSeg = segments.find((s) => s.startsWith('map='));
+    if (!mapSeg) return null;
 
-    const parts = match[1].split('/');
+    const parts = mapSeg.slice(4).split('/');
     if (parts.length < 3) return null;
 
     const zoom = parseInt(parts[0], 10);
@@ -1390,11 +1394,26 @@ function parseSharedMapHash(hashValue) {
         return null;
     }
 
+    // Optional shared trail selection (&route=<overlay>/<id>/<colorHexNoHash>).
+    let route = null;
+    const routeSeg = segments.find((s) => s.startsWith('route='));
+    if (routeSeg) {
+        const rp = routeSeg.slice(6).split('/');
+        const overlay = decodeURIComponent(rp[0] || '');
+        const id = parseInt(rp[1], 10);
+        const color = rp[2] ? '#' + rp[2] : '#1565C0';
+        const name = rp[3] ? decodeURIComponent(rp[3]) : '';
+        if (OVERLAY_SOURCES[overlay] && Number.isFinite(id) && id > 0) {
+            route = { overlay, id, color, name };
+        }
+    }
+
     return {
         zoom,
         lat,
         lng,
-        layer: isSupportedLayer(layer) ? layer : null
+        layer: isSupportedLayer(layer) ? layer : null,
+        route
     };
 }
 
@@ -1425,6 +1444,8 @@ function resolveInitialAppState() {
 
 const initialAppState = resolveInitialAppState();
 const hasSharedMapView = Boolean(parseSharedMapHash(location.hash));
+const sharedRoute = (parseSharedMapHash(location.hash) || {}).route || null;
+let pendingRouteFit = false; // fit map to the full shared trail once it draws
 let currentLang = initialAppState.lang;
 const savedLat = initialAppState.lat;
 const savedLng = initialAppState.lng;
@@ -1498,7 +1519,18 @@ function getCurrentMapHash() {
     const lat = center.lat.toFixed(5);
     const lng = center.lng.toFixed(5);
     const activeLayer = (layerSelect && layerSelect.value) || localStorage.getItem('topo_layer') || savedLayer || 'opentopo';
-    return '#map=' + zoom + '/' + lat + '/' + lng + '/' + activeLayer;
+    let hash = '#map=' + zoom + '/' + lat + '/' + lng + '/' + activeLayer;
+    // Include the selected (isolated) trail so the recipient sees the same route.
+    if (isolatedRouteId != null && isOverlayOn()) {
+        const overlayKey = extraLayerSelect ? extraLayerSelect.value : '';
+        const colorHex = String(isolatedColor || '').replace('#', '');
+        // Carry the route name too, so the recipient's minimized legend can show it
+        // even when zoomed out (the by_area list that supplies names won't have loaded).
+        const isolatedItem = lastRouteItems.find((it) => it.id === isolatedRouteId);
+        const nameEnc = encodeURIComponent(isolatedItem ? isolatedItem.name : '');
+        hash += '&route=' + encodeURIComponent(overlayKey) + '/' + isolatedRouteId + '/' + colorHex + '/' + nameEnc;
+    }
+    return hash;
 }
 
 function getCurrentShareLink() {
@@ -1851,6 +1883,9 @@ function isOverlayOn() {
 }
 
 function handleExtraLayerChange(key) {
+    // Changing the overlay selection drops any isolated trail (and its persistence).
+    removeIsolatedTrailLayers();
+    persistIsolatedSelection();
     if (key && key !== 'none' && OVERLAY_SOURCES[key]) {
         applyExtraOverlay(key);
         localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
@@ -1948,6 +1983,14 @@ async function doRouteLegendFetch() {
         const items = [...byName.entries()]
             .map(([name, v]) => ({ name, id: v.id, color: v.color, symbol: v.symbol }))
             .sort((a, b) => a.name.localeCompare(b.name));
+        // Restore a persisted trail selection once the list (and the map/overlay) are ready.
+        if (restoreIsolatedPending && isolatedRouteId == null) {
+            isolatedRouteId = restoreIsolatedPending.id;
+            isolatedColor = restoreIsolatedPending.color;
+            restoreIsolatedPending = null;
+            setExtraOverlayRasterOpacity(0);
+            fetchAndDrawTrail(isolatedRouteId);
+        }
         renderRouteLegend({ status: items.length ? 'list' : 'empty', items });
     } catch (err) {
         if (err && err.name === 'AbortError') return;
@@ -2010,7 +2053,10 @@ function renderRouteLegend(state) {
         html += `</div>`; // .route-legend-body
         div.innerHTML = html;
         const collapseBtn = div.querySelector('.route-legend-collapse');
-        if (collapseBtn) collapseBtn.addEventListener('click', (e) => {
+        // Clicking anywhere on the header toggles collapse (the refresh button below
+        // stops propagation so it never triggers a toggle).
+        const header = div.querySelector('.route-legend-header');
+        if (header) header.addEventListener('click', (e) => {
             e.stopPropagation();
             routeLegendCollapsed = !routeLegendCollapsed;
             localStorage.setItem(ROUTE_LEGEND_COLLAPSED_KEY, routeLegendCollapsed);
@@ -2025,10 +2071,12 @@ function renderRouteLegend(state) {
                     titleSpan.removeAttribute('title');
                 }
             }
-            collapseBtn.setAttribute('aria-expanded', routeLegendCollapsed ? 'false' : 'true');
-            const label = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
-            collapseBtn.title = label;
-            collapseBtn.setAttribute('aria-label', label);
+            if (collapseBtn) {
+                collapseBtn.setAttribute('aria-expanded', routeLegendCollapsed ? 'false' : 'true');
+                const label = routeLegendCollapsed ? (t.route_legend_expand || 'Expand') : (t.route_legend_collapse || 'Collapse');
+                collapseBtn.title = label;
+                collapseBtn.setAttribute('aria-label', label);
+            }
         });
         const refreshBtn = div.querySelector('.route-legend-refresh');
         if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); doRouteLegendFetch(); });
@@ -2075,8 +2123,20 @@ function removeIsolatedTrailLayers() {
     isolatedRouteId = null;
 }
 
+// Persist (or clear) the isolated-trail selection so it survives a reload.
+function persistIsolatedSelection() {
+    if (isolatedRouteId != null) {
+        localStorage.setItem(ROUTE_ISOLATED_ID_KEY, String(isolatedRouteId));
+        localStorage.setItem(ROUTE_ISOLATED_COLOR_KEY, isolatedColor);
+    } else {
+        localStorage.removeItem(ROUTE_ISOLATED_ID_KEY);
+        localStorage.removeItem(ROUTE_ISOLATED_COLOR_KEY);
+    }
+}
+
 function clearIsolatedTrail() {
     removeIsolatedTrailLayers();
+    persistIsolatedSelection();
     if (routeLegendStatus === 'list') renderRouteLegend({ status: 'list', items: lastRouteItems });
 }
 
@@ -2089,6 +2149,7 @@ function toggleIsolateTrail(id, color) {
     isolatedTrailLayers = [];
     isolatedRouteId = id;
     isolatedColor = color || '#1565C0';
+    persistIsolatedSelection();
     setExtraOverlayRasterOpacity(0);
     renderRouteLegend({ status: 'list', items: lastRouteItems });
     fetchAndDrawTrail(id);
@@ -2130,8 +2191,18 @@ async function fetchAndDrawTrail(id) {
             }
         }
         if (allLines.length) {
+            // Ensure the raster trails stay hidden once the overlay's native layer is
+            // ready (the initial hide may have run before extraOverlayLayer._ids existed).
+            setExtraOverlayRasterOpacity(0);
             isolatedTrailLayers.push(L.polyline(allLines, { color: '#ffffff', weight: 8, opacity: 0.9 }).addTo(map));
             isolatedTrailLayers.push(L.polyline(allLines, { color: isolatedColor, weight: 5, opacity: 0.95 }).addTo(map));
+            // For a shared-link route, ignore the link's zoom and fit the whole trail.
+            if (pendingRouteFit) {
+                pendingRouteFit = false;
+                const flat = [];
+                for (const line of allLines) for (const pt of line) flat.push(pt);
+                if (flat.length) map.fitBounds(L.latLngBounds(flat).pad(0.1));
+            }
         }
     } catch (err) {
         if (err && err.name === 'AbortError') return;
@@ -4619,9 +4690,35 @@ function applyInitialMapState() {
     if (initialMapStateApplied) return;
     initialMapStateApplied = true;
     handleLayerChange(savedLayer);
-    const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
-    if (OVERLAY_SOURCES[savedExtra]) applyExtraOverlay(savedExtra);
-    if (routeNamesOn) refreshRouteLegend();
+    if (sharedRoute) {
+        // A shared link selected a specific trail: turn on its overlay, keep the
+        // legend minimized for the recipient, isolate the trail and fit the whole
+        // route in view (ignoring the link's zoom level).
+        if (extraLayerSelect) extraLayerSelect.value = sharedRoute.overlay;
+        routeNamesOn = true;
+        routeLegendCollapsed = true; // in-memory only; don't overwrite the viewer's preference
+        applyExtraOverlay(sharedRoute.overlay); // also kicks off the legend list fetch
+        updateZoomControlVisibility();
+        isolatedRouteId = sharedRoute.id;
+        isolatedColor = sharedRoute.color;
+        // Seed the legend list with this route so its name shows in the minimized
+        // header even when zoomed out (before/without the by_area list loading).
+        if (sharedRoute.name) {
+            lastRouteItems = [{ id: sharedRoute.id, name: sharedRoute.name, color: sharedRoute.color, symbol: null }];
+        }
+        setExtraOverlayRasterOpacity(0);
+        pendingRouteFit = true;
+        fetchAndDrawTrail(sharedRoute.id);
+    } else {
+        const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
+        if (OVERLAY_SOURCES[savedExtra]) applyExtraOverlay(savedExtra);
+        // Queue restoring a persisted isolated trail; it's applied once the legend list loads.
+        const savedIsoId = Number(localStorage.getItem(ROUTE_ISOLATED_ID_KEY));
+        if (isOverlayOn() && Number.isFinite(savedIsoId) && savedIsoId) {
+            restoreIsolatedPending = { id: savedIsoId, color: localStorage.getItem(ROUTE_ISOLATED_COLOR_KEY) || '#1565C0' };
+        }
+        if (routeNamesOn) refreshRouteLegend();
+    }
     updateUI();
     updateCenterElevation();
 }
