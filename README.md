@@ -6,7 +6,7 @@ Live demo: [Elevation Finder](https://droidgren.github.io/elevation_finder/)
 
 Repository: [droidgren/elevation_finder](https://github.com/droidgren/elevation_finder)
 
-Companion project: [Topo GPX Viewer](https://github.com/droidgren/topo_gpx_viewer/)
+
 
 
 ## Core Capabilities
@@ -43,6 +43,9 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - Color the route by slope.
 - Show waypoints and min/max elevation markers.
 - View route summary stats including distance, elevation gain/loss, and min/max elevation.
+- Open an **elevation profile bar** for the loaded route: hover or drag to scrub along the track, scroll to zoom the profile, and use the arrow keys to step (hold `Shift` for larger steps).
+- Enable **Sync Map with Profile** to pan the map to a blue marker that follows the profile cursor.
+- Optionally upload, list, share, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
 
 ### Map and navigation tools
 
@@ -142,6 +145,28 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 - API keys are stored locally in the browser.
 - No terrain analysis results are uploaded to a project server.
 
+## Optional Backend (GPX Upload And Sharing)
+
+The frontend works fully on static hosting (GitHub Pages and the live demo) with no backend. An optional FastAPI backend adds GPX upload, a per-browser upload history, and shareable `?gpx=<id>` links.
+
+The frontend auto-detects the backend by probing `/api/health` on load. When it is reachable, the **Load GPX Route** button opens an upload/history modal and share links include the uploaded route. When it is not reachable, the same button opens the local file picker directly — no upload UI, no errors, and any `?gpx=` parameter is stripped silently.
+
+Run it locally:
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Then open `http://localhost:8000/`. The backend serves the static files and stores uploads under `gpx-files/` (configurable via `GPX_UPLOAD_DIR`).
+
+Or with Docker:
+
+```bash
+docker build -t elevation-finder .
+docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
+```
+
 ## Progressive Web App Notes
 
 - The app can be installed on mobile and desktop.
@@ -151,15 +176,20 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 ## Repository Layout
 
 - `index.html` - application shell and modal markup
-- `script.js` - map adapter, terrain analysis, GPX overlay, localization, and app logic
+- `script.js` - map adapter, terrain analysis, GPX overlay, elevation profile, localization, and app logic
 - `style.css` - control panel, modal, and map styling
 - `service-worker.js` - offline asset caching
 - `manifest.json` - PWA metadata
 - `lang/en.js` - English strings
 - `lang/sv.js` - Swedish strings
+- `main.py` - optional FastAPI backend for GPX upload/list/delete/share
+- `requirements.txt` - Python dependencies for the optional backend
+- `Dockerfile` - container image for the optional backend
+- `gpx-files/` - uploaded GPX storage (created at runtime; git-ignored)
 
 ## Changelog
 
+- **v2.2.0:** Added an elevation profile bar for loaded GPX routes (hover/drag to scrub, scroll to zoom, arrow keys to step, with an optional "Sync Map with Profile" marker), and an optional FastAPI backend for uploading, listing, and sharing GPX routes by link. The frontend auto-detects the backend and stays fully functional on static hosting when none is present.
 - **v2.1.2:** Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.
 - **v2.1.1:** Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" to restore). Plus compass-placement, tutorial, and Find Climbs refinements.
 - **v2.1:** Added a Waymarkedtrails route overlay (hiking, cycling, MTB, skating) and an optional route-names legend that lists the routes in the current view with their official route symbols.
@@ -181,11 +211,12 @@ Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
 ## Privacy
 
-Elevation Finder is fully client-side.
+Elevation Finder is client-side by default.
 
 - No location data is sent to the creator's server.
 - No search history is stored on a backend.
 - API keys are only stored locally in the browser and sent directly to the relevant map provider when used.
+- The optional backend only stores the GPX files you explicitly upload, and only on the server you choose to run. The public live demo and static hosting run without it.
 
 ## Credits
 

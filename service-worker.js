@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elevation-finder-v2.9.6';
+const CACHE_NAME = 'elevation-finder-v2.9.7';
 const ASSETS = [
     './',
     './index.html',
@@ -33,6 +33,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    // Only handle same-origin GETs from the cache. Let cross-origin requests
+    // (Google Sign-In, map tiles, etc.) and the optional backend API hit the
+    // network directly and untouched.
+    if (url.origin !== self.location.origin) return;
+    if (event.request.method !== 'GET') return;
+    if (url.pathname.startsWith('/api/')) return;
     event.respondWith(
         caches.match(event.request).then((response) => {
             return response || fetch(event.request);
