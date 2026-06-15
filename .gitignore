@@ -1,2 +1,6 @@
 prompt/
 .claude/settings.local.json
+__pycache__/
+*.pyc
+.venv/
+gpx-files/

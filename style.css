@@ -1321,3 +1321,313 @@ details[open] summary {
     padding-bottom: 0;
     margin-bottom: 0;
 }
+
+/* --- GPX MODAL & UPLOADED FILES --- */
+.gpx-modal-content {
+    max-width: 520px;
+    text-align: left;
+}
+
+.gpx-modal-content h4,
+.gpx-modal-content p {
+    text-align: left;
+}
+
+.gpx-modal-actions {
+    margin: 12px 0;
+}
+
+.gpx-modal-actions .gpx-btn,
+#gpx-modal-close {
+    margin-top: 0;
+}
+
+.gpx-modal-panel {
+    margin-top: 0;
+    margin-bottom: 14px;
+}
+
+.gpx-auth {
+    margin: 12px 0;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(236, 239, 241, 0.6);
+    border: 1px solid rgba(120, 144, 156, 0.35);
+}
+
+.gpx-auth-desc {
+    font-size: 12px;
+    color: #455A64;
+    margin: 0 0 8px 0;
+}
+
+.google-signin-btn {
+    display: flex;
+    min-height: 40px;
+}
+
+.gpx-auth-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.gpx-user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background: #CFD8DC;
+}
+
+.gpx-user-email {
+    font-size: 13px;
+    font-weight: 600;
+    color: #263238;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.gpx-signout-btn {
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.secondary-btn {
+    background-color: #ECEFF1;
+    color: #37474F;
+    padding: 7px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.secondary-btn:hover {
+    background-color: #CFD8DC;
+}
+
+.danger-btn {
+    background-color: #FDECEA;
+    color: #B42318;
+    padding: 7px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.danger-btn:hover {
+    background-color: #FCDAD7;
+}
+
+.uploaded-gpx-panel {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(120, 144, 156, 0.35);
+}
+
+.gpx-modal-panel .uploaded-gpx-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.uploaded-gpx-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #37474F;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.uploaded-gpx-empty {
+    font-size: 12px;
+    color: #607D8B;
+}
+
+.uploaded-gpx-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.uploaded-gpx-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(236, 239, 241, 0.9);
+}
+
+.uploaded-gpx-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+}
+
+.uploaded-gpx-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #263238;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.uploaded-gpx-date {
+    font-size: 11px;
+    color: #607D8B;
+}
+
+.uploaded-gpx-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.uploaded-gpx-actions button {
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .uploaded-gpx-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .uploaded-gpx-actions {
+        width: 100%;
+    }
+
+    .uploaded-gpx-actions .secondary-btn,
+    .uploaded-gpx-actions .danger-btn {
+        flex: 1;
+    }
+}
+
+/* --- ELEVATION PROFILE BAR --- */
+.elevation-profile {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    transition: none;
+}
+
+.elevation-profile-body {
+    position: relative;
+    height: 130px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+    transition: height 0.3s ease;
+}
+
+.elevation-profile.minimized .elevation-profile-body {
+    height: 26px;
+}
+
+@media (min-width: 600px) {
+    .elevation-profile-body {
+        height: 150px;
+    }
+}
+
+.elevation-profile-overlay {
+    position: absolute;
+    top: 0;
+    left: 52px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+    min-height: 24px;
+    pointer-events: none;
+    user-select: none;
+    z-index: 1;
+}
+
+@media (max-width: 600px) {
+    .elevation-profile-overlay {
+        pointer-events: auto;
+        cursor: pointer;
+        left: 0;
+        right: 0;
+        padding: 4px 10px;
+    }
+}
+
+.elevation-profile-overlay > * {
+    pointer-events: auto;
+}
+
+.elevation-profile-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #555;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 3px;
+    padding: 1px 5px;
+}
+
+.elevation-profile-info {
+    font-size: 11px;
+    color: #333;
+    font-weight: 600;
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 8px;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 3px;
+    margin: 0 4px;
+}
+
+.elevation-profile-info:empty {
+    display: none;
+}
+
+.elevation-profile-toggle {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #555;
+    padding: 1px 6px;
+    line-height: 1;
+    transition: transform 0.3s ease;
+}
+
+.elevation-profile-toggle:hover {
+    background: #fff;
+    border-color: #888;
+}
+
+.elevation-profile.minimized .elevation-profile-toggle {
+    transform: rotate(180deg);
+}
+
+#elevation-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+}
+
+.elevation-profile.minimized #elevation-canvas {
+    display: none;
+}

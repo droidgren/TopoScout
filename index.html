@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.0/dist/maplibre-gl.css" />
 
     <link rel="stylesheet" href="style.css">
+
+    <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -33,7 +36,7 @@
             <p><strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.1.2</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">2.2.0</span>
             </p>
 
             <details
@@ -41,6 +44,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.2.0:</strong> Added an elevation profile bar for loaded GPX routes (hover/drag to scrub, with an optional "Sync Map with Profile" marker that pans the map), plus an optional self-hosted backend for uploading, listing, and sharing GPX routes by link — the app still works fully on static hosting when no backend is present.</li>
                     <li><strong>v2.1.2:</strong> Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.</li>
                     <li><strong>v2.1.1:</strong> Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" restores). Plus compass-placement, tutorial, and Find Climbs refinements.</li>
                     <li><strong>v2.1:</strong> Added a Waymarkedtrails route overlay (hiking, cycling, MTB, skating) and an optional route-names legend that lists the routes in view with their official route symbols.</li>
@@ -72,6 +76,11 @@
                         <span id="lbl-3d-exaggeration" style="font-size: 13px; min-width: 140px;">3D Exaggeration:</span>
                         <input type="number" id="exaggerationInput" value="1.5" min="0" max="3" step="0.1"
                             style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 10px;">
+                        <input type="checkbox" id="gpxElevMapSync" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-elev-map-sync" style="font-size: 13px; line-height: 1;">Enable sync map with elevation profile</span>
                     </label>
                 </div>
             </details>
@@ -127,6 +136,33 @@
                 <button id="modal-save" class="save-btn" onclick="saveApiKey()">Save</button>
                 <button id="modal-cancel" class="cancel-btn" onclick="cancelApiKey()">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <div id="gpx-modal" class="modal-overlay" onclick="if (event.target === this) closeGpxModal()">
+        <div class="modal-content gpx-modal-content">
+            <h4 id="gpx-modal-title">Load GPX Route</h4>
+            <p id="gpx-modal-desc">Upload a GPX file or open one of your previous uploads.</p>
+            <div id="gpx-auth" class="gpx-auth" style="display:none;">
+                <div id="gpx-auth-signin" class="gpx-auth-signin">
+                    <p id="gpx-auth-desc" class="gpx-auth-desc">Sign in with Google to see your uploaded routes on any device.</p>
+                    <div id="google-signin-btn" class="google-signin-btn"></div>
+                </div>
+                <div id="gpx-auth-user" class="gpx-auth-user" style="display:none;">
+                    <img id="gpx-user-avatar" class="gpx-user-avatar" alt="" referrerpolicy="no-referrer">
+                    <span id="gpx-user-email" class="gpx-user-email"></span>
+                    <button id="gpx-signout-btn" type="button" class="secondary-btn gpx-signout-btn" onclick="signOutGoogle()">Sign out</button>
+                </div>
+            </div>
+            <div class="gpx-modal-actions">
+                <button id="gpx-upload-btn" class="gpx-btn" onclick="document.getElementById('gpx-file-input').click()">Upload</button>
+            </div>
+            <div class="uploaded-gpx-panel gpx-modal-panel">
+                <div id="uploaded-gpx-title" class="uploaded-gpx-title">Uploaded GPX Files</div>
+                <div id="uploaded-gpx-empty" class="uploaded-gpx-empty">No uploaded GPX files yet.</div>
+                <div id="uploaded-gpx-list" class="uploaded-gpx-list"></div>
+            </div>
+            <button id="gpx-modal-close" class="cancel-btn" onclick="closeGpxModal()">Close</button>
         </div>
     </div>
 
@@ -336,7 +372,7 @@
             <!-- Add Routes (collapsible) -->
             <div id="group-routes" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-routes')">
-                    <span id="section-routes-title">📂 Add Routes</span>
+                    <span id="section-routes-title">📂 Add GPX Routes</span>
                     <span class="section-toggle">➕</span>
                 </div>
                 <div id="section-routes" class="section-content">
@@ -374,9 +410,13 @@
                             <input type="checkbox" id="gpxColorBySlope">
                             <label id="lbl-color-slope" for="gpxColorBySlope">Color by slope</label>
                         </div>
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxShowElevProfile" checked>
+                            <label id="lbl-show-elev-profile" for="gpxShowElevProfile">Show Elevation Profile</label>
+                        </div>
                     </div>
                     <input type="file" id="gpx-file-input" accept=".gpx" style="display:none;">
-                    <button id="gpx-btn" class="gpx-btn" onclick="document.getElementById('gpx-file-input').click()">📂 Load GPX Route</button>
+                    <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()">📂 Load GPX Route</button>
                     <div id="gpx-track-info" class="gpx-track-info" style="display:none;"></div>
                     <button id="gpx-clear-btn" class="gpx-clear-btn" onclick="clearGpxRoute()" style="display:none;">✕ Clear Route</button>
                 </div>
@@ -395,6 +435,18 @@
     <canvas id="single-point-canvas" width="1" height="1"></canvas>
 
     <div id="map"></div>
+
+    <!-- ELEVATION PROFILE BAR -->
+    <div id="elevation-profile" class="elevation-profile" style="display:none;">
+        <div id="elevation-profile-body" class="elevation-profile-body">
+            <canvas id="elevation-canvas"></canvas>
+            <div class="elevation-profile-overlay">
+                <span id="elevation-profile-title" class="elevation-profile-label">Elevation Profile</span>
+                <span id="elevation-profile-info" class="elevation-profile-info"></span>
+                <button id="elevation-profile-toggle" class="elevation-profile-toggle" onclick="toggleElevationProfile()" title="Minimize">▼</button>
+            </div>
+        </div>
+    </div>
 
     <div id="update-notification" class="notification-snackbar">
         <span id="update-msg">A new version is available.</span>

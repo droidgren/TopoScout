@@ -1,10 +1,62 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.1.2";
+const APP_VERSION = "2.2.0";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
+
+// --- Optional GPX upload/sharing backend (auto-detected; absent on static hosting) ---
+const API_BASE = '/api';
+const BACKEND_DETECTION_TIMEOUT_MS = 1500;
+
+let backendAvailable = false;
+let backendDetectionPromise = null;
+
+function isBackendEnabled() {
+    return backendAvailable;
+}
+
+// --- Google Sign-In (optional; ties uploads to a Google account so previous
+// uploads appear on any device/session, independent of the anonymous cookie) ---
+const GOOGLE_CLIENT_ID = '79515767501-5p4cbnfq111dqnuv8h6fp91t33k6gcbt.apps.googleusercontent.com';
+const GOOGLE_AUTH_STORAGE_KEY = 'topo_google_auth';
+let googleAuth = null; // { token, exp, email, name, picture, sub }
+let googleAuthInitialized = false;
+
+async function detectBackendAvailability() {
+    if (backendDetectionPromise) {
+        return backendDetectionPromise;
+    }
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), BACKEND_DETECTION_TIMEOUT_MS)
+        : null;
+
+    backendDetectionPromise = fetch(API_BASE + '/health', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal: controller ? controller.signal : undefined
+    })
+        .then(async response => {
+            if (!response.ok) {
+                return false;
+            }
+            const payload = await response.json().catch(() => null);
+            return !!(payload && payload.status === 'ok');
+        })
+        .catch(() => false)
+        .finally(() => {
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+        });
+
+    backendAvailable = await backendDetectionPromise;
+    backendDetectionPromise = null;
+    return backendAvailable;
+}
 
 // Water analysis (CartoDB Light No Labels)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
@@ -1354,6 +1406,12 @@ let gpxLayer = null;
 let gpxTrackData = null; // stores parsed GPX stats for info panel
 let currentMarkers = [];
 let currentKmMarkers = [];
+// Active GPX source + uploaded-files list (backend-only; inert without a backend)
+let currentSharedGpxId = null;
+let currentGpxFilename = null;
+let currentGpxShareUrl = null;
+let uploadedGpxFiles = [];
+let uploadedGpxListState = 'idle';
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -1444,6 +1502,7 @@ function resolveInitialAppState() {
 
 const initialAppState = resolveInitialAppState();
 const hasSharedMapView = Boolean(parseSharedMapHash(location.hash));
+const hasSharedGpxLink = new URLSearchParams(location.search).has('gpx');
 const sharedRoute = (parseSharedMapHash(location.hash) || {}).route || null;
 let pendingRouteFit = false; // fit map to the full shared trail once it draws
 let currentLang = initialAppState.lang;
@@ -1535,6 +1594,9 @@ function getCurrentMapHash() {
 
 function getCurrentShareLink() {
     const params = new URLSearchParams();
+    if (isBackendEnabled() && currentSharedGpxId) {
+        params.set('gpx', currentSharedGpxId);
+    }
     params.set('lang', currentLang);
     return location.origin + location.pathname + '?' + params.toString() + getCurrentMapHash();
 }
@@ -1598,11 +1660,74 @@ async function copyTextToClipboard(text, successMessage, errorMessage) {
 
 window.generateShareLink = function () {
     const t = translations[currentLang];
+    const link = getCurrentShareLink();
+    const successMessage = isBackendEnabled() && currentSharedGpxId
+        ? (t.status_gpx_share_copied || t.status_link_copied || 'Link copied to clipboard.')
+        : (t.status_link_copied || 'Link copied to clipboard.');
     copyTextToClipboard(
-        getCurrentShareLink(),
-        t.status_link_copied || 'Link copied to clipboard.',
+        link,
+        successMessage,
         t.status_clipboard_error || 'Could not copy link.'
     );
+};
+
+window.copyUploadedGpxLink = function (gpxId) {
+    const t = translations[currentLang];
+    if (!isBackendEnabled()) {
+        return copyTextToClipboard(
+            getCurrentShareLink(),
+            t.status_link_copied || 'Link copied to clipboard.',
+            t.status_clipboard_error || 'Could not copy link.'
+        );
+    }
+    const params = new URLSearchParams();
+    params.set('gpx', gpxId);
+    const link = location.origin + location.pathname + '?' + params.toString();
+    copyTextToClipboard(
+        link,
+        t.status_gpx_share_copied || t.status_link_copied || 'Link copied to clipboard.',
+        t.status_clipboard_error || 'Could not copy link.'
+    );
+};
+
+window.deleteUploadedGpx = async function (gpxId) {
+    const t = translations[currentLang];
+    if (!gpxId) return;
+    if (!isBackendEnabled()) {
+        statusDiv.textContent = t.status_backend_disabled || 'Backend sharing is disabled in this build.';
+        return;
+    }
+
+    const fileEntry = uploadedGpxFiles.find(file => file.id === gpxId);
+    const filename = fileEntry && fileEntry.filename ? fileEntry.filename : 'GPX file';
+    const confirmMessage = (t.confirm_delete_uploaded_gpx || 'Delete "{name}"?').replace('{name}', filename);
+    if (!window.confirm(confirmMessage)) {
+        return;
+    }
+
+    statusDiv.textContent = t.status_deleting_gpx || t.status_loading || 'Loading data...';
+    try {
+        const response = await fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: authHeaders()
+        });
+        if (response.status === 401 && isGoogleSignedIn()) {
+            clearGoogleAuthState();
+        }
+        if (!response.ok) {
+            throw new Error('Failed to delete GPX');
+        }
+
+        if (currentSharedGpxId === gpxId) {
+            window.clearGpxRoute();
+        }
+
+        await refreshUploadedFiles();
+        statusDiv.textContent = (t.status_gpx_deleted || 'GPX file deleted.').replace('{name}', filename);
+    } catch (err) {
+        statusDiv.textContent = t.status_delete_gpx_error || 'Could not delete the GPX file.';
+    }
 };
 
 function updateLanguage() {
@@ -1683,6 +1808,24 @@ function updateLanguage() {
         if (document.getElementById('lbl-show-minmax')) document.getElementById('lbl-show-minmax').textContent = t.lbl_show_minmax;
         if (document.getElementById('opt-unit-km')) document.getElementById('opt-unit-km').textContent = t.unit_km;
         if (document.getElementById('opt-unit-mi')) document.getElementById('opt-unit-mi').textContent = t.unit_mi;
+        if (document.getElementById('lbl-show-elev-profile')) document.getElementById('lbl-show-elev-profile').textContent = t.lbl_show_elev_profile;
+        if (document.getElementById('lbl-elev-map-sync')) document.getElementById('lbl-elev-map-sync').textContent = t.lbl_elev_map_sync;
+        if (document.getElementById('elevation-profile-title')) document.getElementById('elevation-profile-title').textContent = t.elevation_profile;
+        const gpxModalTitle = document.getElementById('gpx-modal-title');
+        if (gpxModalTitle) gpxModalTitle.textContent = t.modal_gpx_title || t.btn_gpx;
+        const gpxModalDesc = document.getElementById('gpx-modal-desc');
+        if (gpxModalDesc) gpxModalDesc.textContent = isBackendEnabled() ? (t.modal_gpx_desc || '') : (t.modal_gpx_desc_local || '');
+        const gpxUploadBtn = document.getElementById('gpx-upload-btn');
+        if (gpxUploadBtn) gpxUploadBtn.textContent = isBackendEnabled() ? (t.btn_upload_gpx || t.btn_gpx) : (t.btn_open_local_gpx || t.btn_gpx);
+        const gpxModalClose = document.getElementById('gpx-modal-close');
+        if (gpxModalClose) gpxModalClose.textContent = t.btn_close;
+        const gpxAuthDesc = document.getElementById('gpx-auth-desc');
+        if (gpxAuthDesc) gpxAuthDesc.textContent = t.gpx_auth_desc || '';
+        const gpxSignoutBtn = document.getElementById('gpx-signout-btn');
+        if (gpxSignoutBtn) gpxSignoutBtn.textContent = t.btn_sign_out || '';
+        const uploadedGpxTitle = document.getElementById('uploaded-gpx-title');
+        if (uploadedGpxTitle) uploadedGpxTitle.textContent = isBackendEnabled() ? (t.uploaded_gpx_title || '') : (t.uploaded_gpx_title_local || '');
+        renderUploadedFiles();
         updateGpxTrackInfo();
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
@@ -2456,6 +2599,40 @@ window.clearResults = function () {
     statusDiv.textContent = translations[currentLang].status_cleared;
 };
 
+function showGpxModal() {
+    const modal = document.getElementById('gpx-modal');
+    if (!modal) return;
+
+    if (window.innerWidth <= 600 && !isControlsMinimized) {
+        setControlsMinimized(true);
+    }
+
+    modal.style.display = 'flex';
+    updateGpxModalAuthUI();
+    if (isBackendEnabled()) {
+        refreshUploadedFiles();
+    } else {
+        uploadedGpxFiles = [];
+        uploadedGpxListState = 'disabled';
+        renderUploadedFiles();
+    }
+}
+
+function closeGpxModal() {
+    const modal = document.getElementById('gpx-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+window.showGpxModal = showGpxModal;
+window.closeGpxModal = closeGpxModal;
+
+// Load GPX button: with a backend, show the upload/history modal; without one,
+// open the OS file picker directly (no modal, no "disabled" messaging).
+window.openGpxLoader = function () {
+    if (isBackendEnabled()) { showGpxModal(); }
+    else { document.getElementById('gpx-file-input').click(); }
+};
+
 window.clearGpxRoute = function () {
     clearGpxTrackSourceAndLayers();
     clearMarkerCollection(currentMarkers);
@@ -2466,10 +2643,18 @@ window.clearGpxRoute = function () {
     gpxSlopeLegend = null;
     gpxLayer = null;
     gpxTrackData = null;
+    currentSharedGpxId = null;
+    currentGpxFilename = null;
+    currentGpxShareUrl = null;
+    const params = new URLSearchParams(location.search);
+    params.delete('gpx');
+    const queryString = params.toString();
+    history.replaceState(null, '', location.pathname + (queryString ? '?' + queryString : '') + location.hash);
     const clearBtn = document.getElementById('gpx-clear-btn');
     if (clearBtn) clearBtn.style.display = 'none';
     const infoDiv = document.getElementById('gpx-track-info');
     if (infoDiv) { infoDiv.style.display = 'none'; infoDiv.innerHTML = ''; }
+    hideElevationProfile();
     statusDiv.textContent = translations[currentLang].status_gpx_cleared;
 };
 
@@ -2740,6 +2925,16 @@ function getGpxShowMinMax() {
     return el ? el.checked : true;
 }
 
+function getGpxShowElevProfile() {
+    const el = document.getElementById('gpxShowElevProfile');
+    return el ? el.checked : true;
+}
+
+function getElevMapSync() {
+    const el = document.getElementById('gpxElevMapSync');
+    return el ? el.checked : true;
+}
+
 function clearMarkerCollection(markers) {
     markers.forEach(marker => marker.remove());
 }
@@ -2980,113 +3175,565 @@ function rebuildGpxLayer() {
     syncGpxSlopeLegend();
 }
 
-document.getElementById('gpx-file-input').addEventListener('change', function (e) {
-    const file = e.target.files[0];
-    if (!file) return;
+function parseGpxText(gpxText) {
     const t = translations[currentLang];
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(evt.target.result, 'application/xml');
-            if (doc.querySelector('parsererror')) {
-                statusDiv.textContent = t.status_gpx_error;
-                return;
-            }
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(gpxText, 'application/xml');
+    if (doc.querySelector('parsererror')) {
+        throw new Error(t.status_gpx_error || 'Failed to load GPX file.');
+    }
 
-            clearGpxTrackSourceAndLayers();
-            clearMarkerCollection(currentMarkers);
-            currentMarkers = [];
-            clearMarkerCollection(currentKmMarkers);
-            currentKmMarkers = [];
-            removeLegendControl(gpxSlopeLegend);
-            gpxSlopeLegend = null;
-            gpxLayer = null;
+    const allSegments = [];
+    const waypoints = [];
+    let totalPoints = 0;
 
-            const allSegments = [];
-            const waypoints = [];
-            let totalPoints = 0;
-
-            // Parse tracks
-            doc.querySelectorAll('trk').forEach(trk => {
-                trk.querySelectorAll('trkseg').forEach(seg => {
-                    const pts = [];
-                    seg.querySelectorAll('trkpt').forEach(pt => {
-                        const lat = parseFloat(pt.getAttribute('lat'));
-                        const lon = parseFloat(pt.getAttribute('lon'));
-                        const eleEl = pt.querySelector('ele');
-                        const ele = eleEl ? parseFloat(eleEl.textContent) : null;
-                        if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
-                    });
-                    if (pts.length > 0) {
-                        allSegments.push(pts);
-                        totalPoints += pts.length;
-                    }
-                });
-            });
-
-            // Parse routes
-            doc.querySelectorAll('rte').forEach(rte => {
-                const pts = [];
-                rte.querySelectorAll('rtept').forEach(pt => {
-                    const lat = parseFloat(pt.getAttribute('lat'));
-                    const lon = parseFloat(pt.getAttribute('lon'));
-                    const eleEl = pt.querySelector('ele');
-                    const ele = eleEl ? parseFloat(eleEl.textContent) : null;
-                    if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
-                });
-                if (pts.length > 0) {
-                    allSegments.push(pts);
-                    totalPoints += pts.length;
-                }
-            });
-
-            // Parse waypoints
-            doc.querySelectorAll('wpt').forEach(pt => {
+    doc.querySelectorAll('trk').forEach(trk => {
+        trk.querySelectorAll('trkseg').forEach(seg => {
+            const pts = [];
+            seg.querySelectorAll('trkpt').forEach(pt => {
                 const lat = parseFloat(pt.getAttribute('lat'));
                 const lon = parseFloat(pt.getAttribute('lon'));
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    const nameEl = pt.querySelector('name');
-                    const name = nameEl ? nameEl.textContent : '';
-                    waypoints.push({ lat, lon, name });
-                    totalPoints++;
-                }
+                const eleEl = pt.querySelector('ele');
+                const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+                if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
             });
-
-            if (allSegments.length === 0 && waypoints.length === 0) {
-                statusDiv.textContent = t.status_gpx_empty;
-                return;
+            if (pts.length > 0) {
+                allSegments.push(pts);
+                totalPoints += pts.length;
             }
+        });
+    });
 
-            // Compute statistics
-            const stats = computeTrackStats(allSegments);
-            gpxTrackData = { segments: allSegments, waypoints, ...stats };
-
-            // Build and display layers
-            rebuildGpxLayer();
-            updateGpxTrackInfo();
-
-            // Fit map
-            const allCoords = [];
-            allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
-            waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
-            if (allCoords.length > 0) {
-                map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
-            }
-
-            const clearBtn = document.getElementById('gpx-clear-btn');
-            if (clearBtn) clearBtn.style.display = 'block';
-
-            statusDiv.textContent = t.status_gpx_loaded.replace('{n}', totalPoints);
-        } catch (err) {
-            statusDiv.textContent = t.status_gpx_error;
+    doc.querySelectorAll('rte').forEach(rte => {
+        const pts = [];
+        rte.querySelectorAll('rtept').forEach(pt => {
+            const lat = parseFloat(pt.getAttribute('lat'));
+            const lon = parseFloat(pt.getAttribute('lon'));
+            const eleEl = pt.querySelector('ele');
+            const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+            if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, ele: isNaN(ele) ? null : ele });
+        });
+        if (pts.length > 0) {
+            allSegments.push(pts);
+            totalPoints += pts.length;
         }
+    });
+
+    doc.querySelectorAll('wpt').forEach(pt => {
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if (!isNaN(lat) && !isNaN(lon)) {
+            const nameEl = pt.querySelector('name');
+            const name = nameEl ? nameEl.textContent : '';
+            waypoints.push({ lat, lon, name });
+            totalPoints++;
+        }
+    });
+
+    if (allSegments.length === 0 && waypoints.length === 0) {
+        throw new Error(t.status_gpx_empty || 'No track data found in GPX file.');
+    }
+
+    return {
+        segments: allSegments,
+        waypoints,
+        totalPoints,
+        stats: computeTrackStats(allSegments)
     };
-    reader.onerror = function () {
-        statusDiv.textContent = translations[currentLang].status_gpx_error;
+}
+
+function fitGpxBounds(allSegments, waypoints) {
+    const allCoords = [];
+    allSegments.forEach(s => s.forEach(p => allCoords.push([p.lat, p.lon])));
+    waypoints.forEach(w => allCoords.push([w.lat, w.lon]));
+    if (allCoords.length > 0) {
+        map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
+    }
+}
+
+function setActiveGpxSource(source) {
+    currentSharedGpxId = isBackendEnabled() && source && source.id ? source.id : null;
+    currentGpxFilename = source && source.filename ? source.filename : null;
+    currentGpxShareUrl = isBackendEnabled() && source && source.shareUrl ? source.shareUrl : null;
+
+    const params = new URLSearchParams(location.search);
+    if (isBackendEnabled() && currentSharedGpxId) {
+        params.set('gpx', currentSharedGpxId);
+    } else {
+        params.delete('gpx');
+    }
+    const queryString = params.toString();
+    history.replaceState(null, '', location.pathname + (queryString ? '?' + queryString : '') + location.hash);
+}
+
+function applyParsedGpxData(parsedGpx, options = {}) {
+    const t = translations[currentLang];
+    gpxLayer = null;
+    gpxTrackData = {
+        segments: parsedGpx.segments,
+        waypoints: parsedGpx.waypoints,
+        ...parsedGpx.stats
     };
-    reader.readAsText(file);
+    setActiveGpxSource(options.source || null);
+
+    rebuildGpxLayer();
+    updateGpxTrackInfo();
+    showElevationProfile();
+
+    if (!options.skipFitBounds) {
+        fitGpxBounds(parsedGpx.segments, parsedGpx.waypoints);
+    }
+
+    const clearBtn = document.getElementById('gpx-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'block';
+
+    const statusMessage = options.statusMessage || t.status_gpx_loaded || 'GPX route loaded ({n} points).';
+    statusDiv.textContent = statusMessage.replace('{n}', parsedGpx.totalPoints);
+}
+
+function normalizeUploadedFileEntry(fileEntry) {
+    if (typeof fileEntry === 'string') {
+        return {
+            id: fileEntry,
+            filename: fileEntry,
+            shareUrl: null,
+            uploadedAt: null
+        };
+    }
+    return {
+        id: fileEntry.id || fileEntry.filename,
+        filename: fileEntry.filename || fileEntry.name || fileEntry.id || 'GPX file',
+        shareUrl: fileEntry.share_url || fileEntry.shareUrl || null,
+        uploadedAt: fileEntry.uploaded_at || fileEntry.uploadedAt || null
+    };
+}
+
+function renderUploadedFiles() {
+    const listEl = document.getElementById('uploaded-gpx-list');
+    const emptyEl = document.getElementById('uploaded-gpx-empty');
+    if (!listEl || !emptyEl) return;
+
+    const t = translations[currentLang];
+    listEl.innerHTML = '';
+    if (!isBackendEnabled() || uploadedGpxListState === 'disabled') {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.uploaded_gpx_unavailable || 'Backend upload and sharing are disabled in this build.';
+        return;
+    }
+
+    if (uploadedGpxListState === 'loading') {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.uploaded_gpx_loading || 'Loading uploaded GPX files...';
+        return;
+    }
+
+    if (uploadedGpxListState === 'error') {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.uploaded_gpx_error || 'Could not load uploaded GPX files.';
+        return;
+    }
+
+    if (!uploadedGpxFiles.length) {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.uploaded_gpx_empty || 'No uploaded GPX files yet.';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+    uploadedGpxFiles.forEach(fileEntry => {
+        const row = document.createElement('div');
+        row.className = 'uploaded-gpx-item';
+
+        const meta = document.createElement('div');
+        meta.className = 'uploaded-gpx-meta';
+
+        const name = document.createElement('span');
+        name.className = 'uploaded-gpx-name';
+        name.textContent = fileEntry.filename;
+        meta.appendChild(name);
+
+        if (fileEntry.uploadedAt) {
+            const stamp = document.createElement('span');
+            stamp.className = 'uploaded-gpx-date';
+            const uploadedDate = new Date(fileEntry.uploadedAt);
+            stamp.textContent = Number.isNaN(uploadedDate.getTime())
+                ? fileEntry.uploadedAt
+                : uploadedDate.toLocaleString();
+            meta.appendChild(stamp);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'uploaded-gpx-actions';
+
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'secondary-btn';
+        openBtn.textContent = t.btn_open_uploaded_gpx || 'Open';
+        openBtn.addEventListener('click', async () => {
+            const didLoad = await loadSharedGpxById(fileEntry.id, { filename: fileEntry.filename });
+            if (didLoad) {
+                closeGpxModal();
+            }
+        });
+        actions.appendChild(openBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'danger-btn';
+        deleteBtn.textContent = t.btn_delete_uploaded_gpx || 'Delete';
+        deleteBtn.addEventListener('click', () => {
+            window.deleteUploadedGpx(fileEntry.id);
+        });
+        actions.appendChild(deleteBtn);
+
+        row.appendChild(meta);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+    });
+}
+
+// ==========================================
+// Google Sign-In (optional cross-device upload history)
+// ==========================================
+function decodeJwtPayload(token) {
+    try {
+        const part = token.split('.')[1];
+        let base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '='; // restore base64url padding
+        const json = decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        return JSON.parse(json);
+    } catch (e) {
+        return null;
+    }
+}
+
+function isGoogleSignedIn() {
+    return !!(googleAuth && googleAuth.token && googleAuth.exp && googleAuth.exp * 1000 > Date.now());
+}
+
+// Bearer header sent with the file endpoints; empty object falls back to the anon cookie.
+function authHeaders() {
+    return isGoogleSignedIn() ? { Authorization: 'Bearer ' + googleAuth.token } : {};
+}
+
+function persistGoogleAuth() {
+    try {
+        if (googleAuth) localStorage.setItem(GOOGLE_AUTH_STORAGE_KEY, JSON.stringify(googleAuth));
+        else localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY);
+    } catch (e) { /* storage unavailable; in-memory auth still works for this session */ }
+}
+
+function loadStoredGoogleAuth() {
+    try {
+        const raw = localStorage.getItem(GOOGLE_AUTH_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function clearGoogleAuthState() {
+    googleAuth = null;
+    persistGoogleAuth();
+    try {
+        if (window.google && google.accounts && google.accounts.id) {
+            google.accounts.id.disableAutoSelect();
+        }
+    } catch (e) { /* ignore */ }
+    updateGpxModalAuthUI();
+}
+
+// Tell the backend who we are so it can merge any anonymous uploads into the account.
+async function postAuthLogin() {
+    if (!isGoogleSignedIn() || !isBackendEnabled()) return null;
+    try {
+        const response = await fetch(API_BASE + '/auth/login', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({ credential: googleAuth.token })
+        });
+        console.log('[GPX auth] POST /api/auth/login ->', response.status,
+            response.status === 404 ? '(old backend? route missing)' : '');
+        if (response.status === 401) { clearGoogleAuthState(); return null; }
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (e) {
+        console.log('[GPX auth] /api/auth/login request failed', e);
+        return null;
+    }
+}
+
+// Logs exactly what reaches the backend so deployment issues (old build, proxy
+// stripping Authorization, clock skew, wrong client id) are visible in the console.
+async function runGoogleAuthDiagnostics() {
+    if (!isBackendEnabled() || !googleAuth || !googleAuth.token) return;
+    try {
+        const r = await fetch(API_BASE + '/auth/debug', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({ credential: googleAuth.token })
+        });
+        const data = await r.json().catch(() => null);
+        console.log('[GPX auth] /api/auth/debug ->', r.status, data);
+    } catch (e) {
+        console.log('[GPX auth] /api/auth/debug request failed', e);
+    }
+}
+
+// GIS callback: receives a signed ID token (JWT) on successful sign-in.
+function handleGoogleCredential(response) {
+    const t = translations[currentLang];
+    const token = response && response.credential;
+    const claims = token ? decodeJwtPayload(token) : null;
+    if (!token || !claims || !claims.sub) {
+        if (statusDiv) statusDiv.textContent = t.status_sign_in_error || 'Sign in failed.';
+        return;
+    }
+    googleAuth = {
+        token: token,
+        exp: claims.exp || 0,
+        email: claims.email || '',
+        name: claims.name || '',
+        picture: claims.picture || '',
+        sub: claims.sub
+    };
+    persistGoogleAuth();
+    updateGpxModalAuthUI();
+    if (statusDiv) {
+        statusDiv.textContent = (t.status_signed_in || 'Signed in as {email}.')
+            .replace('{email}', googleAuth.email || googleAuth.name || '');
+    }
+    // Merge anonymous uploads into the account, then show the account's files.
+    runGoogleAuthDiagnostics();
+    postAuthLogin().finally(() => { refreshUploadedFiles(); });
+}
+
+window.signOutGoogle = function () {
+    const t = translations[currentLang];
+    clearGoogleAuthState();
+    if (statusDiv) statusDiv.textContent = t.status_signed_out || 'Signed out.';
+    refreshUploadedFiles();
+};
+
+function updateGpxModalAuthUI() {
+    const authWrap = document.getElementById('gpx-auth');
+    const signinEl = document.getElementById('gpx-auth-signin');
+    const userEl = document.getElementById('gpx-auth-user');
+    if (!authWrap || !signinEl || !userEl) return;
+
+    // Sign-in only matters when the upload backend is present.
+    if (!isBackendEnabled()) { authWrap.style.display = 'none'; return; }
+    authWrap.style.display = '';
+
+    if (isGoogleSignedIn()) {
+        signinEl.style.display = 'none';
+        userEl.style.display = '';
+        const avatar = document.getElementById('gpx-user-avatar');
+        const emailEl = document.getElementById('gpx-user-email');
+        if (avatar) {
+            if (googleAuth.picture) { avatar.src = googleAuth.picture; avatar.style.display = ''; }
+            else { avatar.removeAttribute('src'); avatar.style.display = 'none'; }
+        }
+        if (emailEl) emailEl.textContent = googleAuth.email || googleAuth.name || '';
+    } else {
+        signinEl.style.display = '';
+        userEl.style.display = 'none';
+    }
+}
+
+// Poll briefly for the async GIS script; give up quietly so the app still works offline.
+function whenGisReady(callback, attempts) {
+    if (attempts === undefined) attempts = 40;
+    if (window.google && google.accounts && google.accounts.id) { callback(); return; }
+    if (attempts <= 0) return;
+    window.setTimeout(() => whenGisReady(callback, attempts - 1), 100);
+}
+
+function initGoogleAuth() {
+    if (googleAuthInitialized) return;
+    if (!isBackendEnabled() || !GOOGLE_CLIENT_ID) return;
+
+    // Restore a stored, still-valid session right away (independent of GIS loading).
+    const stored = loadStoredGoogleAuth();
+    if (stored && stored.token && stored.exp && stored.exp * 1000 > Date.now()) {
+        googleAuth = stored;
+    }
+    updateGpxModalAuthUI();
+
+    whenGisReady(() => {
+        googleAuthInitialized = true;
+        try {
+            google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleGoogleCredential,
+                auto_select: true,
+                use_fedcm_for_prompt: true
+            });
+            const btnEl = document.getElementById('google-signin-btn');
+            if (btnEl) {
+                google.accounts.id.renderButton(btnEl, {
+                    theme: 'outline',
+                    size: 'large',
+                    type: 'standard',
+                    shape: 'pill',
+                    text: 'signin_with',
+                    logo_alignment: 'left',
+                    width: 240
+                });
+            }
+            // Returning user without a valid stored token: try a silent One Tap re-auth.
+            if (!isGoogleSignedIn() && stored) {
+                google.accounts.id.prompt();
+            }
+        } catch (e) {
+            // GIS init failed (blocked/offline): stay on the anonymous flow.
+        }
+        updateGpxModalAuthUI();
+    });
+}
+
+async function refreshUploadedFiles() {
+    if (!isBackendEnabled()) {
+        uploadedGpxFiles = [];
+        uploadedGpxListState = 'disabled';
+        renderUploadedFiles();
+        return;
+    }
+
+    uploadedGpxListState = 'loading';
+    renderUploadedFiles();
+    try {
+        const response = await fetch(API_BASE + '/files', {
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: authHeaders()
+        });
+        if (response.status === 401 && isGoogleSignedIn()) {
+            // Token expired/rejected: drop it and reload as the anonymous session.
+            clearGoogleAuthState();
+            return refreshUploadedFiles();
+        }
+        if (!response.ok) {
+            throw new Error('Failed to fetch uploaded GPX files');
+        }
+        const payload = await response.json();
+        const files = Array.isArray(payload.files) ? payload.files : [];
+        console.log('[GPX auth] GET /api/files ->', response.status, 'count:', files.length, 'signedIn:', isGoogleSignedIn());
+        uploadedGpxFiles = files.map(normalizeUploadedFileEntry).filter(fileEntry => fileEntry.id);
+        uploadedGpxListState = 'ready';
+        renderUploadedFiles();
+    } catch (err) {
+        uploadedGpxFiles = [];
+        uploadedGpxListState = 'error';
+        renderUploadedFiles();
+    }
+}
+
+async function loadSharedGpxById(gpxId, options = {}) {
+    const t = translations[currentLang];
+    if (!gpxId) return;
+    if (!isBackendEnabled()) {
+        statusDiv.textContent = t.status_shared_gpx_backend_disabled || t.status_backend_disabled || 'Backend sharing is disabled in this build.';
+        return false;
+    }
+    statusDiv.textContent = t.status_loading_shared_gpx || t.status_loading || 'Loading data...';
+    try {
+        const response = await fetch(API_BASE + '/files/' + encodeURIComponent(gpxId) + '/raw', {
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        if (!response.ok) {
+            throw new Error('Failed to load shared GPX');
+        }
+        const gpxText = await response.text();
+        const parsedGpx = parseGpxText(gpxText);
+        applyParsedGpxData(parsedGpx, {
+            source: {
+                id: gpxId,
+                filename: options.filename || currentGpxFilename || gpxId,
+                shareUrl: options.shareUrl || null
+            },
+            skipFitBounds: options.skipFitBounds,
+            statusMessage: t.status_shared_gpx_loaded || t.status_gpx_loaded || 'GPX route loaded ({n} points).'
+        });
+        const params = new URLSearchParams(location.search);
+        params.set('gpx', gpxId);
+        history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
+        return true;
+    } catch (err) {
+        statusDiv.textContent = t.status_shared_gpx_error || t.status_gpx_error || 'Failed to load GPX file.';
+        return false;
+    }
+}
+
+async function uploadGpxFile(file) {
+    if (!isBackendEnabled()) {
+        return null;
+    }
+
+    const t = translations[currentLang];
+    const formData = new FormData();
+    formData.append('file', file);
+    statusDiv.textContent = t.status_uploading_gpx || t.status_loading || 'Loading data...';
+
+    const response = await fetch(API_BASE + '/upload', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: authHeaders(),
+        body: formData
+    });
+    if (response.status === 401 && isGoogleSignedIn()) {
+        clearGoogleAuthState();
+    }
+    if (!response.ok) {
+        throw new Error('Failed to upload GPX');
+    }
+
+    const payload = await response.json();
+    return {
+        id: payload.id || payload.filename,
+        filename: payload.filename || file.name,
+        shareUrl: payload.share_url || payload.shareUrl || null
+    };
+}
+
+async function handleLocalFileSelection(file) {
+    const t = translations[currentLang];
+    if (!file) return;
+    try {
+        const gpxText = await file.text();
+        const parsedGpx = parseGpxText(gpxText);
+        let uploadResult = null;
+        if (isBackendEnabled()) {
+            try {
+                uploadResult = await uploadGpxFile(file);
+            } catch (uploadErr) {
+                uploadResult = null;
+            }
+        }
+        applyParsedGpxData(parsedGpx, {
+            source: uploadResult,
+            statusMessage: uploadResult
+                ? (t.status_gpx_uploaded || t.status_gpx_loaded || 'GPX route loaded ({n} points).')
+                : (isBackendEnabled()
+                    ? (t.status_gpx_loaded_local || t.status_gpx_loaded || 'GPX route loaded ({n} points).')
+                    : (t.status_gpx_loaded_local_only || t.status_gpx_loaded || 'GPX route loaded ({n} points).'))
+        });
+        if (uploadResult) {
+            await refreshUploadedFiles();
+        }
+    } catch (err) {
+        statusDiv.textContent = t.status_gpx_error || 'Failed to load GPX file.';
+    }
+}
+
+document.getElementById('gpx-file-input').addEventListener('change', async function (e) {
+    const file = e.target.files[0];
     e.target.value = '';
+    await handleLocalFileSelection(file);
 });
 
 // Live-update track when settings change
@@ -3099,11 +3746,626 @@ document.getElementById('gpxShowKmLabels').addEventListener('change', function (
 document.getElementById('gpxColorBySlope').addEventListener('change', function () { rebuildGpxLayer(); });
 document.getElementById('gpxShowWaypoints').addEventListener('change', function () { rebuildGpxLayer(); });
 document.getElementById('gpxShowMinMax').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('gpxShowElevProfile').addEventListener('change', function () {
+    if (this.checked) { showElevationProfile(); } else { hideElevationProfile(); }
+});
 document.getElementById('distanceUnit').addEventListener('change', function () {
     localStorage.setItem('topo_distance_unit', this.value);
     rebuildGpxLayer();
     updateGpxTrackInfo();
+    if (elevationProfileData && !elevationProfileMinimized) drawElevationProfile();
 });
+
+// ==========================================
+// ELEVATION PROFILE BAR
+// ==========================================
+let elevationProfileData = null; // [{dist, ele, lat, lon}, ...]
+let elevationProfileMinimized = true;
+let elevationProfileMarker = null;
+let elevationProfileRedrawFrame = null;
+let elevationViewStart = null;
+let elevationViewEnd = null;
+
+function scheduleElevationProfileRedraw() {
+    if (elevationProfileRedrawFrame !== null) {
+        cancelAnimationFrame(elevationProfileRedrawFrame);
+        elevationProfileRedrawFrame = null;
+    }
+
+    elevationProfileRedrawFrame = requestAnimationFrame(() => {
+        elevationProfileRedrawFrame = requestAnimationFrame(() => {
+            elevationProfileRedrawFrame = null;
+            if (elevationProfileData && !elevationProfileMinimized) {
+                drawElevationProfile();
+            }
+        });
+    });
+}
+
+function buildElevationProfileData(allSegments) {
+    const points = [];
+    let cumDist = 0;
+    for (const seg of allSegments) {
+        for (let i = 0; i < seg.length; i++) {
+            if (i > 0) {
+                cumDist += haversineDistance(seg[i - 1].lat, seg[i - 1].lon, seg[i].lat, seg[i].lon);
+            }
+            points.push({
+                dist: cumDist,
+                ele: seg[i].ele !== null ? seg[i].ele : 0,
+                lat: seg[i].lat,
+                lon: seg[i].lon
+            });
+        }
+    }
+    return points;
+}
+
+function getElevationBarHeight() {
+    if (!elevationProfileData) return 0;
+    const container = document.getElementById('elevation-profile');
+    if (!container || container.style.display === 'none') return 0;
+
+    const body = document.getElementById('elevation-profile-body');
+    const rect = body ? body.getBoundingClientRect() : container.getBoundingClientRect();
+    if (rect.height > 0) {
+        return rect.height;
+    }
+
+    if (elevationProfileMinimized) return 26;
+    return window.innerWidth >= 600 ? 150 : 130;
+}
+
+function adjustMapControlsForElevation() {
+    const h = getElevationBarHeight();
+    const maplibreBottomRight = document.querySelector('.maplibregl-ctrl-bottom-right');
+    const maplibreBottomLeft = document.querySelector('.maplibregl-ctrl-bottom-left');
+
+    if (maplibreBottomRight) {
+        maplibreBottomRight.style.bottom = h > 0
+            ? `calc(${Math.ceil(h)}px + env(safe-area-inset-bottom, 0px))`
+            : '';
+    }
+    if (maplibreBottomLeft) {
+        maplibreBottomLeft.style.bottom = h > 0
+            ? `calc(${Math.ceil(h)}px + env(safe-area-inset-bottom, 0px))`
+            : '';
+    }
+}
+
+function showElevationProfile() {
+    if (!getGpxShowElevProfile()) { hideElevationProfile(); return; }
+    if (!gpxTrackData || !gpxTrackData.segments || gpxTrackData.segments.length === 0) return;
+    elevationProfileData = buildElevationProfileData(gpxTrackData.segments);
+    if (elevationProfileData.length < 2) return;
+
+    elevationViewStart = 0;
+    elevationViewEnd = elevationProfileData[elevationProfileData.length - 1].dist;
+
+    const container = document.getElementById('elevation-profile');
+    container.style.display = '';
+    if (elevationProfileMinimized) {
+        container.classList.add('minimized');
+    } else {
+        container.classList.remove('minimized');
+    }
+    drawElevationProfile();
+    scheduleElevationProfileRedraw();
+    updateElevationProfileInfo(null);
+    adjustMapControlsForElevation();
+}
+
+function hideElevationProfile() {
+    if (elevationProfileRedrawFrame !== null) {
+        cancelAnimationFrame(elevationProfileRedrawFrame);
+        elevationProfileRedrawFrame = null;
+    }
+    const container = document.getElementById('elevation-profile');
+    if (container) container.style.display = 'none';
+    elevationProfileData = null;
+    elevationViewStart = null;
+    elevationViewEnd = null;
+    removeElevationMarker();
+    adjustMapControlsForElevation();
+}
+
+function toggleElevationProfile() {
+    const container = document.getElementById('elevation-profile');
+    elevationProfileMinimized = !elevationProfileMinimized;
+    if (elevationProfileMinimized) {
+        container.classList.add('minimized');
+    } else {
+        container.classList.remove('minimized');
+        drawElevationProfile();
+        scheduleElevationProfileRedraw();
+    }
+    adjustMapControlsForElevation();
+}
+
+function drawElevationProfile() {
+    const canvas = document.getElementById('elevation-canvas');
+    if (!canvas || !elevationProfileData || elevationProfileData.length < 2) return;
+
+    const body = document.getElementById('elevation-profile-body');
+    if (!body) return;
+    const rect = body.getBoundingClientRect();
+    if (rect.width <= 80 || rect.height <= 40) {
+        if (!elevationProfileMinimized) {
+            scheduleElevationProfileRedraw();
+        }
+        return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const W = rect.width;
+    const H = rect.height;
+    const PAD_LEFT = 48;
+    const PAD_RIGHT = 12;
+    const PAD_TOP = 12;
+    const PAD_BOTTOM = 24;
+    const plotW = W - PAD_LEFT - PAD_RIGHT;
+    const plotH = H - PAD_TOP - PAD_BOTTOM;
+
+    const data = elevationProfileData;
+    const totalDist = data[data.length - 1].dist;
+
+    // Determine view bounds
+    const vStart = elevationViewStart !== null ? elevationViewStart : 0;
+    const vEnd = elevationViewEnd !== null ? elevationViewEnd : totalDist;
+    const vRange = vEnd - vStart || 1;
+
+    let minEle = Infinity, maxEle = -Infinity;
+    for (const p of data) {
+        if (p.dist >= vStart && p.dist <= vEnd) {
+            if (p.ele < minEle) minEle = p.ele;
+            if (p.ele > maxEle) maxEle = p.ele;
+        }
+    }
+    // Fallback if no points inside range
+    if (minEle === Infinity) { minEle = 0; maxEle = 100; }
+
+    // Add some padding to elevation range
+    const eleRange = maxEle - minEle || 1;
+    const elePad = eleRange * 0.1;
+    const eleMin = minEle - elePad;
+    const eleMax = maxEle + elePad;
+
+    const xScale = (d) => PAD_LEFT + ((d - vStart) / vRange) * plotW;
+    const yScale = (e) => PAD_TOP + plotH - ((e - eleMin) / (eleMax - eleMin)) * plotH;
+
+    // Grid lines - Y axis (elevation)
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 0.5;
+    ctx.fillStyle = '#888';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    const niceEleSteps = [5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000];
+    let eleStep = niceEleSteps[niceEleSteps.length - 1];
+    const targetYLabels = Math.max(3, Math.floor(plotH / 35));
+    for (const s of niceEleSteps) {
+        if ((eleMax - eleMin) / s <= targetYLabels + 1) { eleStep = s; break; }
+    }
+    const eleStart = Math.ceil(eleMin / eleStep) * eleStep;
+    for (let e = eleStart; e <= eleMax; e += eleStep) {
+        const y = yScale(e);
+        if (y < PAD_TOP || y > PAD_TOP + plotH) continue;
+        ctx.beginPath();
+        ctx.moveTo(PAD_LEFT, y);
+        ctx.lineTo(W - PAD_RIGHT, y);
+        ctx.stroke();
+        ctx.fillText(Math.round(e) + ' m', PAD_LEFT - 4, y);
+    }
+
+    // Grid lines - X axis (distance)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const unit = getDistanceUnit();
+    const unitMeters = unit === 'mi' ? 1609.344 : 1000;
+    const unitLabel = unit === 'mi' ? 'mi' : 'km';
+    const viewUnitsStart = vStart / unitMeters;
+    const viewUnitsEnd = vEnd / unitMeters;
+    const viewUnitsTotal = vRange / unitMeters;
+    const niceDistSteps = [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    const targetXLabels = Math.max(3, Math.floor(plotW / 70));
+    let distStep = niceDistSteps[niceDistSteps.length - 1];
+    for (const s of niceDistSteps) {
+        if (viewUnitsTotal / s <= targetXLabels + 1) { distStep = s; break; }
+    }
+    const distStart = Math.ceil(viewUnitsStart / distStep) * distStep;
+    for (let d = distStart; d <= viewUnitsEnd; d += distStep) {
+        const x = xScale(d * unitMeters);
+        if (x < PAD_LEFT || x > PAD_LEFT + plotW) continue;
+        ctx.beginPath();
+        ctx.moveTo(x, PAD_TOP);
+        ctx.lineTo(x, PAD_TOP + plotH);
+        ctx.stroke();
+
+        let label;
+        if (distStep >= 1) label = Math.round(d);
+        else if (distStep >= 0.1) label = d.toFixed(1);
+        else label = d.toFixed(2);
+
+        ctx.fillText(label + ' ' + unitLabel, x, PAD_TOP + plotH + 4);
+    }
+
+    // Clip the plotting area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_LEFT, PAD_TOP, plotW, plotH);
+    ctx.clip();
+
+    // Filled area
+    ctx.beginPath();
+    ctx.moveTo(xScale(data[0].dist), yScale(data[0].ele));
+    for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(xScale(data[i].dist), yScale(data[i].ele));
+    }
+    ctx.lineTo(xScale(data[data.length - 1].dist), yScale(eleMin));
+    ctx.lineTo(xScale(data[0].dist), yScale(eleMin));
+    ctx.closePath();
+
+    const gradient = ctx.createLinearGradient(0, PAD_TOP, 0, PAD_TOP + plotH);
+    gradient.addColorStop(0, 'rgba(100, 181, 246, 0.7)');
+    gradient.addColorStop(1, 'rgba(100, 181, 246, 0.15)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Stroke line on top
+    ctx.beginPath();
+    ctx.moveTo(xScale(data[0].dist), yScale(data[0].ele));
+    for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(xScale(data[i].dist), yScale(data[i].ele));
+    }
+    ctx.strokeStyle = '#42a5f5';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.restore(); // Remove clipping so border draws properly
+
+    // Border around plot
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_LEFT, PAD_TOP, plotW, plotH);
+
+    // Store drawing params for hit-testing
+    canvas._epParams = { PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM, plotW, plotH, totalDist, eleMin, eleMax, W, H, vStart, vEnd, vRange };
+}
+
+function getElevationPointAtX(canvasX) {
+    const canvas = document.getElementById('elevation-canvas');
+    if (!canvas || !canvas._epParams || !elevationProfileData) return null;
+    const p = canvas._epParams;
+    const frac = (canvasX - p.PAD_LEFT) / p.plotW;
+    if (frac < 0 || frac > 1) return null;
+    const targetDist = p.vStart + frac * p.vRange;
+
+    // Binary search for closest point
+    const data = elevationProfileData;
+    let lo = 0, hi = data.length - 1;
+    while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (data[mid].dist <= targetDist) lo = mid;
+        else hi = mid;
+    }
+    // Interpolate between lo and hi
+    const dRange = data[hi].dist - data[lo].dist;
+    if (dRange === 0) return data[lo];
+    const t = (targetDist - data[lo].dist) / dRange;
+    return {
+        dist: targetDist,
+        ele: data[lo].ele + t * (data[hi].ele - data[lo].ele),
+        lat: data[lo].lat + t * (data[hi].lat - data[lo].lat),
+        lon: data[lo].lon + t * (data[hi].lon - data[lo].lon)
+    };
+}
+
+function updateElevationProfileInfo(point) {
+    const infoEl = document.getElementById('elevation-profile-info');
+    if (!infoEl) return;
+    if (!point) {
+        infoEl.textContent = '';
+        return;
+    }
+    const unit = getDistanceUnit();
+    const unitMeters = unit === 'mi' ? 1609.344 : 1000;
+    const unitLabel = unit === 'mi' ? 'mi' : 'km';
+    const distVal = point.dist / unitMeters;
+    const distStr = distVal >= 1 ? distVal.toFixed(1) + ' ' + unitLabel : Math.round(point.dist) + ' m';
+    infoEl.textContent = distStr + '  •  ' + Math.round(point.ele) + ' m';
+}
+
+function drawElevationCursor(canvasX, point) {
+    const canvas = document.getElementById('elevation-canvas');
+    if (!canvas || !canvas._epParams) return;
+
+    // Redraw base profile then overlay cursor
+    drawElevationProfile();
+    if (!point) return;
+
+    const p = canvas._epParams;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const x = canvasX;
+    const yScale = (e) => p.PAD_TOP + p.plotH - ((e - p.eleMin) / (p.eleMax - p.eleMin)) * p.plotH;
+    const y = yScale(point.ele);
+
+    // Vertical line
+    ctx.beginPath();
+    ctx.moveTo(x, p.PAD_TOP);
+    ctx.lineTo(x, p.PAD_TOP + p.plotH);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#1565C0';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+}
+
+function showElevationMarker(lat, lon) {
+    if (!elevationProfileMarker) {
+        const el = document.createElement('div');
+        el.className = 'elevation-marker';
+        el.style.width = '14px';
+        el.style.height = '14px';
+        el.style.background = '#42a5f5';
+        el.style.border = '2px solid #1565C0';
+        el.style.borderRadius = '50%';
+        elevationProfileMarker = new maplibregl.Marker({ element: el })
+            .setLngLat([lon, lat])
+            .addTo(map._map);
+    } else {
+        elevationProfileMarker.setLngLat([lon, lat]);
+    }
+}
+
+function removeElevationMarker() {
+    if (elevationProfileMarker) {
+        elevationProfileMarker.remove();
+        elevationProfileMarker = null;
+    }
+}
+
+// Elevation canvas interaction handlers
+(function () {
+    const canvas = document.getElementById('elevation-canvas');
+    if (!canvas) return;
+    let dragging = false;
+    let cursorFrac = null; // 0..1 fraction along track for keyboard nav
+
+    function distToCanvasX(frac) {
+        const p = canvas._epParams;
+        if (!p) return 0;
+        return p.PAD_LEFT + frac * p.plotW;
+    }
+
+    function showAtFrac(frac, syncMap) {
+        if (!elevationProfileData || !canvas._epParams) return;
+        frac = Math.max(0, Math.min(1, frac));
+        cursorFrac = frac;
+        const canvasX = distToCanvasX(frac);
+        const point = getElevationPointAtX(canvasX);
+        if (point) {
+            drawElevationCursor(canvasX, point);
+            updateElevationProfileInfo(point);
+            showElevationMarker(point.lat, point.lon);
+            if (syncMap && getElevMapSync()) {
+                map._map.panTo([point.lon, point.lat], { animate: false });
+            }
+        }
+    }
+
+    function handlePointer(e, syncMap) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+        } else {
+            clientX = e.clientX;
+        }
+        const canvasX = clientX - rect.left;
+        const p = canvas._epParams;
+        if (p) cursorFrac = Math.max(0, Math.min(1, (canvasX - p.PAD_LEFT) / p.plotW));
+        const point = getElevationPointAtX(canvasX);
+        if (point) {
+            drawElevationCursor(canvasX, point);
+            updateElevationProfileInfo(point);
+            showElevationMarker(point.lat, point.lon);
+            if (syncMap && getElevMapSync()) {
+                map._map.panTo([point.lon, point.lat], { animate: false });
+            }
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => { dragging = true; handlePointer(e, true); });
+    canvas.addEventListener('mousemove', (e) => { if (dragging) handlePointer(e, true); });
+    window.addEventListener('mouseup', () => {
+        if (dragging) {
+            dragging = false;
+            removeElevationMarker();
+            drawElevationProfile();
+            updateElevationProfileInfo(null);
+        }
+    });
+    canvas.addEventListener('mouseleave', () => {
+        if (!dragging) {
+            removeElevationMarker();
+            drawElevationProfile();
+            updateElevationProfileInfo(null);
+        }
+    });
+
+    // Touch support
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); dragging = true; handlePointer(e, true); }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (dragging) handlePointer(e, true); }, { passive: false });
+    canvas.addEventListener('touchend', () => {
+        dragging = false;
+        removeElevationMarker();
+        drawElevationProfile();
+        updateElevationProfileInfo(null);
+    });
+
+    // Also support hover (no click required on desktop) for better UX
+    canvas.addEventListener('mousemove', (e) => {
+        if (!dragging) {
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const point = getElevationPointAtX(canvasX);
+            if (point) {
+                drawElevationCursor(canvasX, point);
+                updateElevationProfileInfo(point);
+                showElevationMarker(point.lat, point.lon);
+            }
+        }
+    });
+
+    // Tap overlay header to toggle on mobile
+    const overlay = document.querySelector('.elevation-profile-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (window.innerWidth <= 600 && e.target === overlay) {
+                toggleElevationProfile();
+            }
+        });
+    }
+
+    // Keyboard arrow key navigation
+    document.addEventListener('keydown', (e) => {
+        if (!elevationProfileData || elevationProfileMinimized) return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const container = document.getElementById('elevation-profile');
+        if (!container || container.style.display === 'none') return;
+
+        e.preventDefault();
+        const step = e.shiftKey ? 0.01 : 0.002; // Shift for bigger steps
+        if (cursorFrac === null) cursorFrac = 0;
+        if (e.key === 'ArrowRight') cursorFrac = Math.min(1, cursorFrac + step);
+        else cursorFrac = Math.max(0, cursorFrac - step);
+        showAtFrac(cursorFrac, true);
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'Escape' && cursorFrac !== null) {
+            cursorFrac = null;
+            removeElevationMarker();
+            drawElevationProfile();
+            updateElevationProfileInfo(null);
+        }
+    });
+
+    // Redraw on resize
+    window.addEventListener('resize', () => {
+        if (elevationProfileData && !elevationProfileMinimized) {
+            drawElevationProfile();
+        }
+        adjustMapControlsForElevation();
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+        if (!elevationProfileData || elevationProfileMinimized) return;
+        const p = canvas._epParams;
+        if (!p) return;
+
+        e.preventDefault();
+
+        // Canvas coordinates
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+
+        // Find cursor fraction over the plot area
+        let frac = (canvasX - p.PAD_LEFT) / p.plotW;
+        frac = Math.max(0, Math.min(1, frac)); // Bound the pivot
+
+        const zoomPivotDist = p.vStart + frac * p.vRange;
+
+        const zoomFactor = e.deltaY < 0 ? 0.8 : 1.25;
+        let newRange = p.vRange * zoomFactor;
+
+        // Prevent zooming too far in/out
+        const minDistanceSpan = p.totalDist * 0.01; // Max 100x zoom
+        if (newRange < minDistanceSpan) newRange = minDistanceSpan;
+        if (newRange > p.totalDist) newRange = p.totalDist;
+
+        let newStart = zoomPivotDist - (frac * newRange);
+        let newEnd = newStart + newRange;
+
+        // Clamp to file bounds
+        if (newStart < 0) {
+            newStart = 0;
+            newEnd = newRange;
+        }
+        if (newEnd > p.totalDist) {
+            newEnd = p.totalDist;
+            newStart = p.totalDist - newRange;
+            if (newStart < 0) newStart = 0;
+        }
+
+        elevationViewStart = newStart;
+        elevationViewEnd = newEnd;
+
+        drawElevationProfile();
+
+        // Re-trigger hover effect at current mouse position after redrawing
+        const point = getElevationPointAtX(canvasX);
+        if (point) {
+            drawElevationCursor(canvasX, point);
+            updateElevationProfileInfo(point);
+            showElevationMarker(point.lat, point.lon);
+        }
+    }, { passive: false });
+
+    // Expand on click if minimized
+    const container = document.getElementById('elevation-profile');
+    if (container) {
+        container.addEventListener('click', (e) => {
+            if (elevationProfileMinimized && !e.target.closest('.elevation-profile-toggle') && !e.target.closest('.elevation-profile-overlay')) {
+                toggleElevationProfile();
+            }
+        });
+    }
+
+    const elevationProfileBody = document.getElementById('elevation-profile-body');
+    if (elevationProfileBody && 'ResizeObserver' in window) {
+        let lastBodyWidth = 0;
+        let lastBodyHeight = 0;
+        const resizeObserver = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry || !elevationProfileData) return;
+
+            const width = entry.contentRect.width;
+            const height = entry.contentRect.height;
+            if (Math.abs(width - lastBodyWidth) < 0.5 && Math.abs(height - lastBodyHeight) < 0.5) {
+                return;
+            }
+
+            lastBodyWidth = width;
+            lastBodyHeight = height;
+            adjustMapControlsForElevation();
+            if (!elevationProfileMinimized) {
+                scheduleElevationProfileRedraw();
+            }
+        });
+        resizeObserver.observe(elevationProfileBody);
+    }
+})();
 
 window.copyCoords = function (lat, lng, btnElement) {
     navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
@@ -3945,7 +5207,7 @@ function isMobileDevice() {
 }
 
 function shouldDelayInstallUiUntilTutorialCompletes() {
-    return !localStorage.getItem('topo_tutorial_done') && !hasSharedMapView;
+    return !localStorage.getItem('topo_tutorial_done') && !hasSharedMapView && !hasSharedGpxLink;
 }
 
 function showDeferredInstallUi(mobileDelayMs = 0) {
@@ -4728,7 +5990,34 @@ if (isMobileDevice()) {
     setControlsMinimized(true);
 }
 
+// Run the GPX layer op only once the MapLibre style is ready (the adapter's own
+// readiness flag; do not use map.once('load') — backend detection can resolve after
+// 'load' already fired, which would drop the callback).
+function whenGpxMapReady(callback) {
+    if (map && map._styleReady) { callback(); return; }
+    window.setTimeout(() => whenGpxMapReady(callback), 50);
+}
+
+// Detect the optional backend, then refresh backend-conditional UI text and, if a
+// ?gpx= share link was opened, load it (or strip the param silently when there is
+// no backend — no error, no message).
+(async function initializeBackendFeatures() {
+    await detectBackendAvailability();
+    if (isBackendEnabled()) initGoogleAuth();
+    updateLanguage();
+    const params = new URLSearchParams(location.search);
+    const sharedGpxId = params.get('gpx');
+    if (!sharedGpxId) return;
+    if (isBackendEnabled()) {
+        whenGpxMapReady(() => { loadSharedGpxById(sharedGpxId, { skipFitBounds: hasSharedMapView }); });
+    } else {
+        params.delete('gpx');
+        const queryString = params.toString();
+        history.replaceState(null, '', location.pathname + (queryString ? '?' + queryString : '') + location.hash);
+    }
+})();
+
 // Auto-start tutorial for new visitors
-if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView) {
+if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView && !hasSharedGpxLink) {
     setTimeout(() => startTutorial(), 1000);
 }
