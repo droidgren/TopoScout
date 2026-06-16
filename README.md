@@ -2,12 +2,9 @@
 
 Elevation Finder is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend.
 
-Live demo: [Elevation Finder](https://droidgren.github.io/elevation_finder/)
+🌐 Open the [Live demo](https://elevation-finder.dedyn.io/) with GPX store.
 
-Repository: [droidgren/elevation_finder](https://github.com/droidgren/elevation_finder)
-
-
-
+🌐 Live [demo](https://droidgren.github.io/elevation_finder/) without GPX store (Hosted on github).
 
 ## Core Capabilities
 
@@ -46,6 +43,7 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - Open an **elevation profile bar** for the loaded route: hover or drag to scrub along the track, scroll to zoom the profile, and use the arrow keys to step (hold `Shift` for larger steps).
 - Enable **Sync Map with Profile** to pan the map to a blue marker that follows the profile cursor.
 - Optionally upload, list, share, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
+- To acess your GPX file you log i with your Google account
 
 ### Map and navigation tools
 
