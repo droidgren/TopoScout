@@ -187,6 +187,7 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
 
 ## Changelog
 
+- **v2.3.0:** Redesigned the control icons: replaced all emoji and glyph icons with a crisp, consistent inline SVG icon set that highlights on hover, refreshed the Sweden/UK language flags, switched the collapsible sections and panel toggle to + / − icons, and gave the 3D toggle a clear active state.
 - **v2.2.0:** Added an elevation profile bar for loaded GPX routes (hover/drag to scrub, scroll to zoom, arrow keys to step, with an optional "Sync Map with Profile" marker), and an optional FastAPI backend for uploading, listing, and sharing GPX routes by link. The frontend auto-detects the backend and stays fully functional on static hosting when none is present.
 - **v2.1.2:** Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.
 - **v2.1.1:** Route-names legend now shows each route's symbol with a manual refresh button, and you can click a route to show only that trail ("Show all" to restore). Plus compass-placement, tutorial, and Find Climbs refinements.
