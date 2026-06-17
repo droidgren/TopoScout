@@ -1,7 +1,18 @@
+:root {
+    --panel-bg: #ffffff;
+    --text-main: #27272a;
+    --text-muted: #71717a;
+    --border-color: #e4e4e7;
+    --hover-bg: #f4f4f5;
+    --accent-color: #2563eb;
+    --danger-bg: #fef2f2;
+    --danger-color: #ef4444;
+}
+
 body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     overflow: hidden;
 }
 
@@ -291,44 +302,62 @@ button {
     transition: background 0.2s;
 }
 
-.action-btn {
-    background-color: #d9534f;
-    color: white;
-    padding: 12px;
-    font-size: 14px;
+/* Flat menu-item action buttons (shared look across all primary actions) */
+.action-btn,
+.climb-btn,
+.slope-btn,
+.gpx-btn {
+    display: flex;
+    align-items: center;
     width: 100%;
     margin-top: 5px;
-    transition: all 0.3s ease;
+    padding: 11px 14px;
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: left;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
-.action-btn:hover {
-    background-color: #c9302c;
+.action-btn:hover,
+.climb-btn:hover,
+.slope-btn:hover,
+.gpx-btn:hover {
+    background-color: var(--hover-bg);
 }
 
-.action-btn:disabled {
-    background-color: #cccccc;
-    color: #666666;
+.action-btn:hover .btn-icon,
+.climb-btn:hover .btn-icon,
+.slope-btn:hover .btn-icon,
+.gpx-btn:hover .btn-icon {
+    color: var(--accent-color);
+}
+
+.action-btn:disabled,
+.climb-btn:disabled,
+.slope-btn:disabled,
+.gpx-btn:disabled {
+    background-color: var(--hover-bg);
+    color: #a1a1aa;
+    border-color: var(--border-color);
     cursor: not-allowed;
 }
 
-.climb-btn {
-    background-color: #e67e22;
-    color: white;
-    padding: 12px;
-    font-size: 14px;
-    width: 100%;
-    margin-top: 5px;
-    transition: all 0.3s ease;
+.action-btn:disabled:hover,
+.climb-btn:disabled:hover,
+.slope-btn:disabled:hover,
+.gpx-btn:disabled:hover {
+    background-color: var(--hover-bg);
 }
 
-.climb-btn:hover {
-    background-color: #d35400;
-}
-
-.climb-btn:disabled {
-    background-color: #cccccc;
-    color: #666666;
-    cursor: not-allowed;
+.action-btn:disabled .btn-icon,
+.climb-btn:disabled .btn-icon,
+.slope-btn:disabled .btn-icon,
+.gpx-btn:disabled .btn-icon {
+    color: #a1a1aa;
 }
 
 .climb-mode-toggle-row {
@@ -342,27 +371,8 @@ button {
     width: auto;
     margin-top: 0;
     padding: 10px;
-    font-size: 13px;
-}
-
-.slope-btn {
-    background-color: #8E24AA;
-    color: white;
-    padding: 12px;
-    font-size: 14px;
-    width: 100%;
-    margin-top: 5px;
-    transition: all 0.3s ease;
-}
-
-.slope-btn:hover {
-    background-color: #6A1B9A;
-}
-
-.slope-btn:disabled {
-    background-color: #cccccc;
-    color: #666666;
-    cursor: not-allowed;
+    font-size: 0.85rem;
+    justify-content: center;
 }
 
 /* --- COLLAPSIBLE SECTIONS --- */
@@ -406,33 +416,29 @@ button {
     padding-top: 6px;
 }
 
-.gpx-btn {
-    background-color: #00897B;
-    color: white;
-    padding: 12px;
-    font-size: 14px;
-    width: 100%;
-    margin-top: 5px;
-    transition: all 0.3s ease;
-}
-
-.gpx-btn:hover {
-    background-color: #00695C;
-}
-
 .gpx-clear-btn {
     display: none;
-    background-color: #78909C;
-    color: white;
-    padding: 8px;
-    font-size: 13px;
+    align-items: center;
     width: 100%;
     margin-top: 5px;
-    transition: all 0.3s ease;
+    padding: 9px 14px;
+    background-color: var(--panel-bg);
+    color: var(--danger-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: left;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .gpx-clear-btn:hover {
-    background-color: #546E7A;
+    background-color: var(--danger-bg);
+    border-color: var(--danger-bg);
+}
+
+.gpx-clear-btn:hover .btn-icon {
+    color: var(--danger-color);
 }
 
 .gpx-track-info {
@@ -727,17 +733,28 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
 }
 
 .clear-btn {
-    background-color: #6c757d;
-    color: white;
-    padding: 8px;
-    font-size: 13px;
+    display: flex;
+    align-items: center;
     width: 100%;
     margin-top: 10px;
-    transition: background-color 0.2s ease;
+    padding: 11px 14px;
+    background-color: var(--panel-bg);
+    color: var(--danger-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: left;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .clear-btn:hover {
-    background-color: #dc3545;
+    background-color: var(--danger-bg);
+    border-color: var(--danger-bg);
+}
+
+.clear-btn:hover .btn-icon {
+    color: var(--danger-color);
 }
 
 .icon-btn {
@@ -1230,27 +1247,46 @@ details[open] summary {
 
 /* ── Manual Climb ────────────────────────────────────────────────── */
 .manual-climb-toggle-btn {
-    background-color: #1565C0;
-    color: white;
-    padding: 10px;
-    font-size: 14px;
+    display: flex;
+    align-items: center;
     width: 100%;
-    transition: background 0.2s;
+    padding: 10px;
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: left;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .manual-climb-toggle-btn:hover {
-    background-color: #0d47a1;
+    background-color: var(--hover-bg);
+}
+
+.manual-climb-toggle-btn:hover .btn-icon {
+    color: var(--accent-color);
 }
 
 .manual-climb-toggle-btn.active {
-    background-color: #0d47a1;
-    outline: 2px solid #82b1ff;
+    background-color: var(--hover-bg);
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.manual-climb-toggle-btn.active .btn-icon {
+    color: var(--accent-color);
 }
 
 .manual-climb-toggle-btn:disabled {
-    background-color: #ccc;
-    color: #666;
+    background-color: var(--hover-bg);
+    color: #a1a1aa;
     cursor: not-allowed;
+}
+
+.manual-climb-toggle-btn:disabled .btn-icon {
+    color: #a1a1aa;
 }
 
 .manual-climb-hint {
@@ -1276,19 +1312,10 @@ details[open] summary {
 .manual-climb-calc {
     flex: 1;
     margin: 0;
-    padding: 8px;
-    font-size: 13px;
-    background-color: #1565C0;
-}
-
-.manual-climb-calc:hover {
-    background-color: #0d47a1;
-}
-
-.manual-climb-calc:disabled {
-    background-color: #ccc;
-    color: #666;
-    cursor: not-allowed;
+    padding: 9px;
+    font-size: 0.85rem;
+    justify-content: center;
+    text-align: center;
 }
 
 .manual-climb-cancel-btn {
