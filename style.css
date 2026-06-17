@@ -84,9 +84,8 @@ h3 {
 
 /* BUTTONS IN HEADER (INFO & LANGUAGE) */
 .circle-btn {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid #999;
-    border-radius: 50%;
+    background: none;
+    border: none;
     width: 26px;
     height: 26px;
     display: flex;
@@ -94,13 +93,12 @@ h3 {
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    transition: background 0.2s;
+    transition: opacity 0.2s;
     overflow: hidden;
 }
 
 .circle-btn:hover {
-    background: #fff;
-    border-color: #555;
+    color: #2563eb;
 }
 
 .info-btn {
@@ -112,17 +110,16 @@ h3 {
 }
 
 .share-circle-btn {
-    color: #1565C0;
-    font-size: 13px;
-    transform: translateY(-1px);
+    color: #555;
 }
 
 /* FLAG IMAGE */
 .flag-img {
-    width: 100%;
-    height: 100%;
+    width: 15px;
+    height: 15px;
     object-fit: cover;
     display: block;
+    border-radius: 3px;
 }
 
 .footer-row {
@@ -377,18 +374,18 @@ button {
 
 .section-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     cursor: pointer;
     padding: 4px 0;
     user-select: none;
 }
 
-.section-header:hover {
-    opacity: 0.75;
+.section-header:hover .btn-icon {
+    color: #2563eb;
 }
 
-.section-header span:first-child {
+.section-header span:not(.section-toggle) {
     font-size: 14px;
     font-weight: 700;
     color: #333;
@@ -399,6 +396,9 @@ button {
     color: #555;
     line-height: 1;
     opacity: 0.45;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
 }
 
 .section-content {
@@ -733,10 +733,11 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     font-size: 13px;
     width: 100%;
     margin-top: 10px;
+    transition: background-color 0.2s ease;
 }
 
 .clear-btn:hover {
-    background-color: #5a6268;
+    background-color: #dc3545;
 }
 
 .icon-btn {
@@ -756,6 +757,7 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
 
 .icon-btn:hover {
     background: #e2e6ea;
+    color: #2563eb;
 }
 
 .icon-btn svg {
@@ -764,12 +766,12 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: block;
 }
 
-/* 3D toggle: light-blue filled cube with a blue outline when off;
-   outline turns white and the fill drops away when active (3D on). */
-#enable3dBtn { color: #1565c0; }
-#enable3dBtn .cube-face { fill: #e3f2fd; }
-#enable3dBtn.active { color: #fff; }
-#enable3dBtn.active .cube-face { fill: none; }
+/* 3D toggle: the box icon's outline turns the accent blue and stays blue while 3D is on. */
+#enable3dBtn.active {
+    color: #2563eb;
+    border-color: #2563eb;
+    background: #f8f9fa;
+}
 
 .icon-btn.active {
     background: #1565c0;
@@ -1630,4 +1632,132 @@ details[open] summary {
 
 .elevation-profile.minimized #elevation-canvas {
     display: none;
+}
+
+/* ============================================================
+   Inline SVG icon system (replaces emoji/glyph icons)
+   ============================================================ */
+.icon-svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Leading icon inside a text button or label */
+.btn-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+    flex: 0 0 auto;
+}
+
+.btn-label {
+    vertical-align: middle;
+}
+
+/* Header circle buttons (share, info) */
+.circle-btn svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+}
+
+/* Header app logo */
+.title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.app-logo {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    color: #333;
+}
+
+/* Panel minimize +/- toggle */
+.toggle-btn {
+    display: flex;
+    align-items: center;
+}
+
+.toggle-btn:hover {
+    color: #2563eb;
+}
+
+.toggle-btn .icon-svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Panel expanded shows "−"; minimized shows "+" */
+.toggle-btn .pm-v {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#controls.minimized .toggle-btn .pm-v {
+    opacity: 1;
+}
+
+/* Section expand/collapse +/- toggle */
+.section-toggle .icon-svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+/* Section collapsed shows "+"; expanded shows "−" */
+.section-toggle .pm-v {
+    transition: opacity 0.2s ease;
+}
+
+.section-toggle.expanded .pm-v {
+    opacity: 0;
+}
+
+/* Elevation profile chevron (the button itself rotates via the .minimized rule above) */
+.elevation-profile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.elevation-profile-toggle .icon-svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+/* Lock-radius label icon */
+#lbl-lock-circle {
+    display: inline-flex;
+    align-items: center;
+}
+
+#lbl-lock-circle .btn-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 6px;
+}
+
+/* Icon-only buttons that aren't .icon-btn (manual-climb cancel, install-bar dismiss) */
+.manual-climb-cancel-btn,
+#mobile-install-dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.manual-climb-cancel-btn svg,
+#mobile-install-dismiss svg {
+    width: 16px;
+    height: 16px;
+    display: block;
 }

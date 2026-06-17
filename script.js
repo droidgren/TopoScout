@@ -64,8 +64,8 @@ const WATER_TOLERANCE = 25;
 const WATER_CHECK_URL = "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
 
 // Base64 flags
-const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxMCI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjEwIiBmaWxsPSIjMDA2YWE3Ii8+PHJlY3QgeD0iNSIgd2lkdGg9IjIiIGhlaWdodD0iMTAiIGZpbGw9IiNmZWNjMDAiLz48cmVjdCB5PSI0IiB3aWR0aD0iMTYiIGhlaWdodD0iMiIgZmlsbD0iI2ZlY2MwMCIvPjwvc3ZnPg==";
-const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCAzMCI+PHBhdGggZmlsbD0iIzAxMjE2OSIgZD0iTTAgMGg2MHYzMEgwVjB6Ii8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0wIDAgNjAgMzBNNjAgMCAwIDMwIi8+PHBhdGggc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEwIiBkPSJNMzAgMHYzME0wIDE1aDYwIi8+PHBhdGggc3Ryb2tlPSIjQzgxMDJFIiBzdHJva2Utd2lkdGg9IjYiIGQ9Ik0zMCAwdjMwTTAgMTVoNjAiLz48L3N2Zz4=";
+const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMDA2QUE3Ii8+PHBhdGggZD0iTTAgMTJIMjRNOCAwVjI0IiBzdHJva2U9IiNGRUNDMDAiIHN0cm9rZS13aWR0aD0iNCIvPjwvc3ZnPg==";
+const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMDAyNDdEIi8+PHBhdGggZD0iTTAgMEwyNCAyNE0yNCAwTDAgMjQiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48cGF0aCBkPSJNMCAwTDI0IDI0TTI0IDBMMCAyNCIgc3Ryb2tlPSIjQ0YxNDJCIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0xMiAwVjI0TTAgMTJIMjQiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI0LjUiLz48cGF0aCBkPSJNMTIgMFYyNE0wIDEySDI0IiBzdHJva2U9IiNDRjE0MkIiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+";
 
 // Services requiring API keys
 const lockedServices = {
@@ -1745,7 +1745,7 @@ function updateLanguage() {
         document.getElementById('lbl-radius').textContent = t.lbl_radius;
         document.getElementById('lbl-points').textContent = t.lbl_points;
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
-        document.getElementById('lbl-lock-circle').textContent = t.lbl_lock_circle;
+        document.querySelector('#lbl-lock-circle .btn-label').textContent = t.lbl_lock_circle;
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
         if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
         if (extraLayerSelect) {
@@ -1756,11 +1756,11 @@ function updateLanguage() {
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
         if (enable3dBtn) enable3dBtn.title = t.lbl_enable_3d;
         if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
-        document.getElementById('scan-btn').textContent = t.btn_scan;
+        document.querySelector('#scan-btn .btn-label').textContent = t.btn_scan;
         document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
-        document.getElementById('climb-btn').textContent = t.btn_climb;
-        document.getElementById('clear-btn').textContent = t.btn_clear;
+        document.querySelector('#climb-btn .btn-label').textContent = t.btn_climb;
+        document.querySelector('#clear-btn .btn-label').textContent = t.btn_clear;
 
         document.getElementById('searchInput').placeholder = t.input_search_ph;
         document.getElementById('status').textContent = t.status_ready;
@@ -1769,7 +1769,7 @@ function updateLanguage() {
         document.getElementById('info-desc').innerHTML = t.info_desc;
 
         const tutBtn = document.getElementById('start-tutorial-btn');
-        if (tutBtn) tutBtn.textContent = t.btn_tutorial;
+        if (tutBtn) tutBtn.querySelector('.btn-label').textContent = t.btn_tutorial;
         document.getElementById('lbl-version').textContent = t.lbl_version;
         document.getElementById('app-version').textContent = APP_VERSION;
         if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
@@ -1780,7 +1780,7 @@ function updateLanguage() {
         if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
         if (document.getElementById('lbl-peak-min-pixels')) document.getElementById('lbl-peak-min-pixels').textContent = t.lbl_peak_min_pixels;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
-        if (document.getElementById('slope-btn')) document.getElementById('slope-btn').textContent = t.btn_slope;
+        if (document.getElementById('slope-btn')) document.querySelector('#slope-btn .btn-label').textContent = t.btn_slope;
         if (document.getElementById('lbl-slope-filter')) document.getElementById('lbl-slope-filter').textContent = t.lbl_slope_filter;
         if (document.getElementById('lbl-slope-min')) document.getElementById('lbl-slope-min').textContent = t.lbl_slope_min;
         if (document.getElementById('lbl-slope-max')) document.getElementById('lbl-slope-max').textContent = t.lbl_slope_max;
@@ -1789,16 +1789,19 @@ function updateLanguage() {
         if (document.getElementById('section-climbs-title')) document.getElementById('section-climbs-title').textContent = t.section_climbs_title;
         if (document.getElementById('section-slope-title')) document.getElementById('section-slope-title').textContent = t.section_slope_title;
         if (document.getElementById('section-routes-title')) document.getElementById('section-routes-title').textContent = t.section_routes_title;
-        if (document.getElementById('gpx-btn')) document.getElementById('gpx-btn').textContent = t.btn_gpx;
-        if (document.getElementById('gpx-clear-btn')) document.getElementById('gpx-clear-btn').textContent = t.btn_gpx_clear;
+        if (document.getElementById('gpx-btn')) document.querySelector('#gpx-btn .btn-label').textContent = t.btn_gpx;
+        if (document.getElementById('gpx-clear-btn')) document.querySelector('#gpx-clear-btn .btn-label').textContent = t.btn_gpx_clear;
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
         if (mcToggle) {
-            mcToggle.textContent = t.btn_manual_climb;
+            mcToggle.querySelector('.btn-label').textContent = t.btn_manual_climb;
         }
         const mcCalc = document.getElementById('manual-climb-calc-btn');
         if (mcCalc) mcCalc.textContent = t.btn_manual_climb_calculate;
         const mcCancel = document.getElementById('manual-climb-cancel-btn');
-        if (mcCancel) mcCancel.textContent = t.btn_manual_climb_cancel;
+        if (mcCancel) {
+            mcCancel.title = t.btn_cancel || 'Cancel';
+            mcCancel.setAttribute('aria-label', t.btn_cancel || 'Cancel');
+        }
         _updateManualClimbUI();
         if (document.getElementById('lbl-track-color')) document.getElementById('lbl-track-color').textContent = t.lbl_track_color;
         if (document.getElementById('lbl-track-width')) document.getElementById('lbl-track-width').textContent = t.lbl_track_width;
@@ -1862,7 +1865,7 @@ function updateLanguage() {
 
         // Install button and mobile install bar
         const installBtn = document.getElementById('install-app-btn');
-        if (installBtn) installBtn.textContent = t.btn_install_app;
+        if (installBtn) installBtn.querySelector('.btn-label').textContent = t.btn_install_app;
         const installMsg = document.getElementById('mobile-install-msg');
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
@@ -2471,7 +2474,6 @@ function setControlsMinimized(minimized) {
         controls.classList.toggle('minimized', minimized);
     }
     if (btn) {
-        btn.textContent = minimized ? '➕' : '➖';
         const label = getControlsToggleLabel(minimized);
         btn.title = label;
         btn.setAttribute('aria-label', label);
@@ -2488,7 +2490,7 @@ function setSectionExpanded(sectionId, expanded) {
     const toggle = header ? header.querySelector('.section-toggle') : null;
     content.style.display = expanded ? 'block' : 'none';
     if (toggle) {
-        toggle.textContent = expanded ? '➖' : '➕';
+        toggle.classList.toggle('expanded', expanded);
     }
 }
 
