@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elevation Finder — Icon Set</title>
+  <style>
+    :root {
+      --bg-color: #f4f4f5;
+      --panel-bg: #ffffff;
+      --text-main: #27272a;
+      --text-muted: #71717a;
+      --border-color: #e4e4e7;
+      --hover-bg: #f4f4f5;
+      --accent-color: #2563eb;
+      --danger-bg: #fef2f2;
+      --danger-color: #ef4444;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background-color: var(--bg-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 24px;
+      min-height: 100vh;
+      box-sizing: border-box;
+      background-image: radial-gradient(#d4d4d8 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    .map-sidebar {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      width: 300px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-group {
+      padding: 8px 0;
+    }
+
+    .menu-group-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 8px 20px;
+      font-weight: 600;
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      cursor: pointer;
+      color: var(--text-main);
+      transition: background-color 0.2s, color 0.2s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    /* App behaviour: hovering a row turns the ICON accent-blue (text stays). */
+    .menu-item:hover {
+      background-color: var(--hover-bg);
+    }
+    .menu-item:hover .svg-outline {
+      stroke: var(--accent-color);
+    }
+
+    .menu-item.danger {
+      color: var(--danger-color);
+    }
+    .menu-item.danger:hover {
+      background-color: var(--danger-bg);
+    }
+    .menu-item.danger:hover .svg-outline {
+      stroke: var(--danger-color);
+    }
+
+    .menu-item svg {
+      flex-shrink: 0;
+    }
+
+    .menu-divider {
+      height: 1px;
+      background-color: var(--border-color);
+      margin: 4px 0;
+    }
+
+    /* SVG base style — outline icons, stroke follows currentColor */
+    .svg-outline {
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      transition: stroke 0.2s;
+    }
+
+    .flag-icon {
+      border-radius: 4px;
+      overflow: hidden;
+      display: block;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+    }
+
+    /* ---- Icon reference grid (second card) ---- */
+    .icon-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      width: 300px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 12px;
+    }
+
+    .icon-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 6px;
+      border-radius: 8px;
+      color: var(--text-main);
+      transition: background-color 0.2s, color 0.2s;
+      text-align: center;
+    }
+
+    .icon-cell:hover {
+      background-color: var(--hover-bg);
+    }
+    .icon-cell:hover .svg-outline {
+      stroke: var(--accent-color);
+    }
+
+    .icon-cell span {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      line-height: 1.2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============ CONTROLS SIDEBAR (matches the app) ============ -->
+  <div class="map-sidebar">
+    <div class="sidebar-header">
+      <!-- Layers logo -->
+      <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24">
+        <path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"></path>
+        <line x1="9" y1="2" x2="9" y2="16"></line>
+        <line x1="15" y1="6" x2="15" y2="20"></line>
+      </svg>
+      Elevation Finder
+    </div>
+
+    <div class="menu-group">
+      <div class="menu-group-title">Language / Språk</div>
+
+      <button class="menu-item">
+        <!-- Sweden flag -->
+        <svg class="flag-icon" width="20" height="20" viewBox="0 0 24 24">
+          <rect width="24" height="24" fill="#006AA7"></rect>
+          <path d="M0 12H24M8 0V24" stroke="#FECC00" stroke-width="4"></path>
+        </svg>
+        Svenska
+      </button>
+
+      <button class="menu-item">
+        <!-- UK flag -->
+        <svg class="flag-icon" width="20" height="20" viewBox="0 0 24 24">
+          <rect width="24" height="24" fill="#00247D"></rect>
+          <path d="M0 0L24 24M24 0L0 24" stroke="#FFFFFF" stroke-width="2.5"></path>
+          <path d="M0 0L24 24M24 0L0 24" stroke="#CF142B" stroke-width="1.2"></path>
+          <path d="M12 0V24M0 12H24" stroke="#FFFFFF" stroke-width="4.5"></path>
+          <path d="M12 0V24M0 12H24" stroke="#CF142B" stroke-width="2.5"></path>
+        </svg>
+        English (UK)
+      </button>
+    </div>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-group">
+      <button class="menu-item">
+        <!-- Search -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Search
+      </button>
+
+      <button class="menu-item">
+        <!-- Location pin -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        Go to my current location
+      </button>
+
+      <button class="menu-item">
+        <!-- Lock -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" ry="2"></rect><path d="M8 11V7a4 4 0 1 1 8 0v4"></path></svg>
+        Lock Radius
+      </button>
+
+      <button class="menu-item">
+        <!-- 3D box -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        Enable 3D
+      </button>
+
+      <button class="menu-item">
+        <!-- Share / upload -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+        Share Map view
+      </button>
+    </div>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-group">
+      <div class="menu-group-title">Terrain Analysis</div>
+
+      <button class="menu-item">
+        <!-- Peak -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><path d="M8 10l4 8 5-5 5 15H2L8 10z"></path><line x1="8" y1="2" x2="8" y2="8"></line><polyline points="5 5 8 8 11 5"></polyline></svg>
+        Find Highest Points
+      </button>
+
+      <button class="menu-item">
+        <!-- Trending up -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+        Find Climbs
+      </button>
+
+      <button class="menu-item">
+        <!-- Layers -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"></path><line x1="9" y1="2" x2="9" y2="16"></line><line x1="15" y1="6" x2="15" y2="20"></line></svg>
+        Generate Slopemap
+      </button>
+
+      <button class="menu-item">
+        <!-- Keyboard -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="8" x2="6" y2="12"></line><line x1="10" y1="8" x2="10" y2="12"></line><line x1="14" y1="8" x2="14" y2="12"></line><line x1="18" y1="8" x2="18" y2="12"></line></svg>
+        Manual Mode
+      </button>
+    </div>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-group">
+      <button class="menu-item">
+        <!-- Route nodes -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="18" r="2"></circle><circle cx="13" cy="6" r="2"></circle><polyline points="5 16 5 12 13 12 13 8"></polyline><line x1="17" y1="15" x2="23" y2="15"></line><line x1="20" y1="12" x2="20" y2="18"></line></svg>
+        Add GPX Routes
+      </button>
+
+      <button class="menu-item">
+        <!-- Info circle -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        About Elevation Finder
+      </button>
+
+      <button class="menu-item danger">
+        <!-- Trash -->
+        <svg class="svg-outline" width="20" height="20" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Clear Results
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ ADDITIONAL UI ICONS ============ -->
+  <div class="icon-card">
+    <div class="sidebar-header">Additional UI icons</div>
+    <div class="icon-grid">
+
+      <div class="icon-cell">
+        <!-- Graduation cap -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"></path><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"></path><line x1="22" y1="10" x2="22" y2="15"></line></svg>
+        <span>Start Tutorial</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Download -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Install as App</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Key -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+        <span>API Key</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Rotate ccw (undo) -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        <span>Undo point</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- X (cancel / close) -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <span>Close / Cancel</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Plus (expand / maximize) -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line><line x1="12" y1="5" x2="12" y2="19"></line></svg>
+        <span>Expand</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Minus (collapse / minimize) -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>Collapse</span>
+      </div>
+
+      <div class="icon-cell">
+        <!-- Chevron (elevation-profile toggle) -->
+        <svg class="svg-outline" width="24" height="24" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <span>Profile toggle</span>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
