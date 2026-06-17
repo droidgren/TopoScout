@@ -29,7 +29,7 @@
 
             <p id="info-desc">This tool helps you analyze terrain to find highest points, calculate maximum ascent, visualize slope steepness, and overlay GPX routes on the map. The app is designed to work on mobile devices as well.</p>
 
-            <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;">🎓 Start Tutorial</button>
+            <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/><line x1="22" y1="10" x2="22" y2="15"/></svg><span class="btn-label">Start Tutorial</span></button>
 
             <p><strong><a href="https://github.com/droidgren/elevation_finder">GitHub Project</a></strong></p>
 
@@ -55,7 +55,7 @@
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
             </details>
 
-            <button id="install-app-btn" onclick="triggerInstallPrompt()" style="display:none;">📲 Install as App</button>
+            <button id="install-app-btn" onclick="triggerInstallPrompt()" style="display:none;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="btn-label">Install as App</span></button>
 
             <details
                 style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #555;">
@@ -168,14 +168,17 @@
 
     <div id="controls">
         <div class="header-row">
-            <h3 id="app-title">Elevation Finder</h3>
+            <span class="title-group">
+                <svg class="icon-svg app-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+                <h3 id="app-title">Elevation Finder</h3>
+            </span>
             <div class="header-buttons">
                 <button class="circle-btn" onclick="toggleLanguage()" title="Switch Language">
                     <img id="flag-icon" class="flag-img" src="" alt="Flag">
                 </button>
-                <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View">🔗</button>
-                <button class="circle-btn info-btn" onclick="showInfo()" title="Info">i</button>
-                <button class="toggle-btn" onclick="toggleControls()" title="Minimize">➖</button>
+                <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+                <button class="circle-btn info-btn" onclick="showInfo()" title="Info"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                <button class="toggle-btn" onclick="toggleControls()" title="Minimize"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></button>
             </div>
         </div>
 
@@ -188,9 +191,9 @@
 
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="Search location">
-                <button class="icon-btn" onclick="searchLocation()" title="Search">🔍</button>
-                <button class="icon-btn" onclick="locateUser()" title="GPS">📍</button>
-                <button id="enable3dBtn" class="icon-btn" onclick="toggle3dView()" title="Enable 3D" aria-label="Enable 3D"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="cube-face" d="M12 2L3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg></button>
+                <button class="icon-btn" onclick="searchLocation()" title="Search"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+                <button class="icon-btn" onclick="locateUser()" title="GPS"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></button>
+                <button id="enable3dBtn" class="icon-btn" onclick="toggle3dView()" title="Enable 3D" aria-label="Enable 3D"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></button>
             </div>
 
             <!-- Common settings (not collapsible) -->
@@ -212,7 +215,7 @@
                         <option value="debug">Elevation Data (Debug)</option>
                     </select>
                     <button id="edit-key-btn" class="icon-btn" onclick="openCurrentKeyModal()" title="API"
-                        style="display:none;">🔑</button>
+                        style="display:none;"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></button>
                     </div>
                 </div>
 
@@ -241,7 +244,7 @@
                     </div>
                     <div class="checkbox-row">
                         <input type="checkbox" id="lock-circle">
-                        <label id="lbl-lock-circle" for="lock-circle" title="Lock">🔒 Lock Radius</label>
+                        <label id="lbl-lock-circle" for="lock-circle" title="Lock"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" ry="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></svg><span class="btn-label">Lock Radius</span></label>
                     </div>
                 </div>
 
@@ -258,8 +261,9 @@
             <!-- Find Highest Points (collapsible) -->
             <div id="group-points" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-points')">
-                    <span id="section-points-title">📍 Find Highest Points</span>
-                    <span class="section-toggle">➕</span>
+                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 8 5-5 5 15H2L8 10z"/><line x1="8" y1="2" x2="8" y2="8"/><polyline points="5 5 8 8 11 5"/></svg>
+                    <span id="section-points-title">Find Highest Points</span>
+                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
                 </div>
                 <div id="section-points" class="section-content">
                     <div class="control-row">
@@ -270,15 +274,16 @@
                             <button class="num-btn" onclick="adjustNumber('numPoints', 1)">+</button>
                         </div>
                     </div>
-                    <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled>📍 Find Highest Points</button>
+                    <button id="scan-btn" class="action-btn" onclick="analyzeTerrain()" disabled><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 8 5-5 5 15H2L8 10z"/><line x1="8" y1="2" x2="8" y2="8"/><polyline points="5 5 8 8 11 5"/></svg><span class="btn-label">Find Highest Points</span></button>
                 </div>
             </div>
 
             <!-- Find Climbs (collapsible) -->
             <div id="group-climbs" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-climbs')">
-                    <span id="section-climbs-title">📈 Find Climbs</span>
-                    <span class="section-toggle">➕</span>
+                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                    <span id="section-climbs-title">Find Climbs</span>
+                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
                 </div>
                 <div id="section-climbs" class="section-content">
                     <div class="control-row">
@@ -299,12 +304,10 @@
                     </div>
 
                     <div class="climb-mode-toggle-row">
-                        <button id="climb-btn" class="climb-btn climb-mode-btn" onclick="findSteepestClimb()" disabled>📈 Find Climbs</button>
+                        <button id="climb-btn" class="climb-btn climb-mode-btn" onclick="findSteepestClimb()" disabled><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg><span class="btn-label">Find Climbs</span></button>
                         <button id="manual-climb-toggle-btn"
                             class="manual-climb-toggle-btn climb-mode-btn"
-                            onclick="toggleManualClimbMode()">
-                            📏 Manual mode
-                        </button>
+                            onclick="toggleManualClimbMode()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="8" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="8" x2="6" y2="12"/><line x1="10" y1="8" x2="10" y2="12"/><line x1="14" y1="8" x2="14" y2="12"/><line x1="18" y1="8" x2="18" y2="12"/></svg><span class="btn-label">Manual mode</span></button>
                     </div>
 
                     <!-- Manual Mode subsection -->
@@ -317,14 +320,14 @@
                                     class="icon-btn"
                                     onclick="undoManualClimbPoint()"
                                     title="Undo last point"
-                                    disabled>↩</button>
+                                    disabled><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
                                 <button id="manual-climb-calc-btn"
                                     class="action-btn manual-climb-calc"
                                     onclick="runManualClimbCalculation()"
                                     disabled>Calculate</button>
                                 <button id="manual-climb-cancel-btn"
                                     class="cancel-btn manual-climb-cancel-btn"
-                                    onclick="cancelManualClimbMode()">✕</button>
+                                    onclick="cancelManualClimbMode()"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                             </div>
                         </div>
                     </div>
@@ -334,8 +337,9 @@
             <!-- Generate Slope Map (collapsible) -->
             <div id="group-slope" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-slope')">
-                    <span id="section-slope-title">🗺️ Generate Slope Map</span>
-                    <span class="section-toggle">➕</span>
+                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+                    <span id="section-slope-title">Generate Slope Map</span>
+                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
                 </div>
                 <div id="section-slope" class="section-content">
                     <div class="checkbox-group">
@@ -365,15 +369,16 @@
                         <input type="range" id="slopeOpacity" min="10" max="100" value="60" step="5" style="flex:1; margin: 0 6px;">
                         <span id="slopeOpacityVal" style="min-width:35px;text-align:right;font-size:13px;">60%</span>
                     </div>
-                    <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled>🗺️ Generate Slope Map</button>
+                    <button id="slope-btn" class="slope-btn" onclick="generateSlopeMap()" disabled><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg><span class="btn-label">Generate Slope Map</span></button>
                 </div>
             </div>
 
             <!-- Add Routes (collapsible) -->
             <div id="group-routes" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-routes')">
-                    <span id="section-routes-title">📂 Add GPX Routes</span>
-                    <span class="section-toggle">➕</span>
+                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg>
+                    <span id="section-routes-title">Add GPX Routes</span>
+                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
                 </div>
                 <div id="section-routes" class="section-content">
                     <div class="control-row">
@@ -416,13 +421,13 @@
                         </div>
                     </div>
                     <input type="file" id="gpx-file-input" accept=".gpx" style="display:none;">
-                    <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()">📂 Load GPX Route</button>
+                    <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg><span class="btn-label">Load GPX Route</span></button>
                     <div id="gpx-track-info" class="gpx-track-info" style="display:none;"></div>
-                    <button id="gpx-clear-btn" class="gpx-clear-btn" onclick="clearGpxRoute()" style="display:none;">✕ Clear Route</button>
+                    <button id="gpx-clear-btn" class="gpx-clear-btn" onclick="clearGpxRoute()" style="display:none;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="btn-label">Clear Route</span></button>
                 </div>
             </div>
 
-            <button id="clear-btn" class="clear-btn" onclick="clearResults()">🗑️ Clear Results</button>
+            <button id="clear-btn" class="clear-btn" onclick="clearResults()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span class="btn-label">Clear Results</span></button>
         </div>
 
         <div class="footer-row">
@@ -443,7 +448,7 @@
             <div class="elevation-profile-overlay">
                 <span id="elevation-profile-title" class="elevation-profile-label">Elevation Profile</span>
                 <span id="elevation-profile-info" class="elevation-profile-info"></span>
-                <button id="elevation-profile-toggle" class="elevation-profile-toggle" onclick="toggleElevationProfile()" title="Minimize">▼</button>
+                <button id="elevation-profile-toggle" class="elevation-profile-toggle" onclick="toggleElevationProfile()" title="Minimize"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
             </div>
         </div>
     </div>
@@ -456,7 +461,7 @@
     <div id="mobile-install-bar" class="notification-snackbar">
         <span id="mobile-install-msg">Install Elevation Finder as an app!</span>
         <button id="mobile-install-btn" onclick="triggerInstallPrompt()">Install</button>
-        <button id="mobile-install-dismiss" onclick="dismissInstallBar()">✕</button>
+        <button id="mobile-install-dismiss" onclick="dismissInstallBar()"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
 
     <!-- TUTORIAL OVERLAY -->
