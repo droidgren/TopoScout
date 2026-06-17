@@ -115,8 +115,8 @@ h3 {
 
 /* FLAG IMAGE */
 .flag-img {
-    width: 15px;
-    height: 15px;
+    width: 22px;
+    height: 22px;
     object-fit: cover;
     display: block;
     border-radius: 3px;
@@ -1661,8 +1661,8 @@ details[open] summary {
 
 /* Header circle buttons (share, info) */
 .circle-btn svg {
-    width: 15px;
-    height: 15px;
+    width: 22px;
+    height: 22px;
     display: block;
 }
 
