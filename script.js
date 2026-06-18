@@ -2528,6 +2528,12 @@ window.toggleSection = function (sectionId) {
 
     if (isCurrentlyOpen) {
         setSectionExpanded(sectionId, false);
+        // Collapsing an analysis section turns Show Radius back off, matching
+        // the auto-enable that happens when the section is expanded.
+        if (ANALYSIS_SECTION_IDS.includes(sectionId) && circleCheckbox && circleCheckbox.checked) {
+            circleCheckbox.checked = false;
+            updateUI();
+        }
         return;
     }
 
