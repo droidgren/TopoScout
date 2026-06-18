@@ -312,7 +312,7 @@ button {
 }
 
 .climb-btn {
-    background-color: #e67e22;
+    background-color: #d9534f;
     color: white;
     padding: 12px;
     font-size: 14px;
@@ -322,7 +322,7 @@ button {
 }
 
 .climb-btn:hover {
-    background-color: #d35400;
+    background-color: #c9302c;
 }
 
 .climb-btn:disabled {
@@ -346,7 +346,7 @@ button {
 }
 
 .slope-btn {
-    background-color: #8E24AA;
+    background-color: #d9534f;
     color: white;
     padding: 12px;
     font-size: 14px;
@@ -356,7 +356,7 @@ button {
 }
 
 .slope-btn:hover {
-    background-color: #6A1B9A;
+    background-color: #c9302c;
 }
 
 .slope-btn:disabled {
@@ -407,7 +407,7 @@ button {
 }
 
 .gpx-btn {
-    background-color: #00897B;
+    background-color: #d9534f;
     color: white;
     padding: 12px;
     font-size: 14px;
@@ -417,7 +417,7 @@ button {
 }
 
 .gpx-btn:hover {
-    background-color: #00695C;
+    background-color: #c9302c;
 }
 
 .gpx-clear-btn {
