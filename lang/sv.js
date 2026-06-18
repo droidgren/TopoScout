@@ -140,7 +140,7 @@ const LANG_SV = {
     tutorial_slope_title: "Lutningskarta",
     tutorial_slope_text: "Generera en färgkodad lutningskarta inom sökradien. Använd opacitetsreglaget och filterinställningarna för att markera specifika lutningsvinklar. Om du först avmarkerar Visa radie skapas lutningskartan för hela den synliga kartan.",
     tutorial_routes_title: "Lägg till spår (GPX)",
-    tutorial_routes_text: "Ladda en GPX-fil för att visa ett spår på kartan. Anpassa spårfärg, bredd och växla avståndsmarkeringar, lutningsfärgning, vägpunkter och min/max höjdmarkörer.",
+    tutorial_routes_text: "Ladda en GPX-fil för att visa ett spår på kartan. Anpassa spårfärg, bredd och växla avståndsmarkeringar, lutningsfärgning, vägpunkter, min/max höjdmarkörer och höjdprofilen.",
     tutorial_search_title: "Sök & Position",
     tutorial_search_text: "Sök efter valfri plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din position.",
     tutorial_share_title: "Dela kartvy",
