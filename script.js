@@ -1410,6 +1410,8 @@ let currentKmMarkers = [];
 let currentSharedGpxId = null;
 let currentGpxFilename = null;
 let currentGpxShareUrl = null;
+let currentGpxRawText = null;     // raw GPX text of the active route (for download/rename)
+let currentGpxRawFilename = null; // original filename of the active route (download default name)
 let uploadedGpxFiles = [];
 let uploadedGpxListState = 'idle';
 let searchCircle = null;
@@ -1730,6 +1732,49 @@ window.deleteUploadedGpx = async function (gpxId) {
     }
 };
 
+window.renameUploadedGpx = async function (gpxId) {
+    const t = translations[currentLang];
+    if (!gpxId) return;
+    if (!isBackendEnabled()) {
+        statusDiv.textContent = t.status_backend_disabled || 'Backend sharing is disabled in this build.';
+        return;
+    }
+
+    const fileEntry = uploadedGpxFiles.find(file => file.id === gpxId);
+    const currentName = fileEntry && fileEntry.filename ? fileEntry.filename : 'GPX file';
+    const promptMessage = (t.prompt_rename_gpx || 'New name for "{name}":').replace('{name}', currentName);
+    const input = window.prompt(promptMessage, currentName);
+    if (input === null) return;
+    const newName = sanitizeGpxFilename(input) + '.gpx';
+
+    statusDiv.textContent = t.status_renaming_gpx || t.status_loading || 'Loading data...';
+    try {
+        const response = await fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({ filename: newName })
+        });
+        if (response.status === 401 && isGoogleSignedIn()) {
+            clearGoogleAuthState();
+        }
+        if (!response.ok) {
+            throw new Error('Failed to rename GPX');
+        }
+
+        // Keep the active route's displayed/download filename in sync.
+        if (currentSharedGpxId === gpxId) {
+            currentGpxFilename = newName;
+            currentGpxRawFilename = newName;
+        }
+
+        await refreshUploadedFiles();
+        statusDiv.textContent = (t.status_gpx_renamed || 'Renamed to {name}.').replace('{name}', newName);
+    } catch (err) {
+        statusDiv.textContent = t.status_rename_gpx_error || 'Could not rename the GPX file.';
+    }
+};
+
 function updateLanguage() {
     const t = translations[currentLang];
     const isEn = currentLang === 'en';
@@ -1791,6 +1836,7 @@ function updateLanguage() {
         if (document.getElementById('section-routes-title')) document.getElementById('section-routes-title').textContent = t.section_routes_title;
         if (document.getElementById('gpx-btn')) document.querySelector('#gpx-btn .btn-label').textContent = t.btn_gpx;
         if (document.getElementById('gpx-clear-btn')) document.querySelector('#gpx-clear-btn .btn-label').textContent = t.btn_gpx_clear;
+        if (document.getElementById('gpx-download-btn')) document.querySelector('#gpx-download-btn .btn-label').textContent = t.btn_gpx_download;
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
         if (mcToggle) {
             mcToggle.querySelector('.btn-label').textContent = t.btn_manual_climb;
@@ -2654,16 +2700,53 @@ window.clearGpxRoute = function () {
     currentSharedGpxId = null;
     currentGpxFilename = null;
     currentGpxShareUrl = null;
+    currentGpxRawText = null;
+    currentGpxRawFilename = null;
     const params = new URLSearchParams(location.search);
     params.delete('gpx');
     const queryString = params.toString();
     history.replaceState(null, '', location.pathname + (queryString ? '?' + queryString : '') + location.hash);
-    const clearBtn = document.getElementById('gpx-clear-btn');
-    if (clearBtn) clearBtn.style.display = 'none';
+    const actionRow = document.getElementById('gpx-action-row');
+    if (actionRow) actionRow.style.display = 'none';
     const infoDiv = document.getElementById('gpx-track-info');
     if (infoDiv) { infoDiv.style.display = 'none'; infoDiv.innerHTML = ''; }
     hideElevationProfile();
     statusDiv.textContent = translations[currentLang].status_gpx_cleared;
+};
+
+// ==========================================
+// GPX DOWNLOAD + RENAME (client-side export of the loaded route)
+// ==========================================
+function sanitizeGpxFilename(name) {
+    let base = String(name == null ? '' : name).trim();
+    base = base.replace(/\.gpx$/i, '');        // drop an existing .gpx extension
+    base = base.replace(/[\\/:*?"<>|]/g, '_'); // strip filesystem-invalid chars
+    base = base.replace(/[.\s]+$/, '').trim(); // no trailing dots/spaces
+    return base || 'route';
+}
+
+function triggerGpxDownload(text, filename) {
+    const blob = new Blob([text], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+window.downloadCurrentGpx = function () {
+    const t = translations[currentLang];
+    if (!gpxTrackData || !currentGpxRawText) {
+        statusDiv.textContent = t.status_gpx_download_none || t.status_gpx_error || 'No GPX route loaded.';
+        return;
+    }
+    const filename = sanitizeGpxFilename(currentGpxFilename || currentGpxRawFilename || 'route') + '.gpx';
+    triggerGpxDownload(currentGpxRawText, filename);
+    const msg = t.status_gpx_downloaded || 'GPX downloaded as {name}.';
+    statusDiv.textContent = msg.replace('{name}', filename);
 };
 
 function getGpxTrackColor() {
@@ -3283,6 +3366,9 @@ function applyParsedGpxData(parsedGpx, options = {}) {
         ...parsedGpx.stats
     };
     setActiveGpxSource(options.source || null);
+    currentGpxRawText = options.rawText || null;
+    currentGpxRawFilename = options.rawFilename ||
+        (options.source && options.source.filename) || null;
 
     rebuildGpxLayer();
     updateGpxTrackInfo();
@@ -3292,8 +3378,8 @@ function applyParsedGpxData(parsedGpx, options = {}) {
         fitGpxBounds(parsedGpx.segments, parsedGpx.waypoints);
     }
 
-    const clearBtn = document.getElementById('gpx-clear-btn');
-    if (clearBtn) clearBtn.style.display = 'block';
+    const actionRow = document.getElementById('gpx-action-row');
+    if (actionRow) actionRow.style.display = 'flex';
 
     const statusMessage = options.statusMessage || t.status_gpx_loaded || 'GPX route loaded ({n} points).';
     statusDiv.textContent = statusMessage.replace('{n}', parsedGpx.totalPoints);
@@ -3384,6 +3470,15 @@ function renderUploadedFiles() {
             }
         });
         actions.appendChild(openBtn);
+
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'secondary-btn';
+        renameBtn.textContent = t.btn_rename_uploaded_gpx || 'Rename';
+        renameBtn.addEventListener('click', () => {
+            window.renameUploadedGpx(fileEntry.id);
+        });
+        actions.appendChild(renameBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
@@ -3664,6 +3759,8 @@ async function loadSharedGpxById(gpxId, options = {}) {
                 filename: options.filename || currentGpxFilename || gpxId,
                 shareUrl: options.shareUrl || null
             },
+            rawText: gpxText,
+            rawFilename: options.filename || currentGpxFilename || gpxId,
             skipFitBounds: options.skipFitBounds,
             statusMessage: t.status_shared_gpx_loaded || t.status_gpx_loaded || 'GPX route loaded ({n} points).'
         });
@@ -3724,6 +3821,8 @@ async function handleLocalFileSelection(file) {
         }
         applyParsedGpxData(parsedGpx, {
             source: uploadResult,
+            rawText: gpxText,
+            rawFilename: file.name,
             statusMessage: uploadResult
                 ? (t.status_gpx_uploaded || t.status_gpx_loaded || 'GPX route loaded ({n} points).')
                 : (isBackendEnabled()

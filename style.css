@@ -421,7 +421,6 @@ button {
 }
 
 .gpx-clear-btn {
-    display: none;
     background-color: #78909C;
     color: white;
     padding: 8px;
@@ -433,6 +432,33 @@ button {
 
 .gpx-clear-btn:hover {
     background-color: #546E7A;
+}
+
+.gpx-download-btn {
+    background-color: #4a7ba6;
+    color: white;
+    padding: 8px;
+    font-size: 13px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.gpx-download-btn:hover {
+    background-color: #3a6489;
+}
+
+.gpx-action-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+.gpx-action-row .gpx-clear-btn,
+.gpx-action-row .gpx-download-btn {
+    flex: 1;
+    width: auto;
+    margin-top: 0;
 }
 
 .gpx-track-info {
@@ -1230,7 +1256,7 @@ details[open] summary {
 
 /* ── Manual Climb ────────────────────────────────────────────────── */
 .manual-climb-toggle-btn {
-    background-color: #1565C0;
+    background-color: #4a7ba6;
     color: white;
     padding: 10px;
     font-size: 14px;
@@ -1239,12 +1265,12 @@ details[open] summary {
 }
 
 .manual-climb-toggle-btn:hover {
-    background-color: #0d47a1;
+    background-color: #3a6489;
 }
 
 .manual-climb-toggle-btn.active {
-    background-color: #0d47a1;
-    outline: 2px solid #82b1ff;
+    background-color: #3a6489;
+    outline: 2px solid #9dc3da;
 }
 
 .manual-climb-toggle-btn:disabled {
