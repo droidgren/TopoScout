@@ -42,7 +42,8 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - View route summary stats including distance, elevation gain/loss, and min/max elevation.
 - Open an **elevation profile bar** for the loaded route: hover or drag to scrub along the track, scroll to zoom the profile, and use the arrow keys to step (hold `Shift` for larger steps).
 - Enable **Sync Map with Profile** to pan the map to a blue marker that follows the profile cursor.
-- Optionally upload, list, share, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
+- **Download** the loaded route back to a `.gpx` file (saved under its current name).
+- Optionally upload, list, share, rename, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
 - To acess your GPX file you log i with your Google account
 
 ### Map and navigation tools
@@ -180,13 +181,14 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
 - `manifest.json` - PWA metadata
 - `lang/en.js` - English strings
 - `lang/sv.js` - Swedish strings
-- `main.py` - optional FastAPI backend for GPX upload/list/delete/share
+- `main.py` - optional FastAPI backend for GPX upload/list/delete/share/rename
 - `requirements.txt` - Python dependencies for the optional backend
 - `Dockerfile` - container image for the optional backend
 - `gpx-files/` - uploaded GPX storage (created at runtime; git-ignored)
 
 ## Changelog
 
+- **v2.4.0:** Added a **Download GPX** button (next to Clear Route) that saves the currently loaded route back to a `.gpx` file, and a **Rename** action for uploaded routes in the GPX upload history (renames the file on the optional backend). Also unified some secondary button colors.
 - **v2.3.0:** Redesigned the control icons: replaced all emoji and glyph icons with a crisp, consistent inline SVG icon set that highlights on hover, refreshed the Sweden/UK language flags, switched the collapsible sections and panel toggle to + / − icons, and gave the 3D toggle a clear active state.
 - **v2.2.0:** Added an elevation profile bar for loaded GPX routes (hover/drag to scrub, scroll to zoom, arrow keys to step, with an optional "Sync Map with Profile" marker), and an optional FastAPI backend for uploading, listing, and sharing GPX routes by link. The frontend auto-detects the backend and stays fully functional on static hosting when none is present.
 - **v2.1.2:** Misc GUI fixes: added an Advanced settings section and a 3D-terrain toggle button next to search, simplified the route overlay to a single dropdown (route names always shown, legend collapsed by default), and refined the panel layout, dropdowns, and tutorial.

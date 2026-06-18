@@ -478,6 +478,47 @@ def delete_file(gpx_id: str, request: Request) -> dict[str, str]:
     return {"status": "deleted", "id": gpx_id}
 
 
+@app.patch("/api/files/{gpx_id}")
+async def rename_file(gpx_id: str, request: Request) -> dict[str, Any]:
+    owner_id = require_owner_id(request)
+
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid request body") from exc
+    new_filename_raw = body.get("filename") if isinstance(body, dict) else None
+    if not isinstance(new_filename_raw, str) or not new_filename_raw.strip():
+        raise HTTPException(status_code=400, detail="Filename is required")
+    new_filename = sanitize_filename(new_filename_raw)
+
+    with _index_lock:
+        index_payload = load_index()
+        record = index_payload["files_by_id"].get(gpx_id)
+        if not record or record.get("owner_id") != owner_id:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        old_filename = record.get("filename") or ""
+        if new_filename != old_filename:
+            new_key = build_owner_filename_key(owner_id, new_filename)
+            existing_id = index_payload["filename_to_id"].get(new_key)
+            if existing_id and existing_id != gpx_id:
+                raise HTTPException(status_code=409, detail="A file with that name already exists")
+
+            # Only the display name and dedup mapping change; the file on disk is
+            # keyed by record id (stored_filename), so it stays put.
+            old_key = build_owner_filename_key(owner_id, old_filename)
+            if old_filename and index_payload["filename_to_id"].get(old_key) == gpx_id:
+                del index_payload["filename_to_id"][old_key]
+            if old_filename and index_payload["filename_to_id"].get(old_filename) == gpx_id:
+                del index_payload["filename_to_id"][old_filename]
+
+            record["filename"] = new_filename
+            index_payload["filename_to_id"][new_key] = gpx_id
+            save_index(index_payload)
+
+    return serialize_record(record, request)
+
+
 @app.get("/api/files/{gpx_id}/raw", name="get_raw_file")
 def get_raw_file(gpx_id: str) -> FileResponse:
     record = get_record_or_404(gpx_id)
