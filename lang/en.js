@@ -140,7 +140,7 @@ const LANG_EN = {
     tutorial_slope_title: "Slope Map",
     tutorial_slope_text: "Generate a color-coded slope map within the search radius. Use the opacity slider and filter settings to highlight specific slope angles. If you disable Show Radius first, the slope map is generated for the whole visible map instead.",
     tutorial_routes_title: "Add Routes (GPX)",
-    tutorial_routes_text: "Load a GPX file to overlay a route on the map. Customize track color, width, and toggle distance labels, slope coloring, waypoints, and min/max elevation markers.",
+    tutorial_routes_text: "Load a GPX file to overlay a route on the map. Customize track color, width, and toggle distance labels, slope coloring, waypoints, min/max elevation markers, and the elevation profile.",
     tutorial_search_title: "Search & Location",
     tutorial_search_text: "Search for any place by name or coordinates. Use the GPS button to jump to your current location.",
     tutorial_share_title: "Share Map View",
