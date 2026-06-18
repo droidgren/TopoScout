@@ -23,6 +23,12 @@ const GOOGLE_CLIENT_ID = '79515767501-5p4cbnfq111dqnuv8h6fp91t33k6gcbt.apps.goog
 const GOOGLE_AUTH_STORAGE_KEY = 'topo_google_auth';
 let googleAuth = null; // { token, exp, email, name, picture, sub }
 let googleAuthInitialized = false;
+let googleRefreshTimer = null;   // proactive pre-expiry silent re-auth timer
+let pendingAuthRefresh = null;   // { promise, resolve, timeout } while a silent refresh is in flight
+// Google ID tokens live ~1h. Re-auth silently this long before they expire.
+const GOOGLE_AUTH_REFRESH_LEAD_MS = 5 * 60 * 1000;
+// Cap on how long we wait for a silent One Tap re-auth before treating it as failed.
+const GOOGLE_AUTH_REFRESH_TIMEOUT_MS = 8 * 1000;
 
 async function detectBackendAvailability() {
     if (backendDetectionPromise) {
@@ -1709,14 +1715,11 @@ window.deleteUploadedGpx = async function (gpxId) {
 
     statusDiv.textContent = t.status_deleting_gpx || t.status_loading || 'Loading data...';
     try {
-        const response = await fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
+        const response = await fetchWithAuthRetry(() => fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
             method: 'DELETE',
             credentials: 'same-origin',
             headers: authHeaders()
-        });
-        if (response.status === 401 && isGoogleSignedIn()) {
-            clearGoogleAuthState();
-        }
+        }));
         if (!response.ok) {
             throw new Error('Failed to delete GPX');
         }
@@ -1749,15 +1752,12 @@ window.renameUploadedGpx = async function (gpxId) {
 
     statusDiv.textContent = t.status_renaming_gpx || t.status_loading || 'Loading data...';
     try {
-        const response = await fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
+        const response = await fetchWithAuthRetry(() => fetch(API_BASE + '/files/' + encodeURIComponent(gpxId), {
             method: 'PATCH',
             credentials: 'same-origin',
             headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
             body: JSON.stringify({ filename: newName })
-        });
-        if (response.status === 401 && isGoogleSignedIn()) {
-            clearGoogleAuthState();
-        }
+        }));
         if (!response.ok) {
             throw new Error('Failed to rename GPX');
         }
@@ -3515,6 +3515,77 @@ function isGoogleSignedIn() {
     return !!(googleAuth && googleAuth.token && googleAuth.exp && googleAuth.exp * 1000 > Date.now());
 }
 
+// Resolve any in-flight silent refresh with the given result (idempotent).
+function settlePendingAuthRefresh(success) {
+    if (!pendingAuthRefresh) return;
+    const pending = pendingAuthRefresh;
+    pendingAuthRefresh = null;
+    if (pending.timeout) clearTimeout(pending.timeout);
+    pending.resolve(success);
+}
+
+function clearGoogleAuthRefreshTimer() {
+    if (googleRefreshTimer) { clearTimeout(googleRefreshTimer); googleRefreshTimer = null; }
+}
+
+// Ask Google for a fresh ID token without user interaction (auto-select / One Tap).
+// Resolves true once a new token arrives via handleGoogleCredential, false if a
+// silent re-auth isn't possible (GIS unavailable, prompt suppressed, or timeout).
+function refreshGoogleAuth() {
+    if (!isBackendEnabled() || !GOOGLE_CLIENT_ID) return Promise.resolve(false);
+    if (pendingAuthRefresh) return pendingAuthRefresh.promise;
+    if (!(window.google && google.accounts && google.accounts.id)) return Promise.resolve(false);
+
+    let resolveFn;
+    const promise = new Promise(resolve => { resolveFn = resolve; });
+    const timeout = setTimeout(() => settlePendingAuthRefresh(false), GOOGLE_AUTH_REFRESH_TIMEOUT_MS);
+    pendingAuthRefresh = { promise, resolve: resolveFn, timeout };
+    try {
+        google.accounts.id.prompt(notification => {
+            // Best-effort early failure signal. Under FedCM these introspection
+            // methods are deprecated/may throw, so guard and otherwise let the
+            // credential callback (success) or the timeout (failure) settle it.
+            // A returned credential surfaces as a dismissed moment, so we never
+            // treat dismissal as failure here.
+            try {
+                if (notification.isNotDisplayed && notification.isNotDisplayed()) {
+                    settlePendingAuthRefresh(false);
+                } else if (notification.isSkippedMoment && notification.isSkippedMoment()) {
+                    settlePendingAuthRefresh(false);
+                }
+            } catch (e) { /* FedCM: moment introspection unsupported; rely on timeout */ }
+        });
+    } catch (e) {
+        settlePendingAuthRefresh(false);
+    }
+    return promise;
+}
+
+// Re-auth silently a few minutes before the current token expires so a tab left
+// open never quietly falls back to the anonymous session.
+function scheduleGoogleAuthRefresh() {
+    clearGoogleAuthRefreshTimer();
+    if (!isGoogleSignedIn()) return;
+    const msUntilRefresh = googleAuth.exp * 1000 - Date.now() - GOOGLE_AUTH_REFRESH_LEAD_MS;
+    googleRefreshTimer = setTimeout(() => { refreshGoogleAuth(); }, Math.max(0, msUntilRefresh));
+}
+
+// Run an authenticated request; if the Google token just expired (401), refresh
+// it silently and retry once before falling back to the anonymous session.
+// makeRequest must build a fresh fetch each call so it picks up the new token.
+async function fetchWithAuthRetry(makeRequest) {
+    let response = await makeRequest();
+    if (response.status === 401 && isGoogleSignedIn()) {
+        if (await refreshGoogleAuth()) {
+            response = await makeRequest();
+        }
+        if (response.status === 401 && isGoogleSignedIn()) {
+            clearGoogleAuthState();
+        }
+    }
+    return response;
+}
+
 // Bearer header sent with the file endpoints; empty object falls back to the anon cookie.
 function authHeaders() {
     return isGoogleSignedIn() ? { Authorization: 'Bearer ' + googleAuth.token } : {};
@@ -3539,6 +3610,8 @@ function loadStoredGoogleAuth() {
 function clearGoogleAuthState() {
     googleAuth = null;
     persistGoogleAuth();
+    clearGoogleAuthRefreshTimer();
+    settlePendingAuthRefresh(false);
     try {
         if (window.google && google.accounts && google.accounts.id) {
             google.accounts.id.disableAutoSelect();
@@ -3604,6 +3677,8 @@ function handleGoogleCredential(response) {
         sub: claims.sub
     };
     persistGoogleAuth();
+    settlePendingAuthRefresh(true);   // unblock any silent refresh waiting on this token
+    scheduleGoogleAuthRefresh();      // line up the next pre-expiry refresh
     updateGpxModalAuthUI();
     if (statusDiv) {
         statusDiv.textContent = (t.status_signed_in || 'Signed in as {email}.')
@@ -3663,6 +3738,7 @@ function initGoogleAuth() {
     const stored = loadStoredGoogleAuth();
     if (stored && stored.token && stored.exp && stored.exp * 1000 > Date.now()) {
         googleAuth = stored;
+        scheduleGoogleAuthRefresh();
     }
     updateGpxModalAuthUI();
 
@@ -3698,7 +3774,7 @@ function initGoogleAuth() {
     });
 }
 
-async function refreshUploadedFiles() {
+async function refreshUploadedFiles(authRetried) {
     if (!isBackendEnabled()) {
         uploadedGpxFiles = [];
         uploadedGpxListState = 'disabled';
@@ -3715,7 +3791,11 @@ async function refreshUploadedFiles() {
             headers: authHeaders()
         });
         if (response.status === 401 && isGoogleSignedIn()) {
-            // Token expired/rejected: drop it and reload as the anonymous session.
+            // Token expired/rejected: try one silent refresh, then reload with the
+            // fresh token; otherwise drop it and reload as the anonymous session.
+            if (!authRetried && await refreshGoogleAuth()) {
+                return refreshUploadedFiles(true);
+            }
             clearGoogleAuthState();
             return refreshUploadedFiles();
         }
@@ -3784,15 +3864,12 @@ async function uploadGpxFile(file) {
     formData.append('file', file);
     statusDiv.textContent = t.status_uploading_gpx || t.status_loading || 'Loading data...';
 
-    const response = await fetch(API_BASE + '/upload', {
+    const response = await fetchWithAuthRetry(() => fetch(API_BASE + '/upload', {
         method: 'POST',
         credentials: 'same-origin',
         headers: authHeaders(),
         body: formData
-    });
-    if (response.status === 401 && isGoogleSignedIn()) {
-        clearGoogleAuthState();
-    }
+    }));
     if (!response.ok) {
         throw new Error('Failed to upload GPX');
     }
