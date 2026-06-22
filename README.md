@@ -73,6 +73,12 @@ Some third-party layers require an API key. When needed, the app prompts for the
 
 Elevation analysis uses Terrarium-format DEM tiles from Mapterhorn.
 
+### Route overlays
+
+Optional overlays can be drawn on top of any base layer from the **Route Overlay** dropdown:
+
+- **Waymarked Trails** — hiking, cycling, MTB, and skating route networks, with a "Routes in view" legend (click a route to isolate just that trail).
+- **Strava Global Heatmap** — aggregated activity heatmap
 ## How The Analysis Works
 
 ### Shared analysis pipeline
@@ -188,6 +194,7 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
 
 ## Changelog
 
+- **v2.6:** Added a **Strava Global Heatmap** to the Route Overlay dropdown. Tiles are served privately through the optional backend (`/api/heatmap/...`), which proxies a self-hosted [strava-heatmap-proxy](https://github.com/patrickziegler/strava-heatmap-proxy) over the internal Docker network — so there are no CORS/mixed-content issues and the Strava cookies never reach the browser. The option appears only when the backend is available. A route selected in the Routes-in-view legend stays drawn when you switch the overlay to the heatmap. See `strava-heatmap-proxy.yaml`.
 - **v2.5.1:** Moved the language switcher from the header into the About menu as a **Select Language** dropdown and removed the flag icons. Placed the **Install as App** button beside **Refresh app**, and put the GitHub Project and droidgren.github.io links on one row.
 - **v2.5.0:** The GPS button now toggles live positioning: it drops a moving marker that follows you in real time (tap again to stop). Added a center crosshair you can show/hide, with a selectable high-contrast color (Dark, White, Magenta, Cyan, Yellow, Red, Lime) under Advanced settings. The center dot now shows only when the search radius is locked, so it no longer overlaps the crosshair.
 - **v2.4.0:** Added a **Download GPX** button (next to Clear Route) that saves the currently loaded route back to a `.gpx` file, and a **Rename** action for uploaded routes in the GPX upload history (renames the file on the optional backend). Also unified some secondary button colors.

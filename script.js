@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.6";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -123,17 +123,14 @@ const OVERLAY_SOURCES = {
     "waymarked_hiking": { url: 'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
     "waymarked_cycling": { url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
     "waymarked_mtb": { url: 'https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
-    "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 }
+    "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    "strava_heatmap": { url: `${API_BASE}/heatmap/all/bluered/{z}/{x}/{y}.png`, attribution: '&copy; <a href="https://www.strava.com/">Strava</a>', maxZoom: 15 }
 };
 const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
 const ROUTE_LEGEND_COLLAPSED_KEY = 'topo_route_legend_collapsed'; // 'true' when the route-names legend is collapsed
 const ROUTE_ISOLATED_ID_KEY = 'topo_route_isolated_id';       // relation id of the persisted isolated trail
 const ROUTE_ISOLATED_COLOR_KEY = 'topo_route_isolated_color'; // its draw color
 
-// Map each Waymarkedtrails overlay to its API activity subdomain. The route-names
-// legend lists the routes in the current viewport via that activity's by_area API
-// (https://<activity>.waymarkedtrails.org/api/v1/list/by_area) — the same data the
-// overlay tiles are rendered from, and far faster than a generic Overpass query.
 const OVERLAY_WMT_ACTIVITY = {
     "waymarked_hiking": 'hiking',
     "waymarked_cycling": 'cycling',
@@ -2084,14 +2081,30 @@ function isOverlayOn() {
 }
 
 function handleExtraLayerChange(key) {
-    // Changing the overlay selection drops any isolated trail (and its persistence).
-    removeIsolatedTrailLayers();
-    persistIsolatedSelection();
-    if (key && key !== 'none' && OVERLAY_SOURCES[key]) {
+    const targetIsOverlay = !!(key && key !== 'none' && OVERLAY_SOURCES[key]);
+    const targetIsWmt = targetIsOverlay && !!OVERLAY_WMT_ACTIVITY[key];
+    // Keep a selected (isolated) route when moving to a non-Waymarked overlay such as the
+    // Strava heatmap; any other change drops it (and its persistence).
+    const keepIsolated = isolatedRouteId != null && targetIsOverlay && !targetIsWmt;
+    if (!keepIsolated) {
+        removeIsolatedTrailLayers();
+        persistIsolatedSelection();
+    }
+    if (targetIsOverlay) {
         applyExtraOverlay(key);
         localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, key);
-        routeNamesOn = true;
-        refreshRouteLegend();
+        // The route-names legend applies only to the Waymarkedtrails overlays; other
+        // overlays (e.g. the Strava heatmap) have no such legend.
+        if (targetIsWmt) {
+            routeNamesOn = true;
+            refreshRouteLegend();
+        } else {
+            routeNamesOn = false;
+            removeRouteLegend();
+            // Trail kept: raise it above the just-added heatmap raster (which stays visible
+            // beneath it).
+            if (keepIsolated) liftIsolatedTrailToTop();
+        }
     } else {
         removeExtraOverlay();
         removeRouteLegend();
@@ -2297,7 +2310,9 @@ function renderRouteLegend(state) {
 function removeRouteLegend() {
     if (routeRefreshTimer) { clearTimeout(routeRefreshTimer); routeRefreshTimer = null; }
     if (routeFetchAbort) { routeFetchAbort.abort(); routeFetchAbort = null; }
-    removeIsolatedTrailLayers();
+    // UI-only teardown: the isolated trail is independent of the legend (it persists when
+    // switching to a non-Waymarked overlay such as the Strava heatmap). Callers that should
+    // also drop the trail call removeIsolatedTrailLayers() / clearIsolatedTrail() directly.
     removeLegendControl(routeLegend);
     routeLegend = null;
     routeLegendEl = null;
@@ -2322,6 +2337,19 @@ function removeIsolatedTrailLayers() {
     isolatedTrailLayers = [];
     if (isolatedRouteId != null) setExtraOverlayRasterOpacity(1);
     isolatedRouteId = null;
+}
+
+// Lift the drawn trail above the current overlay. A newly applied overlay raster (e.g. the
+// heatmap) is added on top of the stack, so re-raise the kept trail over it — casing first,
+// colored line last, preserving their order.
+function liftIsolatedTrailToTop() {
+    const nativeMap = map && map._map;
+    if (!nativeMap || !nativeMap.moveLayer) return;
+    isolatedTrailLayers.forEach((l) => {
+        if (l && l._ids && nativeMap.getLayer(l._ids.layerId)) {
+            try { nativeMap.moveLayer(l._ids.layerId); } catch (e) { /* ignore */ }
+        }
+    });
 }
 
 // Persist (or clear) the isolated-trail selection so it survives a reload.
@@ -6075,7 +6103,10 @@ if (extraLayerSelect) {
     const savedExtra = localStorage.getItem(EXTRA_OVERLAY_STORAGE_KEY) || '';
     if (OVERLAY_SOURCES[savedExtra]) {
         extraLayerSelect.value = savedExtra;
-        routeNamesOn = true;
+        // The route-names legend applies only to the Waymarkedtrails overlays. (A saved
+        // backend-only overlay like the Strava heatmap is reverted later in
+        // initializeBackendFeatures() if no backend turns out to be present.)
+        routeNamesOn = !!OVERLAY_WMT_ACTIVITY[savedExtra];
     } else {
         extraLayerSelect.value = 'none';
         routeNamesOn = false;
@@ -6232,7 +6263,10 @@ function applyInitialMapState() {
         if (OVERLAY_SOURCES[savedExtra]) applyExtraOverlay(savedExtra);
         // Queue restoring a persisted isolated trail; it's applied once the legend list loads.
         const savedIsoId = Number(localStorage.getItem(ROUTE_ISOLATED_ID_KEY));
-        if (isOverlayOn() && Number.isFinite(savedIsoId) && savedIsoId) {
+        // Only the Waymarked overlays restore an isolated trail on load (via the legend list);
+        // a non-Waymarked overlay like the heatmap has no legend, so skip it rather than leave
+        // a dormant selection that would pop back on a later switch to a Waymarked overlay.
+        if (isOverlayOn() && OVERLAY_WMT_ACTIVITY[savedExtra] && Number.isFinite(savedIsoId) && savedIsoId) {
             restoreIsolatedPending = { id: savedIsoId, color: localStorage.getItem(ROUTE_ISOLATED_COLOR_KEY) || '#1565C0' };
         }
         if (routeNamesOn) refreshRouteLegend();
@@ -6260,6 +6294,15 @@ function whenGpxMapReady(callback) {
 (async function initializeBackendFeatures() {
     await detectBackendAvailability();
     if (isBackendEnabled()) initGoogleAuth();
+    // The Strava heatmap overlay is served by the backend, so only offer it when one is
+    // present. If a stale selection restored it on a backend-less load, revert to none.
+    const stravaOpt = extraLayerSelect && extraLayerSelect.querySelector('option[value="strava_heatmap"]');
+    if (stravaOpt) stravaOpt.hidden = !isBackendEnabled();
+    if (!isBackendEnabled() && extraLayerSelect && extraLayerSelect.value === 'strava_heatmap') {
+        extraLayerSelect.value = 'none';
+        removeExtraOverlay();
+        localStorage.setItem(EXTRA_OVERLAY_STORAGE_KEY, '');
+    }
     updateLanguage();
     const params = new URLSearchParams(location.search);
     const sharedGpxId = params.get('gpx');

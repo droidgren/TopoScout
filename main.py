@@ -14,6 +14,8 @@ from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import requests
+
 try:
     from google.auth.transport import requests as google_requests
     from google.oauth2 import id_token as google_id_token
@@ -40,6 +42,11 @@ GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 # Tolerance for minor server-clock drift when validating token iat/exp. This is a
 # safety net for NTP jitter only — a badly wrong clock must still be fixed.
 GOOGLE_TOKEN_CLOCK_SKEW = int(os.getenv("GOOGLE_TOKEN_CLOCK_SKEW_SECONDS", "30"))
+
+STRAVA_HEATMAP_PROXY_URL = os.getenv("STRAVA_HEATMAP_PROXY_URL", "http://strava-heatmap-proxy:8080")
+# Allowlists guard the values forwarded to the internal proxy (avoid SSRF / path abuse).
+HEATMAP_ACTIVITIES = {"all", "ride", "run", "winter", "water"}
+HEATMAP_COLORS = {"bluered", "hot", "blue", "purple", "gray", "mobileblue"}
 
 PUBLIC_ROOT_FILES = {
     "index.html",
@@ -534,6 +541,37 @@ def get_raw_file(gpx_id: str) -> FileResponse:
         file_path,
         media_type="application/gpx+xml",
         filename=record["filename"],
+    )
+
+
+@app.get("/api/heatmap/{activity}/{color}/{z}/{x}/{y}.png", include_in_schema=False)
+def get_heatmap_tile(activity: str, color: str, z: int, x: int, y: int) -> Response:
+    """Proxy a Strava Global Heatmap tile from the internal strava-heatmap-proxy.
+
+    Served same-origin so MapLibre can use the tiles (the upstream proxy is plain HTTP with
+    no CORS headers). A plain def so the blocking request runs in FastAPI's threadpool.
+    """
+    if activity not in HEATMAP_ACTIVITIES or color not in HEATMAP_COLORS:
+        raise HTTPException(status_code=404, detail="Unknown heatmap layer")
+
+    upstream = (
+        f"{STRAVA_HEATMAP_PROXY_URL}/identified/globalheat/"
+        f"{activity}/{color}/{z}/{x}/{y}.png"
+    )
+    try:
+        upstream_response = requests.get(upstream, timeout=10)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Heatmap proxy unreachable") from exc
+
+    if upstream_response.status_code != 200:
+        # Tiles with no heat legitimately 404; expired/missing cookies 401. Either way return
+        # an empty tile so MapLibre simply renders nothing there instead of erroring.
+        return Response(status_code=204)
+
+    return Response(
+        content=upstream_response.content,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
