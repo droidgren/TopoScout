@@ -1133,7 +1133,6 @@ details[open] summary {
 /* --- INSTALL BUTTON --- */
 #install-app-btn {
     display: none;
-    width: 100%;
     background-color: #2196F3;
     color: white;
     padding: 10px 20px;
@@ -1142,11 +1141,15 @@ details[open] summary {
     cursor: pointer;
     font-weight: bold;
     font-size: 14px;
-    margin: 10px 0;
 }
 
 #install-app-btn:hover {
     background-color: #1976D2;
+}
+
+/* Equal-width buttons in the About modal action row */
+#info-modal .modal-btns button {
+    flex: 1;
 }
 
 /* --- MOBILE INSTALL BAR dismiss button --- */
