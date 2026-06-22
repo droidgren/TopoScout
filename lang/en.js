@@ -7,6 +7,8 @@ const LANG_EN = {
     lbl_show_circle: "Show Radius",
     lbl_lock_circle: "Lock Radius",
     lbl_enable_overzoom: "Overzoom",
+    lbl_show_crosshair: "Show crosshair",
+    lbl_crosshair_color: "Crosshair color:",
     lbl_extra_layer: "Show route overlay",
     lbl_extra_layer_select: "Route Overlay:",
     overlay_none: "None",

@@ -7,6 +7,8 @@ const LANG_SV = {
     lbl_show_circle: "Visa radie",
     lbl_lock_circle: "Lås radie",
     lbl_enable_overzoom: "Överzoom",
+    lbl_show_crosshair: "Visa hårkors",
+    lbl_crosshair_color: "Hårkorsfärg:",
     lbl_extra_layer: "Visa ledlager",
     lbl_extra_layer_select: "Ledlager:",
     overlay_none: "Inget",

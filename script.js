@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.3.0";
+const APP_VERSION = "2.5.0";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1294,6 +1294,17 @@ const waterCtx = waterCanvas.getContext('2d', { willReadFrequently: true });
 const controls = document.getElementById('controls');
 const crosshair = document.getElementById('crosshair');
 const centerHeightDisplay = document.getElementById('center-h');
+
+// Crosshair shows when the user preference is on (default) OR while the center is locked.
+function syncCrosshairVisibility() {
+    if (!crosshair) return;
+    const show = (localStorage.getItem('topo_show_crosshair') !== 'false') || isLocked;
+    crosshair.style.display = show ? 'block' : 'none';
+}
+
+function applyCrosshairColor(c) {
+    document.documentElement.style.setProperty('--crosshair-color', c);
+}
 const scanBtn = document.getElementById('scan-btn');
 const climbBtn = document.getElementById('climb-btn');
 const slopeBtn = document.getElementById('slope-btn');
@@ -1388,6 +1399,8 @@ let manualClimbMode = false;
 let manualClimbPoints = [];    // L.latLng objects
 let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
 let manualClimbPolyline = null; // L.polyline (blue preview line)
+let gpsMarker = null;          // native maplibregl.Marker for live GPS position
+let gpsWatchId = null;         // navigator.geolocation watch id (null = tracking off)
 let slopeOverlay = null;
 let extraOverlayLayer = null;
 let slopeLegend = null;
@@ -1792,6 +1805,8 @@ function updateLanguage() {
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.querySelector('#lbl-lock-circle .btn-label').textContent = t.lbl_lock_circle;
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
+        if (document.getElementById('lbl-show-crosshair')) document.getElementById('lbl-show-crosshair').textContent = t.lbl_show_crosshair;
+        if (document.getElementById('lbl-crosshair-color')) document.getElementById('lbl-crosshair-color').textContent = t.lbl_crosshair_color;
         if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
         if (extraLayerSelect) {
             const noneOpt = extraLayerSelect.querySelector('option[value="none"]');
@@ -2617,13 +2632,44 @@ async function searchLocation() {
     } catch (error) { console.error(error); }
 }
 
+function stopGpsTracking() {
+    if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+    if (gpsMarker) { gpsMarker.remove(); gpsMarker = null; }
+    const btn = document.getElementById('gpsBtn');
+    if (btn) btn.classList.remove('active');
+}
+
 function locateUser() {
     const t = translations[currentLang];
+    // Toggle off if live tracking is already running.
+    if (gpsWatchId !== null) { stopGpsTracking(); statusDiv.textContent = t.status_ready; return; }
     if (!navigator.geolocation) { statusDiv.textContent = t.status_gps_missing; return; }
     statusDiv.textContent = t.status_gps_fetch;
+
+    function updateGpsMarker(pos) {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if (gpsMarker) {
+            gpsMarker.setLngLat([lng, lat]);
+        } else {
+            const el = document.createElement('div');
+            el.className = 'gps-marker';
+            gpsMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map._map);
+        }
+    }
+
+    const btn = document.getElementById('gpsBtn');
+    if (btn) btn.classList.add('active');
+
+    // Initial fix recenters the map once; continuous updates only move the marker.
     navigator.geolocation.getCurrentPosition(
-        (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], 13); statusDiv.textContent = t.status_done; },
-        () => statusDiv.textContent = t.status_gps_error
+        (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], 13); updateGpsMarker(pos); statusDiv.textContent = t.status_done; },
+        () => { statusDiv.textContent = t.status_gps_error; stopGpsTracking(); },
+        { enableHighAccuracy: true }
+    );
+    gpsWatchId = navigator.geolocation.watchPosition(
+        updateGpsMarker,
+        () => {},
+        { enableHighAccuracy: true }
     );
 }
 
@@ -4635,10 +4681,16 @@ function updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fil
     const radiusPx = Math.hypot(edgePoint.x - point.x, edgePoint.y - point.y);
 
     const markerEl = overlay._marker;
-    markerEl.style.display = 'block';
-    markerEl.style.left = `${point.x}px`;
-    markerEl.style.top = `${point.y}px`;
-    markerEl.style.border = `2px solid ${markerColor}`;
+    // The center crosshair already marks the (unlocked) map center, so only show
+    // the center dot when locked — where it pins the locked point as the map pans.
+    if (isLocked) {
+        markerEl.style.display = 'block';
+        markerEl.style.left = `${point.x}px`;
+        markerEl.style.top = `${point.y}px`;
+        markerEl.style.border = `2px solid ${markerColor}`;
+    } else {
+        markerEl.style.display = 'none';
+    }
 
     const circleEl = overlay._circle;
     if (showCircle) {
@@ -5983,11 +6035,10 @@ if (lockCheckbox) lockCheckbox.addEventListener('change', (e) => {
     isLocked = e.target.checked;
     if (isLocked) {
         lockedCenterCoords = map.getCenter();
-        crosshair.style.display = 'block';
     } else {
         lockedCenterCoords = null;
-        crosshair.style.display = 'none';
     }
+    syncCrosshairVisibility();
     updateUI();
 });
 if (overzoomCheckbox) {
@@ -5997,6 +6048,25 @@ if (overzoomCheckbox) {
         applyCurrentLayerMaxZoom();
     });
 }
+const showCrosshairCheckbox = document.getElementById('showCrosshair');
+if (showCrosshairCheckbox) {
+    showCrosshairCheckbox.checked = localStorage.getItem('topo_show_crosshair') !== 'false';
+    showCrosshairCheckbox.addEventListener('change', (e) => {
+        localStorage.setItem('topo_show_crosshair', e.target.checked);
+        syncCrosshairVisibility();
+    });
+}
+const crosshairColorSelect = document.getElementById('crosshairColor');
+if (crosshairColorSelect) {
+    const savedCrosshairColor = localStorage.getItem('topo_crosshair_color') || '#333333';
+    crosshairColorSelect.value = savedCrosshairColor;
+    applyCrosshairColor(savedCrosshairColor);
+    crosshairColorSelect.addEventListener('change', (e) => {
+        localStorage.setItem('topo_crosshair_color', e.target.value);
+        applyCrosshairColor(e.target.value);
+    });
+}
+syncCrosshairVisibility();
 if (extraLayerSelect) {
     // Route names are always shown whenever an overlay is selected; the dropdown's
     // inline onchange (handleExtraLayerChange) drives all user-initiated changes.

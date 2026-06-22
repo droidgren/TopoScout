@@ -36,7 +36,7 @@
             <p><strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.4.0</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">2.5.0</span>
             </p>
 
             <details
@@ -44,6 +44,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.5.0:</strong> The GPS button now toggles live positioning: it drops a moving marker that follows you in real time (tap again to stop). Added a center crosshair you can show/hide, with a selectable high-contrast color (Dark, White, Magenta, Cyan, Yellow, Red, Lime) under Advanced settings. The center dot now shows only when the search radius is locked, so it no longer overlaps the crosshair.</li>
                     <li><strong>v2.4.0:</strong> Added a Download GPX button (next to Clear Route) that saves the currently loaded route back to a .gpx file, and a Rename action for your uploaded routes in the GPX upload history (renames the file on the optional backend). Also unified some secondary button colors.</li>
                     <li><strong>v2.3.0:</strong> Redesigned the control icons: replaced all emoji and glyph icons with a crisp, consistent inline SVG icon set that highlights on hover, refreshed the Sweden/UK language flags, switched the collapsible sections and panel toggle to + / − icons, and gave the 3D toggle a clear active state.</li>
                     <li><strong>v2.2.0:</strong> Added an elevation profile bar for loaded GPX routes (hover/drag to scrub, with an optional "Sync Map with Profile" marker that pans the map), plus an optional self-hosted backend for uploading, listing, and sharing GPX routes by link — the app still works fully on static hosting when no backend is present.</li>
@@ -83,6 +84,24 @@
                         <input type="checkbox" id="gpxElevMapSync" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-elev-map-sync" style="font-size: 13px; line-height: 1;">Enable sync map with elevation profile</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 10px;">
+                        <input type="checkbox" id="showCrosshair" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-show-crosshair" style="font-size: 13px; line-height: 1;">Show crosshair</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                        <span id="lbl-crosshair-color" style="font-size: 13px; min-width: 140px;">Crosshair color:</span>
+                        <select id="crosshairColor"
+                            style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                            <option value="#333333">Dark</option>
+                            <option value="#FFFFFF">White</option>
+                            <option value="#FF00FF">Magenta</option>
+                            <option value="#00FFFF">Cyan</option>
+                            <option value="#FFFF00">Yellow</option>
+                            <option value="#FF0000">Red</option>
+                            <option value="#00FF00">Lime</option>
+                        </select>
                     </label>
                 </div>
             </details>
@@ -194,7 +213,7 @@
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="Search location">
                 <button class="icon-btn" onclick="searchLocation()" title="Search"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
-                <button class="icon-btn" onclick="locateUser()" title="GPS"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></button>
+                <button id="gpsBtn" class="icon-btn" onclick="locateUser()" title="GPS"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></button>
                 <button id="enable3dBtn" class="icon-btn" onclick="toggle3dView()" title="Enable 3D" aria-label="Enable 3D"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></button>
             </div>
 
