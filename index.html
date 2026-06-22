@@ -17,6 +17,16 @@
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Use the Apple-style share icon on Apple platforms (macOS/iOS/iPadOS); the
+         Android-style (three connected dots) icon is the default everywhere else.
+         Set the class before the body renders so the right icon shows without a flash. -->
+    <script>
+        if (/iPhone|iPad|iPod|Macintosh|Mac OS X/i.test(navigator.userAgent) ||
+            (navigator.platform && /^(Mac|iP)/i.test(navigator.platform))) {
+            document.documentElement.classList.add('apple-platform');
+        }
+    </script>
 </head>
 
 <body>
@@ -197,7 +207,7 @@
                 <button class="circle-btn" onclick="toggleLanguage()" title="Switch Language">
                     <img id="flag-icon" class="flag-img" src="" alt="Flag">
                 </button>
-                <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
+                <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View"><svg class="icon-svg share-icon-android" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><svg class="icon-svg share-icon-apple" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
                 <button class="circle-btn info-btn" onclick="showInfo()" title="Info"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
                 <button class="toggle-btn" onclick="toggleControls()" title="Minimize"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></button>
             </div>
