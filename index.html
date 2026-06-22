@@ -41,9 +41,16 @@
 
             <button id="start-tutorial-btn" class="action-btn" onclick="startTutorial(); closeInfo();" style="margin: 10px 0;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/><line x1="22" y1="10" x2="22" y2="15"/></svg><span class="btn-label">Start Tutorial</span></button>
 
-            <p><strong><a href="https://github.com/droidgren/elevation_finder">GitHub Project</a></strong></p>
+            <label style="display: flex; align-items: center; justify-content: center; margin: 10px 0;">
+                <select id="language-select" onchange="setLanguage(this.value)"
+                    style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                    <option value="" id="lbl-language">Select Language</option>
+                    <option value="en">English</option>
+                    <option value="sv">Svenska</option>
+                </select>
+            </label>
 
-            <p><strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
+            <p><strong><a href="https://github.com/droidgren/elevation_finder">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
                 <span id="lbl-version">Version</span>: <span id="app-version">2.5.0</span>
@@ -67,8 +74,6 @@
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/elevation_finder#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
             </details>
-
-            <button id="install-app-btn" onclick="triggerInstallPrompt()" style="display:none;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="btn-label">Install as App</span></button>
 
             <details
                 style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; color: #555;">
@@ -151,6 +156,7 @@
             </p>
 
             <div class="modal-btns">
+                <button id="install-app-btn" class="cancel-btn" onclick="triggerInstallPrompt()" style="display:none;"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="btn-label">Install as App</span></button>
                 <button id="info-refresh" class="cancel-btn" onclick="refreshApp(this)">Refresh app</button>
                 <button id="info-close" class="save-btn" onclick="closeInfo()">Close</button>
             </div>
@@ -204,9 +210,6 @@
                 <h3 id="app-title">Elevation Finder</h3>
             </span>
             <div class="header-buttons">
-                <button class="circle-btn" onclick="toggleLanguage()" title="Switch Language">
-                    <img id="flag-icon" class="flag-img" src="" alt="Flag">
-                </button>
                 <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View"><svg class="icon-svg share-icon-android" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><svg class="icon-svg share-icon-apple" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
                 <button class="circle-btn info-btn" onclick="showInfo()" title="Info"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
                 <button class="toggle-btn" onclick="toggleControls()" title="Minimize"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></button>

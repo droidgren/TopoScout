@@ -69,10 +69,6 @@ const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
 const WATER_TOLERANCE = 25;
 const WATER_CHECK_URL = "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
 
-// Base64 flags
-const FLAG_SE = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMDA2QUE3Ii8+PHBhdGggZD0iTTAgMTJIMjRNOCAwVjI0IiBzdHJva2U9IiNGRUNDMDAiIHN0cm9rZS13aWR0aD0iNCIvPjwvc3ZnPg==";
-const FLAG_GB = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMDAyNDdEIi8+PHBhdGggZD0iTTAgMEwyNCAyNE0yNCAwTDAgMjQiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48cGF0aCBkPSJNMCAwTDI0IDI0TTI0IDBMMCAyNCIgc3Ryb2tlPSIjQ0YxNDJCIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0xMiAwVjI0TTAgMTJIMjQiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI0LjUiLz48cGF0aCBkPSJNMTIgMFYyNE0wIDEySDI0IiBzdHJva2U9IiNDRjE0MkIiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+";
-
 // Services requiring API keys
 const lockedServices = {
     'tracetrack': {
@@ -1793,8 +1789,8 @@ function updateLanguage() {
     const t = translations[currentLang];
     const isEn = currentLang === 'en';
 
-    const flagImg = document.getElementById('flag-icon');
-    if (flagImg) flagImg.src = isEn ? FLAG_GB : FLAG_SE;
+    const languageSelect = document.getElementById('language-select');
+    if (languageSelect) languageSelect.value = '';
 
     if (document.getElementById('app-title')) {
         document.getElementById('app-title').textContent = t.title;
@@ -1932,12 +1928,8 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
-        const languageBtn = document.querySelector('.header-buttons .circle-btn:not(#share-map-btn):not(.info-btn)');
-        if (languageBtn) {
-            const label = t.btn_switch_language || 'Switch Language';
-            languageBtn.title = label;
-            languageBtn.setAttribute('aria-label', label);
-        }
+        const languageLabel = document.getElementById('lbl-language');
+        if (languageLabel) languageLabel.textContent = t.lbl_language || 'Select Language';
         const infoBtn = document.querySelector('.info-btn');
         if (infoBtn) {
             const label = t.btn_info_panel || 'Info';
@@ -1985,8 +1977,9 @@ function updateLanguage() {
     }
 }
 
-function toggleLanguage() {
-    currentLang = currentLang === 'sv' ? 'en' : 'sv';
+function setLanguage(lang) {
+    if (lang !== 'en' && lang !== 'sv') return;
+    currentLang = lang;
     localStorage.setItem('topo_lang', currentLang);
     updateLanguage();
 }
@@ -5522,7 +5515,6 @@ let _routeOverlayBeforeTutorial = 'none'; // Route Overlay dropdown value to res
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
-    { targetSelector: '.circle-btn:not(.info-btn)', titleKey: 'tutorial_language_title', textKey: 'tutorial_language_text' },
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
