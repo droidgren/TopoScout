@@ -113,6 +113,20 @@ h3 {
     color: #555;
 }
 
+/* Share button: Android-style (three connected dots) icon by default; swap to the
+   Apple-style icon on Apple platforms (<html class="apple-platform">, set in index.html). */
+.share-circle-btn .share-icon-apple {
+    display: none;
+}
+
+.apple-platform .share-circle-btn .share-icon-android {
+    display: none;
+}
+
+.apple-platform .share-circle-btn .share-icon-apple {
+    display: block;
+}
+
 /* FLAG IMAGE */
 .flag-img {
     width: 22px;
