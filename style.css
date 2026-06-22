@@ -127,15 +127,6 @@ h3 {
     display: block;
 }
 
-/* FLAG IMAGE */
-.flag-img {
-    width: 22px;
-    height: 22px;
-    object-fit: cover;
-    display: block;
-    border-radius: 3px;
-}
-
 .footer-row {
     display: flex;
     justify-content: space-between;
