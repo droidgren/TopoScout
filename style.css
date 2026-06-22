@@ -1088,7 +1088,7 @@ details[open] summary {
 /* --- UPDATE NOTIFICATION --- */
 .notification-snackbar {
     position: fixed;
-    bottom: 25px;
+    bottom: calc(25px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%) translateY(150%);
     background: rgba(33, 33, 33, 0.95);
