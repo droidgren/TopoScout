@@ -1298,8 +1298,9 @@ const centerHeightDisplay = document.getElementById('center-h');
 // Crosshair shows when the user preference is on (default) OR while the center is locked.
 function syncCrosshairVisibility() {
     if (!crosshair) return;
-    const show = (localStorage.getItem('topo_show_crosshair') !== 'false') || isLocked;
-    crosshair.style.display = show ? 'block' : 'none';
+    const pref = (localStorage.getItem('topo_show_crosshair') !== 'false') || isLocked;
+    // Hide while scrubbing the elevation profile so it doesn't overlap the track cursor.
+    crosshair.style.display = (pref && !isElevationCursorActive) ? 'block' : 'none';
 }
 
 function applyCrosshairColor(c) {
@@ -3992,6 +3993,7 @@ document.getElementById('distanceUnit').addEventListener('change', function () {
 let elevationProfileData = null; // [{dist, ele, lat, lon}, ...]
 let elevationProfileMinimized = true;
 let elevationProfileMarker = null;
+let isElevationCursorActive = false; // true while scrubbing/hovering the elevation profile
 let elevationProfileRedrawFrame = null;
 let elevationViewStart = null;
 let elevationViewEnd = null;
@@ -4365,12 +4367,20 @@ function showElevationMarker(lat, lon) {
     } else {
         elevationProfileMarker.setLngLat([lon, lat]);
     }
+    if (!isElevationCursorActive) {
+        isElevationCursorActive = true;
+        syncCrosshairVisibility();
+    }
 }
 
 function removeElevationMarker() {
     if (elevationProfileMarker) {
         elevationProfileMarker.remove();
         elevationProfileMarker = null;
+    }
+    if (isElevationCursorActive) {
+        isElevationCursorActive = false;
+        syncCrosshairVisibility();
     }
 }
 
