@@ -230,7 +230,7 @@ h3 {
 #crosshair::after {
     content: '';
     position: absolute;
-    background: #333;
+    background: var(--crosshair-color, #333);
 }
 
 #crosshair::before {
@@ -245,6 +245,16 @@ h3 {
     left: 9px;
     width: 2px;
     height: 20px;
+}
+
+/* Live GPS position marker */
+.gps-marker {
+    width: 14px;
+    height: 14px;
+    background: #007bff;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 
 .live-height-box {
