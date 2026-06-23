@@ -4,8 +4,6 @@ TopoScout is a browser-based terrain analysis tool for finding high points, comp
 
 🌐 Open the [Live demo](https://toposcout.org/) with GPX store.
 
-🌐 Live [demo](https://droidgren.github.io/TopoScout/) without GPX store (Hosted on github).
-
 ## Core Capabilities
 
 - **Live center elevation** for the current map position.
