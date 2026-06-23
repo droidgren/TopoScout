@@ -13,7 +13,9 @@
 
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
 
-    <link rel="stylesheet" href="style.css">
+    <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
+         so a refresh can't be served stale local assets from the browser cache. -->
+    <link rel="stylesheet" href="style.css?v=2.9.41">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -53,7 +55,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.6.2</span>
+                <span id="lbl-version">Version</span>: <span id="app-version">2.7.1</span>
             </p>
 
             <details
@@ -61,11 +63,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.7.1:</strong> Made the in-app "Refresh app" button and automatic updates refresh reliably on mobile browsers and the home-screen (PWA) app. The service worker now always pulls fresh files from the network when caching an update, and the scripts and styles are version-stamped so a refresh can no longer be served stale copies from the browser cache.</li>
+                    <li><strong>v2.7.0:</strong> Added saved Points of Interest (POIs). Sign in with Google, tap the map to drop a star pin, and give it a name, a description (links become clickable), and a color. POI pins show their elevation and a copy-coordinates button, and can be moved, edited, or deleted. They load automatically on every device while you're signed in.</li>
                     <li><strong>v2.6.2:</strong> Renamed the app to TopoScout.</li>
                     <li><strong>v2.6.1:</strong> Made the "new version available" update prompt far more reliable for the iOS home-screen (PWA) app. The app now re-checks for updates when it's reopened or brought back to the foreground (not only on a cold start), shows an update that finished downloading in a previous session, and always fetches the service worker fresh so new releases aren't missed. Also removed a stray reload on first launch.</li>
                     <li><strong>v2.6:</strong> Added a Strava Global Heatmap to the Route Overlay dropdown. Tiles are served privately through the optional backend, so the option appears only when the backend is available. A route selected in the Routes-in-view legend stays drawn when you switch the overlay to the heatmap.</li>
-                    <li><strong>v2.5.1:</strong> Moved the language switcher from the header into the About menu as a "Select Language" dropdown and removed the flag icons. Placed the Install as App button beside Refresh app, and put the GitHub Project and droidgren.github.io links on one row.</li>
-                    <li><strong>v2.5.0:</strong> The GPS button now toggles live positioning: it drops a moving marker that follows you in real time (tap again to stop). Added a center crosshair you can show/hide, with a selectable high-contrast color (Dark, White, Magenta, Cyan, Yellow, Red, Lime) under Advanced settings. The center dot now shows only when the search radius is locked, so it no longer overlaps the crosshair.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -196,6 +198,58 @@
                 <div id="uploaded-gpx-list" class="uploaded-gpx-list"></div>
             </div>
             <button id="gpx-modal-close" class="cancel-btn" onclick="closeGpxModal()">Close</button>
+        </div>
+    </div>
+
+    <div id="poi-modal" class="modal-overlay" onclick="if (event.target === this) closePoiModal()">
+        <div class="modal-content gpx-modal-content">
+            <h4 id="poi-modal-title">Points of Interest</h4>
+            <p id="poi-modal-desc">Place and manage your saved points of interest.</p>
+            <div id="poi-auth" class="gpx-auth">
+                <div id="poi-auth-signin" class="gpx-auth-signin">
+                    <p id="poi-auth-desc" class="gpx-auth-desc">Sign in with Google to save your points of interest and see them on any device.</p>
+                    <div id="poi-google-signin-btn" class="google-signin-btn"></div>
+                </div>
+                <div id="poi-auth-user" class="gpx-auth-user" style="display:none;">
+                    <img id="poi-user-avatar" class="gpx-user-avatar" alt="" referrerpolicy="no-referrer">
+                    <span id="poi-user-email" class="gpx-user-email"></span>
+                    <button id="poi-signout-btn" type="button" class="secondary-btn gpx-signout-btn" onclick="signOutGoogle()">Sign out</button>
+                </div>
+            </div>
+            <div id="poi-signedin-body" class="poi-signedin-body" style="display:none;">
+                <div class="gpx-modal-actions">
+                    <button id="poi-place-btn" class="gpx-btn" onclick="startPoiPlacement()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg><span id="btn-place-poi-label" class="btn-label">Place new POI</span></button>
+                </div>
+                <div class="uploaded-gpx-panel gpx-modal-panel">
+                    <div id="poi-list-title" class="uploaded-gpx-title">Your POIs</div>
+                    <div id="poi-list-empty" class="uploaded-gpx-empty">No points of interest yet.</div>
+                    <div id="poi-list" class="uploaded-gpx-list"></div>
+                </div>
+            </div>
+            <button id="poi-modal-close" class="cancel-btn" onclick="closePoiModal()">Close</button>
+        </div>
+    </div>
+
+    <div id="poi-form-modal" class="modal-overlay">
+        <div class="modal-content poi-form-content">
+            <h4 id="poi-form-title">New POI</h4>
+            <div class="poi-form-field">
+                <label id="poi-form-name-label" for="poi-form-name">Name</label>
+                <input type="text" id="poi-form-name" maxlength="120" autocomplete="off">
+            </div>
+            <div class="poi-form-field">
+                <label id="poi-form-desc-label" for="poi-form-desc">Description</label>
+                <textarea id="poi-form-desc" rows="3" maxlength="500"></textarea>
+            </div>
+            <div class="poi-form-field">
+                <label id="poi-form-color-label">Color</label>
+                <div id="poi-form-colors" class="poi-color-swatches"></div>
+            </div>
+            <div id="poi-form-coords" class="poi-form-coords"></div>
+            <div class="gpx-action-row">
+                <button id="poi-form-cancel" class="gpx-clear-btn" onclick="closePoiForm()">Cancel</button>
+                <button id="poi-form-save" class="gpx-download-btn" onclick="savePoiForm()">Save</button>
+            </div>
         </div>
     </div>
 
@@ -408,7 +462,7 @@
             <div id="group-routes" class="section-group">
                 <div class="section-header" onclick="toggleSection('section-routes')">
                     <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg>
-                    <span id="section-routes-title">Add GPX Routes</span>
+                    <span id="section-routes-title">Add Routes and POIs</span>
                     <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
                 </div>
                 <div id="section-routes" class="section-content">
@@ -451,8 +505,17 @@
                             <label id="lbl-show-elev-profile" for="gpxShowElevProfile">Show Elevation Profile</label>
                         </div>
                     </div>
+                    <div class="checkbox-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="showPoi" checked onchange="setPoiVisibility(this.checked)">
+                            <label id="lbl-show-poi" for="showPoi">Show POIs</label>
+                        </div>
+                    </div>
                     <input type="file" id="gpx-file-input" accept=".gpx" style="display:none;">
-                    <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg><span class="btn-label">Load GPX Route</span></button>
+                    <div class="gpx-action-row routes-poi-row">
+                        <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg><span id="btn-gpx-label" class="btn-label">Load GPX Route</span></button>
+                        <button id="poi-btn" class="poi-btn" onclick="openPoiLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg><span id="btn-poi-label" class="btn-label">Add POI</span></button>
+                    </div>
                     <div id="gpx-track-info" class="gpx-track-info" style="display:none;"></div>
                     <div id="gpx-action-row" class="gpx-action-row" style="display:none;">
                         <button id="gpx-clear-btn" class="gpx-clear-btn" onclick="clearGpxRoute()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="btn-label">Clear Route</span></button>
@@ -514,9 +577,9 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script src="lang/en.js"></script>
-    <script src="lang/sv.js"></script>
-    <script src="script.js"></script>
+    <script src="lang/en.js?v=2.9.41"></script>
+    <script src="lang/sv.js?v=2.9.41"></script>
+    <script src="script.js?v=2.9.41"></script>
 </body>
 
 </html>

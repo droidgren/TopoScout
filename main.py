@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import secrets
@@ -30,6 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = Path(os.getenv("GPX_APP_DIR", BASE_DIR))
 UPLOAD_DIR = Path(os.getenv("GPX_UPLOAD_DIR", BASE_DIR / "gpx-files"))
 INDEX_PATH = Path(os.getenv("GPX_INDEX_PATH", UPLOAD_DIR / "gpx-index.json"))
+POI_INDEX_PATH = Path(os.getenv("POI_INDEX_PATH", UPLOAD_DIR / "pois-index.json"))
 MAX_UPLOAD_BYTES = int(os.getenv("GPX_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
 OWNER_COOKIE_NAME = "elevf_owner"
 OWNER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5
@@ -62,7 +64,16 @@ DEFAULT_INDEX = {
     "filename_to_id": {},
 }
 
+DEFAULT_POI_INDEX = {"pois_by_id": {}}
+
+# A POI's color (hex) drives its pin tint; the palette lives in the frontend.
+POI_DEFAULT_COLOR = "#2e8b57"
+POI_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+POI_NAME_MAX = 120
+POI_DESC_MAX = 500
+
 _index_lock = threading.Lock()
+_poi_index_lock = threading.Lock()
 
 app = FastAPI(title="TopoScout Backend")
 app.mount("/lang", StaticFiles(directory=APP_DIR / "lang"), name="lang")
@@ -287,6 +298,102 @@ def get_record_or_404(gpx_id: str) -> dict[str, Any]:
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
     return record
+
+
+# ==========================================================================
+# Points of Interest (POI) storage. Account-scoped (no anonymous fallback) and
+# parallels the GPX index above: a single JSON file keyed by record id.
+# ==========================================================================
+def load_poi_index() -> dict[str, Any]:
+    if not POI_INDEX_PATH.exists():
+        return {"pois_by_id": {}}
+    try:
+        with POI_INDEX_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {"pois_by_id": {}}
+    pois_by_id = payload.get("pois_by_id")
+    if not isinstance(pois_by_id, dict):
+        return {"pois_by_id": {}}
+    return {"pois_by_id": pois_by_id}
+
+
+def save_poi_index(index_payload: dict[str, Any]) -> None:
+    ensure_storage_dirs()
+    temp_path = POI_INDEX_PATH.with_suffix(".tmp")
+    with temp_path.open("w", encoding="utf-8") as handle:
+        json.dump(index_payload, handle, indent=2, sort_keys=True)
+    temp_path.replace(POI_INDEX_PATH)
+
+
+def require_google_owner_id(request: Request) -> str:
+    """POIs are account-scoped: require a verified Google identity (no anon cookie)."""
+    google_owner, _claims = resolve_google_owner(request)
+    if not google_owner:
+        raise HTTPException(status_code=401, detail="Google sign-in required")
+    return google_owner
+
+
+def _coerce_coord(value: Any, low: float, high: float, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{label} is required")
+    if not math.isfinite(number) or number < low or number > high:
+        raise HTTPException(status_code=400, detail=f"{label} out of range")
+    return number
+
+
+def validate_poi_body(body: Any, *, partial: bool = False) -> dict[str, Any]:
+    """Validate/normalize a POI create (partial=False) or update (partial=True) body."""
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    cleaned: dict[str, Any] = {}
+
+    if not partial or "name" in body:
+        name = (body.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
+        cleaned["name"] = name[:POI_NAME_MAX]
+
+    if not partial or "description" in body:
+        description = body.get("description")
+        cleaned["description"] = ("" if description is None else str(description)).strip()[:POI_DESC_MAX]
+
+    if not partial or "color" in body:
+        color = body.get("color")
+        cleaned["color"] = color.lower() if isinstance(color, str) and POI_COLOR_RE.match(color) else POI_DEFAULT_COLOR
+
+    if not partial or "lat" in body or "lng" in body:
+        cleaned["lat"] = _coerce_coord(body.get("lat"), -90.0, 90.0, "Latitude")
+        cleaned["lng"] = _coerce_coord(body.get("lng"), -180.0, 180.0, "Longitude")
+
+    if not partial or "elevation" in body:
+        elevation = body.get("elevation")
+        if elevation is None:
+            cleaned["elevation"] = None
+        else:
+            try:
+                cleaned["elevation"] = round(float(elevation))
+            except (TypeError, ValueError):
+                cleaned["elevation"] = None
+
+    return cleaned
+
+
+def serialize_poi(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": record["id"],
+        "name": record.get("name"),
+        "description": record.get("description", ""),
+        "color": record.get("color", POI_DEFAULT_COLOR),
+        "lat": record.get("lat"),
+        "lng": record.get("lng"),
+        "elevation": record.get("elevation"),
+        "created_at": record.get("created_at"),
+        "updated_at": record.get("updated_at"),
+    }
 
 
 @app.on_event("startup")
@@ -542,6 +649,82 @@ def get_raw_file(gpx_id: str) -> FileResponse:
         media_type="application/gpx+xml",
         filename=record["filename"],
     )
+
+
+@app.get("/api/pois")
+def list_pois(request: Request) -> dict[str, list[dict[str, Any]]]:
+    owner_id = require_google_owner_id(request)
+    with _poi_index_lock:
+        index_payload = load_poi_index()
+
+    pois = [
+        serialize_poi(record)
+        for record in index_payload["pois_by_id"].values()
+        if record.get("owner_id") == owner_id
+    ]
+    pois.sort(key=lambda item: item.get("created_at") or "")
+    return {"pois": pois}
+
+
+@app.post("/api/pois")
+async def create_poi(request: Request) -> dict[str, Any]:
+    owner_id = require_google_owner_id(request)
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid request body") from exc
+    fields = validate_poi_body(body, partial=False)
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    with _poi_index_lock:
+        index_payload = load_poi_index()
+        poi_id = secrets.token_urlsafe(9)
+        record = {
+            "id": poi_id,
+            "owner_id": owner_id,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            **fields,
+        }
+        index_payload["pois_by_id"][poi_id] = record
+        save_poi_index(index_payload)
+
+    return serialize_poi(record)
+
+
+@app.patch("/api/pois/{poi_id}")
+async def update_poi(poi_id: str, request: Request) -> dict[str, Any]:
+    owner_id = require_google_owner_id(request)
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid request body") from exc
+    fields = validate_poi_body(body, partial=True)
+
+    with _poi_index_lock:
+        index_payload = load_poi_index()
+        record = index_payload["pois_by_id"].get(poi_id)
+        if not record or record.get("owner_id") != owner_id:
+            raise HTTPException(status_code=404, detail="POI not found")
+        record.update(fields)
+        record["updated_at"] = datetime.now(timezone.utc).isoformat()
+        save_poi_index(index_payload)
+
+    return serialize_poi(record)
+
+
+@app.delete("/api/pois/{poi_id}")
+def delete_poi(poi_id: str, request: Request) -> dict[str, str]:
+    owner_id = require_google_owner_id(request)
+    with _poi_index_lock:
+        index_payload = load_poi_index()
+        record = index_payload["pois_by_id"].get(poi_id)
+        if not record or record.get("owner_id") != owner_id:
+            raise HTTPException(status_code=404, detail="POI not found")
+        del index_payload["pois_by_id"][poi_id]
+        save_poi_index(index_payload)
+
+    return {"status": "deleted", "id": poi_id}
 
 
 @app.get("/api/heatmap/{activity}/{color}/{z}/{x}/{y}.png", include_in_schema=False)

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'toposcout-v2.9.32';
+const CACHE_NAME = 'toposcout-v2.9.41';
 const ASSETS = [
     './',
     './index.html',
@@ -13,7 +13,9 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(ASSETS);
+            // `cache: 'reload'` forces each asset to come from the network instead of
+            // the browser HTTP cache, so a new release never re-caches stale files.
+            return cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' })));
         })
     );
 });
@@ -41,7 +43,7 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     if (url.pathname.startsWith('/api/')) return;
     event.respondWith(
-        caches.match(event.request).then((response) => {
+        caches.match(event.request, { ignoreSearch: true }).then((response) => {
             return response || fetch(event.request);
         })
     );
