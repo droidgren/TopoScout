@@ -807,13 +807,6 @@ body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
     display: block;
 }
 
-/* 3D toggle: the box icon's outline turns the accent blue and stays blue while 3D is on. */
-#enable3dBtn.active {
-    color: #2563eb;
-    border-color: #2563eb;
-    background: #f8f9fa;
-}
-
 .icon-btn.active {
     background: #1565c0;
     border-color: #1565c0;
