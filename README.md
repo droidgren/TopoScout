@@ -11,6 +11,7 @@ TopoScout is a browser-based terrain analysis tool for finding high points, comp
 - **Find Climbs** by scanning many directions and ranking routes by cumulative ascent.
 - **Slope Map** overlay with opacity and slope-angle filtering.
 - **GPX route overlay** with customizable styling and route stats.
+- **Points of Interest (POIs)** saved to your Google account, with a custom name, description, and color.
 - **Map tools** for overzoom, tilt, and 3D terrain exaggeration.
 - **Share Map View** links that restore language, center, zoom, and selected layer.
 - **Multiple map sources** including topographic, satellite, national, and debug elevation layers.
@@ -43,6 +44,17 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - **Download** the loaded route back to a `.gpx` file (saved under its current name).
 - Optionally upload, list, share, rename, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
 - To acess your GPX file you log i with your Google account
+
+### Points of Interest
+
+Save your own marked spots and keep them on every device.
+
+- Sign in with Google, then tap **Add POI** and tap the map to drop a pin.
+- Give each POI a name, a description (URLs become clickable links), and a color.
+- POI pins use a star marker tinted with the chosen color, show the point's elevation, and include a copy-coordinates button.
+- Open a POI from the list to recenter the map on it, or move, rename, edit, and delete it.
+- POIs are stored per Google account through the [optional backend](#optional-backend-gpx-upload-and-sharing) and load automatically wherever you're signed in.
+- Toggle all POI pins on or off with the **Show POIs** checkbox.
 
 ### Map and navigation tools
 
@@ -129,12 +141,12 @@ Optional overlays can be drawn on top of any base layer from the **Route Overlay
 - Open **Find Climbs** to look for strong uphill routes over a fixed measurement distance.
 - Open **Generate Slope Map** to paint the terrain by steepness.
 
-### 4. Add GPX context
+### 4. Add routes and POIs
 
-- Expand **Add Routes**.
-- Load a GPX file.
-- Tune track styling and visibility options.
-- Compare the route against peak, climb, and slope results already on the map.
+- Expand **Add Routes and POIs**.
+- Load a GPX file, or sign in and tap **Add POI** to drop a saved Point of Interest.
+- Tune track styling and visibility options, and toggle pins with **Show POIs**.
+- Compare routes and POIs against peak, climb, and slope results already on the map.
 
 ### 5. Share or install
 
@@ -146,13 +158,16 @@ Optional overlays can be drawn on top of any base layer from the **Route Overlay
 - The app remembers language, map position, zoom, and selected layer in `localStorage`.
 - Shared URLs restore the current language and map state.
 - API keys are stored locally in the browser.
+- Points of Interest are saved per Google account on the optional backend, so they sync across devices.
 - No terrain analysis results are uploaded to a project server.
 
 ## Optional Backend (GPX Upload And Sharing)
 
-The frontend works fully on static hosting (GitHub Pages and the live demo) with no backend. An optional FastAPI backend adds GPX upload, a per-browser upload history, and shareable `?gpx=<id>` links.
+The frontend works fully on static hosting (GitHub Pages and the live demo) with no backend. An optional FastAPI backend adds GPX upload, a per-browser upload history, shareable `?gpx=<id>` links, and saved Points of Interest.
 
 The frontend auto-detects the backend by probing `/api/health` on load. When it is reachable, the **Load GPX Route** button opens an upload/history modal and share links include the uploaded route. When it is not reachable, the same button opens the local file picker directly — no upload UI, no errors, and any `?gpx=` parameter is stripped silently.
+
+Saved **Points of Interest** also require the backend: each POI is tied to your Google account through the `/api/pois` endpoints, so signing in shows your pins on any device. Without the backend, the **Add POI** flow reports that POIs need the online backend.
 
 Run it locally:
 
