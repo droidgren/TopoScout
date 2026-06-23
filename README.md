@@ -1,10 +1,10 @@
-# Elevation Finder
+# TopoScout
 
-Elevation Finder is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend.
+TopoScout is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend.
 
-🌐 Open the [Live demo](https://elevation-finder.dedyn.io/) with GPX store.
+🌐 Open the [Live demo](https://toposcout.org/) with GPX store.
 
-🌐 Live [demo](https://droidgren.github.io/elevation_finder/) without GPX store (Hosted on github).
+🌐 Live [demo](https://droidgren.github.io/TopoScout/) without GPX store (Hosted on github).
 
 ## Core Capabilities
 
@@ -23,7 +23,7 @@ Elevation Finder is a browser-based terrain analysis tool for finding high point
 
 ### Terrain analysis
 
-Elevation Finder focuses on terrain discovery rather than just displaying a single height sample.
+TopoScout focuses on terrain discovery rather than just displaying a single height sample.
 
 - **Highest-point scanning** ranks the tallest candidates inside the current search radius.
 - **Climb analysis** estimates the strongest uphill routes by summing positive elevation changes over a chosen distance.
@@ -168,8 +168,8 @@ Then open `http://localhost:8000/`. The backend serves the static files and stor
 Or with Docker:
 
 ```bash
-docker build -t elevation-finder .
-docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
+docker build -t toposcout .
+docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" toposcout
 ```
 
 ## Progressive Web App Notes
@@ -194,6 +194,7 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
 
 ## Changelog
 
+- **v2.6.2:** Renamed the app to **TopoScout**.
 - **v2.6.1:** Made the "new version available" update prompt far more reliable for the iOS home-screen (PWA) app. The app now re-checks for updates when it's reopened or brought back to the foreground (not only on a cold start), surfaces an update that finished downloading in a previous session (previously it could sit unprompted until the browser's automatic ~24h check), and registers the service worker with `updateViaCache: 'none'` so the worker script is always fetched fresh. Also removed a stray reload on first launch and hardened the worker's message handler.
 - **v2.6:** Added a **Strava Global Heatmap** to the Route Overlay dropdown. Tiles are served privately through the optional backend (`/api/heatmap/...`), which proxies a self-hosted [strava-heatmap-proxy](https://github.com/patrickziegler/strava-heatmap-proxy) over the internal Docker network — so there are no CORS/mixed-content issues and the Strava cookies never reach the browser. The option appears only when the backend is available. A route selected in the Routes-in-view legend stays drawn when you switch the overlay to the heatmap. See `strava-heatmap-proxy.yaml`.
 - **v2.5.1:** Moved the language switcher from the header into the About menu as a **Select Language** dropdown and removed the flag icons. Placed the **Install as App** button beside **Refresh app**, and put the GitHub Project and droidgren.github.io links on one row.
@@ -222,7 +223,7 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" elevation-finder
 
 ## Privacy
 
-Elevation Finder is client-side by default.
+TopoScout is client-side by default.
 
 - No location data is sent to the creator's server.
 - No search history is stored on a backend.
