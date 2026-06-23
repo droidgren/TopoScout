@@ -1,4 +1,4 @@
-const CACHE_NAME = 'toposcout-v2.9.31';
+const CACHE_NAME = 'toposcout-v2.9.32';
 const ASSETS = [
     './',
     './index.html',
