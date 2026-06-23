@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elevation-finder-v2.9.30';
+const CACHE_NAME = 'toposcout-v2.9.31';
 const ASSETS = [
     './',
     './index.html',

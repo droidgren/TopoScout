@@ -64,7 +64,7 @@ DEFAULT_INDEX = {
 
 _index_lock = threading.Lock()
 
-app = FastAPI(title="Elevation Finder Backend")
+app = FastAPI(title="TopoScout Backend")
 app.mount("/lang", StaticFiles(directory=APP_DIR / "lang"), name="lang")
 
 
