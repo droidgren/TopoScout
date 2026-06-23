@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.6.2";
+const APP_VERSION = "2.7.1";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1387,8 +1387,41 @@ const redIcon = new L.Icon({
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
+// --- Points of Interest (POI) ---------------------------------------------
+// Every POI uses the same teardrop pin (like the rank markers) with a star in
+// the white center; only the color varies. Colors come from a fixed palette.
+const POI_COLORS = ['#2e8b57', '#2A81CB', '#CB2B3E', '#F39C12', '#7E57C2', '#D81B60', '#546E7A'];
+const POI_DEFAULT_COLOR = '#2e8b57';
+
+function makePoiIcon(color) {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 41" shape-rendering="geometricPrecision">'
+        + '<path d="M 12.5 1 C 6.1 1 1 6.1 1 12.5 C 1 22 12.5 39.5 12.5 39.5 C 12.5 39.5 24 22 24 12.5 C 24 6.1 18.9 1 12.5 1 Z" fill="' + color + '" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>'
+        + '<circle cx="12.5" cy="12.5" r="7.8" fill="#ffffff"/>'
+        + '<polygon points="12.5,6 14,10.4 18.7,10.5 15,13.3 16.3,17.8 12.5,15.1 8.7,17.8 10,13.3 6.3,10.5 11,10.4" fill="' + color + '"/>'
+        + '</svg>';
+    return new L.Icon({
+        iconUrl: 'data:image/svg+xml,' + encodeURIComponent(svg),
+        shadowUrl: _shadowUrl,
+        iconSize: [28, 45], iconAnchor: [14, 45], popupAnchor: [1, -38], shadowSize: [45, 45]
+    });
+}
+
+const poiIconCache = {};
+function poiIconFor(color) {
+    const c = color || POI_DEFAULT_COLOR;
+    if (!poiIconCache[c]) poiIconCache[c] = makePoiIcon(c);
+    return poiIconCache[c];
+}
+
 let markers = [];
 let polylines = [];
+let poiList = [];
+let poiMarkers = [];
+let poiLayerVisible = (localStorage.getItem('topo_show_poi') !== '0'); // default on
+let poiPlacementMode = false;
+let poiPlacementMoveId = null; // id of the POI being relocated, or null when placing a new one
+let poiFormState = null; // { id?, lat, lng, elevation } while the form modal is open
+let poiFormSelectedColor = POI_DEFAULT_COLOR;
 let manualClimbMode = false;
 let manualClimbPoints = [];    // L.latLng objects
 let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
@@ -1885,6 +1918,35 @@ function updateLanguage() {
         if (uploadedGpxTitle) uploadedGpxTitle.textContent = isBackendEnabled() ? (t.uploaded_gpx_title || '') : (t.uploaded_gpx_title_local || '');
         renderUploadedFiles();
         updateGpxTrackInfo();
+
+        // POI labels
+        if (document.getElementById('poi-btn')) document.querySelector('#poi-btn .btn-label').textContent = t.btn_add_poi;
+        if (document.getElementById('lbl-show-poi')) document.getElementById('lbl-show-poi').textContent = t.lbl_show_poi;
+        const poiPlaceLabel = document.getElementById('btn-place-poi-label');
+        if (poiPlaceLabel) poiPlaceLabel.textContent = t.btn_place_poi;
+        const poiModalTitle = document.getElementById('poi-modal-title');
+        if (poiModalTitle) poiModalTitle.textContent = t.poi_modal_title || '';
+        const poiModalDesc = document.getElementById('poi-modal-desc');
+        if (poiModalDesc) poiModalDesc.textContent = t.poi_modal_desc || '';
+        const poiAuthDesc = document.getElementById('poi-auth-desc');
+        if (poiAuthDesc) poiAuthDesc.textContent = t.poi_auth_desc || '';
+        const poiSignout = document.getElementById('poi-signout-btn');
+        if (poiSignout) poiSignout.textContent = t.btn_sign_out || '';
+        const poiListTitle = document.getElementById('poi-list-title');
+        if (poiListTitle) poiListTitle.textContent = t.poi_list_title || '';
+        const poiModalClose = document.getElementById('poi-modal-close');
+        if (poiModalClose) poiModalClose.textContent = t.btn_close;
+        const poiNameLabel = document.getElementById('poi-form-name-label');
+        if (poiNameLabel) poiNameLabel.textContent = t.poi_form_name_label || '';
+        const poiDescLabel = document.getElementById('poi-form-desc-label');
+        if (poiDescLabel) poiDescLabel.textContent = t.poi_form_desc_label || '';
+        const poiColorLabel = document.getElementById('poi-form-color-label');
+        if (poiColorLabel) poiColorLabel.textContent = t.poi_form_color_label || '';
+        const poiFormCancel = document.getElementById('poi-form-cancel');
+        if (poiFormCancel) poiFormCancel.textContent = t.btn_cancel;
+        const poiFormSave = document.getElementById('poi-form-save');
+        if (poiFormSave) poiFormSave.textContent = t.btn_save;
+        renderPoiList();
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
@@ -2753,6 +2815,408 @@ window.closeGpxModal = closeGpxModal;
 window.openGpxLoader = function () {
     if (isBackendEnabled()) { showGpxModal(); }
     else { document.getElementById('gpx-file-input').click(); }
+};
+
+// ==========================================
+// Points of Interest (POI) — saved, account-scoped pins
+// ==========================================
+let poiMarkerById = {};
+
+function poiEscape(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Escapes the description, then turns http(s) URLs into links. CSS wraps long URLs.
+function linkifyDescription(text) {
+    return poiEscape(text).replace(/(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+// Entry point for the "Add POI" button. POIs need the backend; without one we
+// just nudge the user instead of opening an empty modal.
+window.openPoiLoader = function () {
+    const t = translations[currentLang];
+    if (!isBackendEnabled()) {
+        if (statusDiv) statusDiv.textContent = t.status_poi_backend_needed || 'Points of interest require the online backend.';
+        return;
+    }
+    showPoiModal();
+};
+
+function showPoiModal() {
+    const modal = document.getElementById('poi-modal');
+    if (!modal) return;
+    if (window.innerWidth <= 600 && !isControlsMinimized) setControlsMinimized(true);
+    modal.style.display = 'flex';
+    updatePoiModalAuthUI();
+    if (isGoogleSignedIn()) refreshPoiList();
+}
+
+function closePoiModal() {
+    const modal = document.getElementById('poi-modal');
+    if (modal) modal.style.display = 'none';
+}
+window.showPoiModal = showPoiModal;
+window.closePoiModal = closePoiModal;
+
+// Mirrors updateGpxModalAuthUI for the POI modal: show sign-in vs. the signed-in
+// body (Place new POI + list) depending on the Google session.
+function updatePoiModalAuthUI() {
+    const signinEl = document.getElementById('poi-auth-signin');
+    const userEl = document.getElementById('poi-auth-user');
+    const bodyEl = document.getElementById('poi-signedin-body');
+    if (!signinEl || !userEl || !bodyEl) return;
+
+    if (isGoogleSignedIn()) {
+        signinEl.style.display = 'none';
+        userEl.style.display = '';
+        bodyEl.style.display = '';
+        const avatar = document.getElementById('poi-user-avatar');
+        const emailEl = document.getElementById('poi-user-email');
+        if (avatar) {
+            if (googleAuth.picture) { avatar.src = googleAuth.picture; avatar.style.display = ''; }
+            else { avatar.removeAttribute('src'); avatar.style.display = 'none'; }
+        }
+        if (emailEl) emailEl.textContent = googleAuth.email || googleAuth.name || '';
+    } else {
+        signinEl.style.display = '';
+        userEl.style.display = 'none';
+        bodyEl.style.display = 'none';
+    }
+}
+window.updatePoiModalAuthUI = updatePoiModalAuthUI;
+
+// ---- Backend calls (reuse the GPX auth helpers) ----
+async function refreshPoiList() {
+    if (!isBackendEnabled() || !isGoogleSignedIn()) {
+        poiList = [];
+        renderPoiList();
+        renderPoiMarkers();
+        return;
+    }
+    try {
+        const resp = await fetchWithAuthRetry(() => fetch(API_BASE + '/pois', {
+            credentials: 'same-origin',
+            headers: authHeaders()
+        }));
+        if (!resp.ok) throw new Error('Failed to list POIs');
+        const data = await resp.json();
+        poiList = Array.isArray(data.pois) ? data.pois : [];
+    } catch (e) {
+        poiList = [];
+    }
+    renderPoiList();
+    renderPoiMarkers();
+}
+
+window.deletePoiById = async function (poiId) {
+    const t = translations[currentLang];
+    if (!poiId) return;
+    const poi = poiList.find(p => p.id === poiId);
+    const name = poi && poi.name ? poi.name : 'POI';
+    if (!window.confirm((t.confirm_delete_poi || 'Delete "{name}"?').replace('{name}', name))) return;
+
+    statusDiv.textContent = t.status_poi_deleting || 'Deleting POI...';
+    try {
+        const resp = await fetchWithAuthRetry(() => fetch(API_BASE + '/pois/' + encodeURIComponent(poiId), {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: authHeaders()
+        }));
+        if (!resp.ok) throw new Error('Failed to delete POI');
+        await refreshPoiList();
+        statusDiv.textContent = (t.status_poi_deleted || 'POI deleted.').replace('{name}', name);
+    } catch (e) {
+        statusDiv.textContent = t.status_poi_delete_error || 'Could not delete the POI.';
+    }
+};
+
+// ---- Rendering ----
+function renderPoiList() {
+    const listEl = document.getElementById('poi-list');
+    const emptyEl = document.getElementById('poi-list-empty');
+    if (!listEl || !emptyEl) return;
+    const t = translations[currentLang];
+
+    listEl.innerHTML = '';
+    if (!poiList.length) {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.poi_list_empty || 'No points of interest yet.';
+        return;
+    }
+    emptyEl.style.display = 'none';
+
+    poiList.forEach(poi => {
+        const row = document.createElement('div');
+        row.className = 'uploaded-gpx-item';
+
+        const meta = document.createElement('div');
+        meta.className = 'uploaded-gpx-meta';
+
+        const name = document.createElement('span');
+        name.className = 'uploaded-gpx-name';
+        name.textContent = poi.name;
+        meta.appendChild(name);
+
+        const sub = document.createElement('span');
+        sub.className = 'uploaded-gpx-date';
+        const created = poi.created_at ? new Date(poi.created_at) : null;
+        const dateStr = (created && !Number.isNaN(created.getTime())) ? created.toLocaleDateString() : '';
+        const hasElev = (poi.elevation || poi.elevation === 0);
+        sub.textContent = [dateStr, hasElev ? Math.round(poi.elevation) + ' m' : ''].filter(Boolean).join(' · ');
+        meta.appendChild(sub);
+
+        const actions = document.createElement('div');
+        actions.className = 'uploaded-gpx-actions';
+
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'secondary-btn';
+        openBtn.textContent = t.btn_open_poi || 'Open';
+        openBtn.addEventListener('click', () => window.openPoi(poi.id));
+        actions.appendChild(openBtn);
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'secondary-btn';
+        editBtn.textContent = t.btn_edit_poi || 'Edit';
+        editBtn.addEventListener('click', () => window.editPoi(poi.id));
+        actions.appendChild(editBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'danger-btn';
+        delBtn.textContent = t.btn_delete_poi || 'Delete';
+        delBtn.addEventListener('click', () => window.deletePoiById(poi.id));
+        actions.appendChild(delBtn);
+
+        row.appendChild(meta);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+    });
+}
+
+function poiPopupHtml(poi) {
+    const t = translations[currentLang];
+    const lat = Number(poi.lat);
+    const lng = Number(poi.lng);
+    const hasElev = (poi.elevation || poi.elevation === 0);
+    const descLine = poi.description ? '<div class="poi-popup-desc">' + linkifyDescription(poi.description) + '</div>' : '';
+    const elevLine = hasElev ? '<div class="poi-popup-elev">' + (t.status_elevation || 'Elevation') + ': ' + Math.round(poi.elevation) + ' m</div>' : '';
+    return ''
+        + '<span class="popup-header">' + poiEscape(poi.name) + '</span>'
+        + descLine
+        + elevLine
+        + '<div class="coord-box"><span>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>'
+        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">📋</button></div>'
+        + '<div class="poi-popup-actions">'
+        + '<button class="secondary-btn poi-popup-btn" onclick="editPoi(\'' + poi.id + '\')">' + (t.btn_edit_poi || 'Edit') + '</button>'
+        + '<button class="secondary-btn poi-popup-btn" onclick="startPoiMove(\'' + poi.id + '\')">' + (t.btn_move_poi || 'Move') + '</button>'
+        + '<button class="danger-btn poi-popup-btn" onclick="deletePoiById(\'' + poi.id + '\')">' + (t.btn_delete_poi || 'Delete') + '</button>'
+        + '</div>';
+}
+
+function clearPoiMarkers() {
+    poiMarkers.forEach(m => map.removeLayer(m));
+    poiMarkers = [];
+    poiMarkerById = {};
+}
+
+function renderPoiMarkers() {
+    clearPoiMarkers();
+    if (!poiLayerVisible) return; // POIs hidden via the "Show POIs" toggle
+    poiList.forEach(poi => {
+        const marker = L.marker([poi.lat, poi.lng], { icon: poiIconFor(poi.color) })
+            .addTo(map)
+            .bindPopup(poiPopupHtml(poi));
+        poiMarkers.push(marker);
+        poiMarkerById[poi.id] = marker;
+    });
+}
+
+// "Show POIs" checkbox: toggle pin visibility on the map (the saved list is kept).
+window.setPoiVisibility = function (visible) {
+    poiLayerVisible = !!visible;
+    try { localStorage.setItem('topo_show_poi', poiLayerVisible ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+    renderPoiMarkers();
+};
+
+// Clicking a POI in the list recenters the map on it and opens its popup.
+window.openPoi = function (poiId) {
+    const poi = poiList.find(p => p.id === poiId);
+    if (!poi) return;
+    closePoiModal();
+    map.setView([poi.lat, poi.lng], map.getZoom());
+    const marker = poiMarkerById[poiId];
+    if (marker) marker.openPopup();
+};
+
+window.editPoi = function (poiId) {
+    const poi = poiList.find(p => p.id === poiId);
+    if (!poi) return;
+    openPoiForm({
+        id: poi.id, lat: Number(poi.lat), lng: Number(poi.lng), elevation: poi.elevation,
+        name: poi.name, description: poi.description, color: poi.color
+    });
+};
+
+// Called on sign-out so another user's pins never linger on the map.
+function clearPoiState() {
+    poiList = [];
+    clearPoiMarkers();
+    renderPoiList();
+}
+window.clearPoiState = clearPoiState;
+
+// ---- Tap-to-place / move flow ----
+function enterPoiPlacementMode(moveId, statusKey, fallbackStatus) {
+    const t = translations[currentLang];
+    closePoiModal();
+    poiPlacementMode = true;
+    poiPlacementMoveId = moveId || null;
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.add('poi-placement-active');
+    if (statusDiv) statusDiv.textContent = t[statusKey] || fallbackStatus;
+}
+
+window.startPoiPlacement = function () {
+    enterPoiPlacementMode(null, 'status_poi_placement', 'Tap the map to place your POI.');
+};
+
+// Reposition an existing POI: triggered from its popup, then tap the new spot.
+window.startPoiMove = function (poiId) {
+    if (!poiId) return;
+    enterPoiPlacementMode(poiId, 'status_poi_move', 'Tap the map to move your POI.');
+};
+
+function cancelPoiPlacement() {
+    poiPlacementMode = false;
+    poiPlacementMoveId = null;
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.remove('poi-placement-active');
+}
+
+async function handlePoiPlacementClick(lat, lng) {
+    const moveId = poiPlacementMoveId;
+    cancelPoiPlacement();
+    const t = translations[currentLang];
+    if (statusDiv) statusDiv.textContent = t.status_poi_fetching_elev || 'Reading elevation...';
+    const elevation = await getElevationAtLatLng(lat, lng);
+
+    if (moveId) {
+        statusDiv.textContent = t.status_poi_saving || 'Saving POI...';
+        try {
+            const resp = await fetchWithAuthRetry(() => fetch(API_BASE + '/pois/' + encodeURIComponent(moveId), {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                body: JSON.stringify({ lat: lat, lng: lng, elevation: elevation })
+            }));
+            if (!resp.ok) throw new Error('Failed to move POI');
+            await refreshPoiList();
+            statusDiv.textContent = t.status_poi_moved || 'POI moved.';
+        } catch (e) {
+            statusDiv.textContent = t.status_poi_save_error || 'Could not save the POI.';
+        }
+        return;
+    }
+
+    if (statusDiv) statusDiv.textContent = t.status_ready || 'Ready.';
+    openPoiForm({ lat: lat, lng: lng, elevation: elevation, color: POI_DEFAULT_COLOR, name: '', description: '' });
+}
+
+// ---- Create / edit form ----
+function populatePoiColorSwatches(selectedColor) {
+    const wrap = document.getElementById('poi-form-colors');
+    if (!wrap) return;
+    poiFormSelectedColor = (POI_COLORS.indexOf(selectedColor) >= 0) ? selectedColor : POI_DEFAULT_COLOR;
+    wrap.innerHTML = '';
+    POI_COLORS.forEach(color => {
+        const sw = document.createElement('button');
+        sw.type = 'button';
+        sw.className = 'poi-color-swatch' + (color === poiFormSelectedColor ? ' selected' : '');
+        sw.style.background = color;
+        sw.setAttribute('aria-label', color);
+        sw.addEventListener('click', () => {
+            poiFormSelectedColor = color;
+            wrap.querySelectorAll('.poi-color-swatch').forEach(el => el.classList.remove('selected'));
+            sw.classList.add('selected');
+        });
+        wrap.appendChild(sw);
+    });
+}
+
+function openPoiForm(state) {
+    const t = translations[currentLang];
+    poiFormState = state;
+    closePoiModal();
+
+    const titleEl = document.getElementById('poi-form-title');
+    if (titleEl) titleEl.textContent = state.id ? (t.poi_form_edit_title || 'Edit POI') : (t.poi_form_new_title || 'New POI');
+    const nameEl = document.getElementById('poi-form-name');
+    if (nameEl) nameEl.value = state.name || '';
+    const descEl = document.getElementById('poi-form-desc');
+    if (descEl) descEl.value = state.description || '';
+    populatePoiColorSwatches(state.color || POI_DEFAULT_COLOR);
+
+    const coordsEl = document.getElementById('poi-form-coords');
+    if (coordsEl) {
+        const hasElev = (state.elevation || state.elevation === 0);
+        coordsEl.textContent = Number(state.lat).toFixed(5) + ', ' + Number(state.lng).toFixed(5)
+            + (hasElev ? '  ·  ' + Math.round(state.elevation) + ' m' : '');
+    }
+
+    const modal = document.getElementById('poi-form-modal');
+    if (modal) modal.style.display = 'flex';
+    if (nameEl) nameEl.focus();
+}
+
+window.closePoiForm = function () {
+    const modal = document.getElementById('poi-form-modal');
+    if (modal) modal.style.display = 'none';
+    poiFormState = null;
+};
+
+window.savePoiForm = async function () {
+    if (!poiFormState) return;
+    const t = translations[currentLang];
+    const nameEl = document.getElementById('poi-form-name');
+    const name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { if (nameEl) nameEl.focus(); return; }
+    const description = (document.getElementById('poi-form-desc') || {}).value || '';
+    const color = poiFormSelectedColor;
+    const editingId = poiFormState.id;
+    const state = poiFormState;
+    window.closePoiForm();
+
+    statusDiv.textContent = t.status_poi_saving || 'Saving POI...';
+    try {
+        let resp;
+        if (editingId) {
+            resp = await fetchWithAuthRetry(() => fetch(API_BASE + '/pois/' + encodeURIComponent(editingId), {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                body: JSON.stringify({ name: name, description: description.trim(), color: color })
+            }));
+        } else {
+            resp = await fetchWithAuthRetry(() => fetch(API_BASE + '/pois', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                body: JSON.stringify({
+                    name: name, description: description.trim(), color: color,
+                    lat: state.lat, lng: state.lng, elevation: state.elevation
+                })
+            }));
+        }
+        if (!resp.ok) throw new Error('Failed to save POI');
+        await refreshPoiList();
+        statusDiv.textContent = editingId ? (t.status_poi_updated || 'POI updated.') : (t.status_poi_created || 'POI saved.');
+    } catch (e) {
+        statusDiv.textContent = t.status_poi_save_error || 'Could not save the POI.';
+    }
 };
 
 window.clearGpxRoute = function () {
@@ -3686,6 +4150,8 @@ function clearGoogleAuthState() {
         }
     } catch (e) { /* ignore */ }
     updateGpxModalAuthUI();
+    updatePoiModalAuthUI();
+    clearPoiState();
 }
 
 // Tell the backend who we are so it can merge any anonymous uploads into the account.
@@ -3748,13 +4214,14 @@ function handleGoogleCredential(response) {
     settlePendingAuthRefresh(true);   // unblock any silent refresh waiting on this token
     scheduleGoogleAuthRefresh();      // line up the next pre-expiry refresh
     updateGpxModalAuthUI();
+    updatePoiModalAuthUI();
     if (statusDiv) {
         statusDiv.textContent = (t.status_signed_in || 'Signed in as {email}.')
             .replace('{email}', googleAuth.email || googleAuth.name || '');
     }
-    // Merge anonymous uploads into the account, then show the account's files.
+    // Merge anonymous uploads into the account, then show the account's files + POIs.
     runGoogleAuthDiagnostics();
-    postAuthLogin().finally(() => { refreshUploadedFiles(); });
+    postAuthLogin().finally(() => { refreshUploadedFiles(); refreshPoiList(); });
 }
 
 window.signOutGoogle = function () {
@@ -3809,6 +4276,8 @@ function initGoogleAuth() {
         scheduleGoogleAuthRefresh();
     }
     updateGpxModalAuthUI();
+    updatePoiModalAuthUI();
+    if (isGoogleSignedIn()) refreshPoiList();
 
     whenGisReady(() => {
         googleAuthInitialized = true;
@@ -3819,18 +4288,19 @@ function initGoogleAuth() {
                 auto_select: true,
                 use_fedcm_for_prompt: true
             });
+            const signinButtonOptions = {
+                theme: 'outline',
+                size: 'large',
+                type: 'standard',
+                shape: 'pill',
+                text: 'signin_with',
+                logo_alignment: 'left',
+                width: 240
+            };
             const btnEl = document.getElementById('google-signin-btn');
-            if (btnEl) {
-                google.accounts.id.renderButton(btnEl, {
-                    theme: 'outline',
-                    size: 'large',
-                    type: 'standard',
-                    shape: 'pill',
-                    text: 'signin_with',
-                    logo_alignment: 'left',
-                    width: 240
-                });
-            }
+            if (btnEl) google.accounts.id.renderButton(btnEl, signinButtonOptions);
+            const poiBtnEl = document.getElementById('poi-google-signin-btn');
+            if (poiBtnEl) google.accounts.id.renderButton(poiBtnEl, signinButtonOptions);
             // Returning user without a valid stored token: try a silent One Tap re-auth.
             if (!isGoogleSignedIn() && stored) {
                 google.accounts.id.prompt();
@@ -3839,6 +4309,7 @@ function initGoogleAuth() {
             // GIS init failed (blocked/offline): stay on the anonymous flow.
         }
         updateGpxModalAuthUI();
+        updatePoiModalAuthUI();
     });
 }
 
@@ -4781,6 +5252,38 @@ function updateUI() {
     }
     fillOpacity = isLocked ? 0 : (slopeMapHasRadiusArea ? (completelyOutsideSlopeArea ? 0.1 : 0) : 0.1);
     updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity);
+}
+
+// Sample the terrain elevation (meters) at an arbitrary coordinate from a single
+// Terrarium tile pixel (same decode as updateCenterElevation). Resolves null when
+// there is no data / the tile fails to load. Used when saving a POI.
+function getElevationAtLatLng(lat, lng) {
+    return new Promise((resolve) => {
+        try {
+            const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
+            const point = map.project(L.latLng(lat, lng), zoom);
+            const tileX = Math.floor(point.x / 256);
+            const tileY = Math.floor(point.y / 256);
+            const pixelX = Math.floor((point.x - tileX * 256) * 2);
+            const pixelY = Math.floor((point.y - tileY * 256) * 2);
+            const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
+
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = () => {
+                try {
+                    spCtx.imageSmoothingEnabled = false;
+                    spCtx.clearRect(0, 0, 1, 1);
+                    spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
+                    const pData = spCtx.getImageData(0, 0, 1, 1).data;
+                    if (pData[3] === 0) { resolve(null); return; }
+                    resolve(Math.round((pData[0] * 256 + pData[1] + pData[2] / 256) - 32768));
+                } catch (e) { resolve(null); }
+            };
+            img.onerror = () => resolve(null);
+            img.src = url;
+        } catch (e) { resolve(null); }
+    });
 }
 
 async function updateCenterElevation() {
@@ -6256,6 +6759,10 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
 
 // Minimize controls on mobile when clicking the map
 map.on('click', (e) => {
+    if (poiPlacementMode) {
+        if (e.lngLat) handlePoiPlacementClick(e.lngLat.lat, e.lngLat.lng);
+        return;
+    }
     if (manualClimbMode) {
         if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest && e.originalEvent.target.closest('.maplibregl-marker')) {
             return;
@@ -6265,6 +6772,14 @@ map.on('click', (e) => {
     }
     if (window.innerWidth <= 600 && !isControlsMinimized) {
         toggleControls();
+    }
+});
+
+// Esc cancels an in-progress POI placement.
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && poiPlacementMode) {
+        cancelPoiPlacement();
+        if (statusDiv) statusDiv.textContent = translations[currentLang].status_ready || 'Ready.';
     }
 });
 
@@ -6279,6 +6794,9 @@ if (savedUnit) {
     const unitSel = document.getElementById('distanceUnit');
     if (unitSel) unitSel.value = savedUnit;
 }
+
+const showPoiCheckbox = document.getElementById('showPoi');
+if (showPoiCheckbox) showPoiCheckbox.checked = poiLayerVisible;
 
 let initialMapStateApplied = false;
 function applyInitialMapState() {
