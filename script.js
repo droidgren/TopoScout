@@ -2,6 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.7.1";
+const BUILD_NUMBER = "2941";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1859,6 +1860,7 @@ function updateLanguage() {
         if (tutBtn) tutBtn.querySelector('.btn-label').textContent = t.btn_tutorial;
         document.getElementById('lbl-version').textContent = t.lbl_version;
         document.getElementById('app-version').textContent = APP_VERSION;
+        if (document.getElementById('app-build')) document.getElementById('app-build').textContent = BUILD_NUMBER;
         if (document.getElementById('info-changelog-title')) document.getElementById('info-changelog-title').textContent = t.info_changelog_title;
         document.getElementById('info-privacy').textContent = t.info_privacy;
         if (document.getElementById('info-advanced-title')) document.getElementById('info-advanced-title').textContent = t.advanced_settings;
