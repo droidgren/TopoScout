@@ -207,6 +207,7 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" toposcout
 
 ## Changelog
 
+- **v2.7.2:** Points of Interest now persist on your device. The most recently synced POIs are cached in `localStorage`, so their pins stay visible on the map after you sign out of Google or reload the page. Signing in re-syncs and overwrites the cache; creating, editing, moving, and deleting POIs still require a signed-in Google account through the backend (`/api/pois`).
 - **v2.7.1:** Made the in-app **Refresh app** button and automatic updates refresh reliably on mobile browsers and the home-screen (PWA) app. The service worker now caches updated files with `cache: 'reload'` so a new release never re-caches stale copies from the browser HTTP cache, and the local scripts/styles are version-stamped (`?v=`) so a refresh can no longer be served stale assets. The service worker matches requests with `ignoreSearch` so the stamped URLs still resolve to their cached entries (offline still works).
 - **v2.7.0:** Added saved **Points of Interest (POIs)**. Sign in with Google, then tap the map to drop a colored **star** pin and give it a name, a description (URLs become clickable links), and a color. POI pins show the point's elevation and a copy-coordinates button, and can be opened (recenters the map), **moved**, edited, or deleted. POIs are stored per Google account through the optional backend (`/api/pois`) and load automatically on every device while you're signed in.
 - **v2.6.2:** Renamed the app to **TopoScout**.
