@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.7.2";
-const BUILD_NUMBER = "2943";
+const BUILD_NUMBER = "2944";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1589,40 +1589,54 @@ const map = L.map('map', {
     bearing: 0,
     initialTileLayer: initialMapLayer
 }).setView([savedLat, savedLng], savedZoom);
-map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), 'bottom-right');
+// Default MapLibre navigation controls: zoom in/out + built-in compass (reset
+// north + visualize pitch). The compass is auto-hidden while north-up below.
+map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
 
-// Reset-north compass control
-const ResetNorthControl = L.Control.extend({
+// Hide the built-in compass when the map is north-up (bearing 0) and reveal it
+// once rotated, keeping the corner uncluttered while still matching the default look.
+function updateNorthUpState() {
+    document.body.classList.toggle('north-up', map.getBearing() === 0);
+}
+map.on('rotate', updateNorthUpState);
+map.on('rotateend', updateNorthUpState);
+updateNorthUpState();
+
+// GPS / locate control — a single-button group placed above the navigation
+// controls. Reuses locateUser() so it shares the live-tracking toggle and marker
+// with the search-panel GPS button (both carry the .gps-toggle active state).
+const GpsControl = L.Control.extend({
     options: { position: 'bottomright' },
-    onAdd: function (map) {
-        const container = L.DomUtil.create('div', 'maplibregl-ctrl maplibregl-ctrl-group reset-north-control');
-        const btn = L.DomUtil.create('a', 'reset-north-btn', container);
+    onAdd: function () {
+        const container = L.DomUtil.create('div', 'maplibregl-ctrl maplibregl-ctrl-group gps-control');
+        const btn = L.DomUtil.create('button', 'maplibregl-ctrl-geolocate gps-ctrl-btn gps-toggle', container);
         const t = translations[currentLang] || {};
-        const resetNorthLabel = t.btn_reset_north || 'Reset North';
-        btn.href = '#';
-        btn.title = resetNorthLabel;
-        btn.setAttribute('role', 'button');
-        btn.setAttribute('aria-label', resetNorthLabel);
-        btn.innerHTML = '<svg class="compass-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="12,2 15,14 12,12 9,14" fill="#e53935"/><polygon points="12,22 9,14 12,12 15,14" fill="#999"/></svg>';
+        const label = t.btn_gps || 'GPS';
+        btn.type = 'button';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        // Use MapLibre's official geolocate icon (supplied by maplibre-gl.css via the
+        // .maplibregl-ctrl-geolocate class) rather than an inline SVG.
+        btn.innerHTML = '<span class="maplibregl-ctrl-icon" aria-hidden="true"></span>';
         L.DomEvent.disableClickPropagation(container);
         L.DomEvent.on(btn, 'click', function (e) {
             L.DomEvent.preventDefault(e);
-            map.setBearing(0);
+            locateUser();
         });
-        this._btn = btn;
-        map.on('rotate', this._onRotate, this);
         return container;
-    },
-    onRemove: function (map) {
-        map.off('rotate', this._onRotate, this);
-    },
-    _onRotate: function (e) {
-        const bearing = e.target.getBearing();
-        this._btn.querySelector('.compass-icon').style.transform = 'rotate(' + (-bearing) + 'deg)';
-        this._btn.closest('.reset-north-control').style.display = bearing === 0 ? 'none' : 'block';
     }
 });
-new ResetNorthControl().addTo(map);
+new GpsControl().addTo(map);
+
+// Lift the GPS control to the top of the bottom-right corner so it sits above
+// the navigation controls (it is added after the NavigationControl above).
+(function placeGpsAboveNav() {
+    const corner = document.querySelector('.maplibregl-ctrl-bottom-right');
+    const gps = corner && corner.querySelector('.gps-control');
+    if (corner && gps && corner.firstChild !== gps) {
+        corner.insertBefore(gps, corner.firstChild);
+    }
+})();
 
 // ==========================================
 // 5. FUNCTIONS
@@ -2022,11 +2036,18 @@ function updateLanguage() {
             editKeyBtn.title = label;
             editKeyBtn.setAttribute('aria-label', label);
         }
-        const gpsBtn = document.querySelector('.search-group .icon-btn[onclick="locateUser()"]');
-        if (gpsBtn) {
-            const label = t.btn_gps || 'GPS';
-            gpsBtn.title = label;
-            gpsBtn.setAttribute('aria-label', label);
+        const gpsLabel = t.btn_gps || 'GPS';
+        document.querySelectorAll('.gps-toggle').forEach((gpsBtn) => {
+            gpsBtn.title = gpsLabel;
+            gpsBtn.setAttribute('aria-label', gpsLabel);
+        });
+        // Localize the built-in MapLibre compass tooltip (its native locale is set
+        // at map construction and doesn't react to runtime language switches).
+        const resetNorthLabel = t.btn_reset_north || 'Reset bearing to north';
+        const compassBtn = document.querySelector('.maplibregl-ctrl-compass');
+        if (compassBtn) {
+            compassBtn.title = resetNorthLabel;
+            compassBtn.setAttribute('aria-label', resetNorthLabel);
         }
         const searchBtn = document.querySelector('.search-group .icon-btn[onclick="searchLocation()"]');
         if (searchBtn) {
@@ -2037,12 +2058,6 @@ function updateLanguage() {
         const lockRadiusLabel = document.getElementById('lbl-lock-circle');
         if (lockRadiusLabel) {
             lockRadiusLabel.title = t.lbl_lock_radius_title || 'Lock';
-        }
-        const resetNorthBtn = document.querySelector('.reset-north-btn');
-        if (resetNorthBtn) {
-            const label = t.btn_reset_north || 'Reset North';
-            resetNorthBtn.title = label;
-            resetNorthBtn.setAttribute('aria-label', label);
         }
         if (shareMapBtn) {
             shareMapBtn.title = t.btn_share_map_title || 'Share Map View';
@@ -2524,26 +2539,12 @@ function markRouteLegendStale() {
     }
 }
 
-// Hide the zoom controls while the route-names legend is shown (overlay on +
-// route names enabled), so the legend has the bottom-right corner to itself.
-// While shown, the compass also moves to the bottom-left (above the attribution)
-// so it doesn't collide with the legend; otherwise it stays bottom-right.
+// Hide the GPS + navigation controls while the route-names legend is shown
+// (overlay on + route names enabled) so the legend has the bottom-right corner
+// to itself. The hiding itself is done in CSS via the body.route-legend-on class.
 function updateZoomControlVisibility() {
     const legendActive = routeNamesOn && isOverlayOn();
     document.body.classList.toggle('route-legend-on', legendActive);
-    moveCompassControl(legendActive);
-}
-
-function moveCompassControl(toLeft) {
-    const compass = document.querySelector('.reset-north-control');
-    if (!compass) return;
-    const target = document.querySelector(toLeft ? '.maplibregl-ctrl-bottom-left' : '.maplibregl-ctrl-bottom-right');
-    if (!target) return;
-    // Keep the compass at the top of the corner: above the zoom controls on the
-    // right, above the attribution on the left.
-    if (compass.parentElement !== target || target.firstChild !== compass) {
-        target.insertBefore(compass, target.firstChild);
-    }
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -2734,8 +2735,7 @@ async function searchLocation() {
 function stopGpsTracking() {
     if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
     if (gpsMarker) { gpsMarker.remove(); gpsMarker = null; }
-    const btn = document.getElementById('gpsBtn');
-    if (btn) btn.classList.remove('active');
+    document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.remove('active'));
 }
 
 function locateUser() {
@@ -2756,8 +2756,7 @@ function locateUser() {
         }
     }
 
-    const btn = document.getElementById('gpsBtn');
-    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.add('active'));
 
     // Initial fix recenters the map once; continuous updates only move the marker.
     navigator.geolocation.getCurrentPosition(

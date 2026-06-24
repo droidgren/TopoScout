@@ -1379,27 +1379,37 @@ details[open] summary {
     background: #bdbdbd;
 }
 
-/* --- RESET NORTH COMPASS CONTROL --- */
-.reset-north-control {
-    display: none;
+/* --- MAP CONTROLS (zoom / compass / GPS) --- */
+/* The global `button` rule (rounded corners + bold) leaks into the native
+   MapLibre control buttons; undo it so they keep the default grouped look. */
+.maplibregl-ctrl-group > button {
+    border-radius: 0;
+    font-weight: normal;
+}
+.maplibregl-ctrl-group > button:first-child { border-radius: 4px 4px 0 0; }
+.maplibregl-ctrl-group > button:last-child  { border-radius: 0 0 4px 4px; }
+.maplibregl-ctrl-group > button:only-child  { border-radius: 4px; }
+
+/* Auto-hide the built-in compass while the map is north-up. The zoom-out button
+   then becomes the last visible control, so round its bottom corners. */
+body.north-up .maplibregl-ctrl-compass { display: none; }
+body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
+
+/* On-map GPS button: a single-button control group above the zoom controls. The
+   icon is MapLibre's official geolocate icon, supplied by maplibre-gl.css through
+   the .maplibregl-ctrl-geolocate class (no inline SVG). Default sizing/hover come
+   from MapLibre's control button styles. The active (live-tracking) state mirrors
+   the search-panel GPS button with a blue fill; invert the icon to white for it. */
+.gps-ctrl-btn.active {
+    background: #1565c0;
 }
 
-.reset-north-btn {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    background: white !important;
-    cursor: pointer;
+.gps-ctrl-btn.active:hover {
+    background: #0d47a1;
 }
 
-.reset-north-btn:hover {
-    background: #f4f4f4 !important;
-}
-
-.compass-icon {
-    transition: transform 0.15s ease;
+.gps-ctrl-btn.active .maplibregl-ctrl-icon {
+    filter: brightness(0) invert(1);
 }
 
 /* ── Manual Climb ────────────────────────────────────────────────── */

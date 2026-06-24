@@ -15,7 +15,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2943">
+    <link rel="stylesheet" href="style.css?v=2944">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -276,7 +276,7 @@
             <div class="search-group">
                 <input type="text" id="searchInput" placeholder="Search location">
                 <button class="icon-btn" onclick="searchLocation()" title="Search"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
-                <button id="gpsBtn" class="icon-btn" onclick="locateUser()" title="GPS"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></button>
+                <button id="gpsBtn" class="icon-btn gps-toggle" onclick="locateUser()" title="GPS"><svg viewBox="3 3 14 14" fill="currentColor" aria-hidden="true"><path d="M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7"/><circle cx="10" cy="10" r="2"/></svg></button>
                 <button id="enable3dBtn" class="icon-btn" onclick="toggle3dView()" title="Enable 3D" aria-label="Enable 3D"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></button>
             </div>
 
@@ -577,9 +577,9 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script src="lang/en.js?v=2943"></script>
-    <script src="lang/sv.js?v=2943"></script>
-    <script src="script.js?v=2943"></script>
+    <script src="lang/en.js?v=2944"></script>
+    <script src="lang/sv.js?v=2944"></script>
+    <script src="script.js?v=2944"></script>
 </body>
 
 </html>
