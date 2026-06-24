@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.7.1";
-const BUILD_NUMBER = "2941";
+const APP_VERSION = "2.7.2";
+const BUILD_NUMBER = "2942";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1419,6 +1419,19 @@ let polylines = [];
 let poiList = [];
 let poiMarkers = [];
 let poiLayerVisible = (localStorage.getItem('topo_show_poi') !== '0'); // default on
+// Cache the signed-in POIs so their pins stay visible after logout / on reload.
+const POI_CACHE_STORAGE_KEY = 'topo_poi_cache';
+function savePoiCache() {
+    try { localStorage.setItem(POI_CACHE_STORAGE_KEY, JSON.stringify(poiList)); } catch (e) { /* storage unavailable */ }
+}
+function loadPoiCache() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(POI_CACHE_STORAGE_KEY));
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
 let poiPlacementMode = false;
 let poiPlacementMoveId = null; // id of the POI being relocated, or null when placing a new one
 let poiFormState = null; // { id?, lat, lng, elevation } while the form modal is open
@@ -2892,7 +2905,8 @@ window.updatePoiModalAuthUI = updatePoiModalAuthUI;
 // ---- Backend calls (reuse the GPX auth helpers) ----
 async function refreshPoiList() {
     if (!isBackendEnabled() || !isGoogleSignedIn()) {
-        poiList = [];
+        // Logged out / no backend: show the last-synced pins from the local cache.
+        poiList = loadPoiCache();
         renderPoiList();
         renderPoiMarkers();
         return;
@@ -2905,8 +2919,10 @@ async function refreshPoiList() {
         if (!resp.ok) throw new Error('Failed to list POIs');
         const data = await resp.json();
         poiList = Array.isArray(data.pois) ? data.pois : [];
+        savePoiCache();
     } catch (e) {
-        poiList = [];
+        // Keep showing the cached pins rather than blanking on a transient error.
+        poiList = loadPoiCache();
     }
     renderPoiList();
     renderPoiMarkers();
@@ -4153,7 +4169,8 @@ function clearGoogleAuthState() {
     } catch (e) { /* ignore */ }
     updateGpxModalAuthUI();
     updatePoiModalAuthUI();
-    clearPoiState();
+    // Keep the user's pins visible after logout by falling back to the local cache.
+    refreshPoiList();
 }
 
 // Tell the backend who we are so it can merge any anonymous uploads into the account.
@@ -6860,6 +6877,9 @@ function whenGpxMapReady(callback) {
 (async function initializeBackendFeatures() {
     await detectBackendAvailability();
     if (isBackendEnabled()) initGoogleAuth();
+    // Render cached POIs on a logged-out / backend-less load too (when signed in,
+    // initGoogleAuth already fetches the fresh list).
+    whenGpxMapReady(() => { if (!isGoogleSignedIn()) refreshPoiList(); });
     // The Strava heatmap overlay is served by the backend, so only offer it when one is
     // present. If a stale selection restored it on a backend-less load, revert to none.
     const stravaOpt = extraLayerSelect && extraLayerSelect.querySelector('option[value="strava_heatmap"]');
