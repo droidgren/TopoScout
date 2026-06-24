@@ -15,7 +15,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2942">
+    <link rel="stylesheet" href="style.css?v=2943">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -55,7 +55,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.7.2</span> (Build <span id="app-build">2942</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.7.2</span> (Build <span id="app-build">2943</span>)
             </p>
 
             <details
@@ -63,7 +63,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
-                    <li><strong>v2.7.2:</strong> Your Points of Interest now stay visible on the map after you sign out of Google or reload the page — the most recently synced pins are cached on your device. Adding, editing, and deleting still require signing in.</li>
+                    <li><strong>v2.7.2:</strong> Your Points of Interest now stay visible on the map after you sign out of Google or reload the page — the most recently synced pins are cached on your device. Adding, editing, and deleting still require signing in. Also fixed the copy-coordinates button, which had stopped showing its icon correctly in popups.</li>
                     <li><strong>v2.7.1:</strong> Made the in-app "Refresh app" button and automatic updates refresh reliably on mobile browsers and the home-screen (PWA) app. The service worker now always pulls fresh files from the network when caching an update, and the scripts and styles are version-stamped so a refresh can no longer be served stale copies from the browser cache.</li>
                     <li><strong>v2.7.0:</strong> Added saved Points of Interest (POIs). Sign in with Google, tap the map to drop a star pin, and give it a name, a description (links become clickable), and a color. POI pins show their elevation and a copy-coordinates button, and can be moved, edited, or deleted. They load automatically on every device while you're signed in.</li>
                     <li><strong>v2.6.2:</strong> Renamed the app to TopoScout.</li>
@@ -577,9 +577,9 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script src="lang/en.js?v=2942"></script>
-    <script src="lang/sv.js?v=2942"></script>
-    <script src="script.js?v=2942"></script>
+    <script src="lang/en.js?v=2943"></script>
+    <script src="lang/sv.js?v=2943"></script>
+    <script src="script.js?v=2943"></script>
 </body>
 
 </html>

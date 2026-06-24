@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.7.2";
-const BUILD_NUMBER = "2942";
+const BUILD_NUMBER = "2943";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -3027,7 +3027,7 @@ function poiPopupHtml(poi) {
         + descLine
         + elevLine
         + '<div class="coord-box"><span>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>'
-        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">ߓ뼯button></div>'
+        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">📋</button></div>'
         + '<div class="poi-popup-actions">'
         + '<button class="secondary-btn poi-popup-btn" onclick="editPoi(\'' + poi.id + '\')">' + (t.btn_edit_poi || 'Edit') + '</button>'
         + '<button class="secondary-btn poi-popup-btn" onclick="startPoiMove(\'' + poi.id + '\')">' + (t.btn_move_poi || 'Move') + '</button>'
@@ -5664,7 +5664,7 @@ function findPeaks() {
             <span class="popup-meta">${t.res_dist}: ${distKm} km</span>
             <div class="coord-box">
                 <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">ߓ뼯button>
+                <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
             </div>`;
         const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
         if (isHighest) marker.openPopup();
@@ -5848,7 +5848,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${distKmStart} km</span>
                 <div class="coord-box">
                     <span>${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">ߓ뼯button>
+                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
@@ -5868,7 +5868,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${distKmEnd} km</span>
                 <div class="coord-box">
                     <span>${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">ߓ뼯button>
+                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
@@ -6601,7 +6601,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <div class="coord-box">
             <span>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
             <button class="copy-btn"
-                    onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">ߓ뼯button>
+                    onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">📋</button>
         </div>`);
     markers.push(startM);
 
@@ -6615,7 +6615,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <div class="coord-box">
             <span>${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span>
             <button class="copy-btn"
-                    onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">ߓ뼯button>
+                    onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">📋</button>
         </div>`);
     markers.push(endM);
     endM.openPopup();
