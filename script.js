@@ -106,13 +106,13 @@ const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
-    "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 19 },
+    "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 20 },
     "thunderforest": { url: '', attribution: 'ThunderForest', maxZoom: 22 },
     "jawg_terrain": { url: '', attribution: '&copy; <a href="https://www.jawg.io/">Jawg</a> &copy; OpenStreetMap contributors', maxZoom: 22 },
     "carto_voyager": { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
     "carto_positron": { url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
-    "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 17 },
-    "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 18 },
+    "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 20 },
+    "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 19 },
     "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
     "satellite": { url: SATELLITE_URL, attribution: 'Esri', maxZoom: 19 },
     "debug": { url: DATA_TILE_URL, attribution: '<a href="https://github.com/mapterhorn/mapterhorn">Mapterhorn</a> ', maxZoom: ELEVATION_TILE_MAX_ZOOM, opacity: 1 }
@@ -3009,7 +3009,7 @@ function poiPopupHtml(poi) {
         + descLine
         + elevLine
         + '<div class="coord-box"><span>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>'
-        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">📋</button></div>'
+        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">ߓ뼯button></div>'
         + '<div class="poi-popup-actions">'
         + '<button class="secondary-btn poi-popup-btn" onclick="editPoi(\'' + poi.id + '\')">' + (t.btn_edit_poi || 'Edit') + '</button>'
         + '<button class="secondary-btn poi-popup-btn" onclick="startPoiMove(\'' + poi.id + '\')">' + (t.btn_move_poi || 'Move') + '</button>'
@@ -5645,7 +5645,7 @@ function findPeaks() {
             <span class="popup-meta">${t.res_dist}: ${distKm} km</span>
             <div class="coord-box">
                 <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
+                <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">ߓ뼯button>
             </div>`;
         const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
         if (isHighest) marker.openPopup();
@@ -5829,7 +5829,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${distKmStart} km</span>
                 <div class="coord-box">
                     <span>${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">ߓ뼯button>
                 </div>`;
 
             const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
@@ -5849,7 +5849,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${distKmEnd} km</span>
                 <div class="coord-box">
                     <span>${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">ߓ뼯button>
                 </div>`;
 
             const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
@@ -6582,12 +6582,12 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <div class="coord-box">
             <span>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
             <button class="copy-btn"
-                    onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">📋</button>
+                    onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">ߓ뼯button>
         </div>`);
     markers.push(startM);
 
     const endM = L.marker(e, { icon: redIcon }).addTo(map).bindPopup(`
-        <span class="popup-header">📏 Manual Climb</span>
+        <span class="popup-header">ߓanual Climb</span>
         <span class="popup-height">${t.res_climb}: +${Math.round(totalAscent)} m</span>
         <span class="popup-meta">${t.res_elev}: ${Math.round(endElev)} m</span>
         <span class="popup-meta">${t.res_vertical_drop}: ${vertDrop >= 0 ? '+' : ''}${vertDrop} m</span>
@@ -6596,7 +6596,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <div class="coord-box">
             <span>${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span>
             <button class="copy-btn"
-                    onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">📋</button>
+                    onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">ߓ뼯button>
         </div>`);
     markers.push(endM);
     endM.openPopup();
