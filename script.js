@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.7.2";
-const BUILD_NUMBER = "2944";
+const APP_VERSION = "2.7.3";
+const BUILD_NUMBER = "2949";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1441,6 +1441,7 @@ let manualClimbPoints = [];    // L.latLng objects
 let manualClimbMarkers = [];   // native maplibregl.Marker objects (preview dots)
 let manualClimbPolyline = null; // L.polyline (blue preview line)
 let gpsMarker = null;          // native maplibregl.Marker for live GPS position
+let gpsAccuracyCircle = null;  // L.circle showing GPS margin of error (meters)
 let gpsWatchId = null;         // navigator.geolocation watch id (null = tracking off)
 let slopeOverlay = null;
 let extraOverlayLayer = null;
@@ -2735,6 +2736,7 @@ async function searchLocation() {
 function stopGpsTracking() {
     if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
     if (gpsMarker) { gpsMarker.remove(); gpsMarker = null; }
+    if (gpsAccuracyCircle) { gpsAccuracyCircle.remove(); gpsAccuracyCircle = null; }
     document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.remove('active'));
 }
 
@@ -2745,6 +2747,12 @@ function locateUser() {
     if (!navigator.geolocation) { statusDiv.textContent = t.status_gps_missing; return; }
     statusDiv.textContent = t.status_gps_fetch;
 
+    // Accuracy at or below this many metres is treated as "pinpoint": no ring is shown.
+    const GPS_PINPOINT_M = 5;
+    // Cap the rendered ring so a coarse "Approximate Location" fix (accuracy of many
+    // kilometres) doesn't swamp the map; beyond this it just reads as "low accuracy".
+    const GPS_MAX_RING_M = 1000;
+
     function updateGpsMarker(pos) {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (gpsMarker) {
@@ -2753,6 +2761,28 @@ function locateUser() {
             const el = document.createElement('div');
             el.className = 'gps-marker';
             gpsMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map._map);
+        }
+
+        // Shade a ring sized to the reported margin of error (metres). A tighter fix
+        // shrinks the ring; a pinpoint fix removes it so only the dot remains.
+        const acc = pos.coords.accuracy;
+        if (Number.isFinite(acc) && acc > GPS_PINPOINT_M) {
+            const radius = Math.min(acc, GPS_MAX_RING_M);
+            if (gpsAccuracyCircle) {
+                gpsAccuracyCircle.setLatLng([lat, lng]).setRadius(radius);
+            } else {
+                gpsAccuracyCircle = L.circle([lat, lng], {
+                    radius,
+                    color: '#007bff',
+                    fillColor: '#007bff',
+                    fillOpacity: 0.15,
+                    weight: 1,
+                    opacity: 0.4
+                }).addTo(map);
+            }
+        } else if (gpsAccuracyCircle) {
+            gpsAccuracyCircle.remove();
+            gpsAccuracyCircle = null;
         }
     }
 
