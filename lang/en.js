@@ -24,6 +24,7 @@ const LANG_EN = {
     route_legend_collapse: "Collapse",
     route_legend_expand: "Expand",
     lbl_enable_tilt: "Enable tilt",
+    lbl_max_pitch: "Max tilt angle:",
     lbl_enable_3d: "Enable 3D",
     lbl_3d_exaggeration: "3D Exaggeration",
     lbl_enable_exaggeration_slider: "Enable 3D exaggeration slider",
