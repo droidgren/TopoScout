@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.7.3";
-const BUILD_NUMBER = "2949";
+const APP_VERSION = "2.7.4";
+const BUILD_NUMBER = "2950";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1538,12 +1538,31 @@ function parseSharedMapHash(hashValue) {
     };
 }
 
+// Browser-language fallback: Swedish ('sv', 'sv-SE', ...) -> sv, anything else -> en.
+// Only sv/en exist in translations, so non-Swedish collapses to the en default.
+function detectBrowserLang() {
+    const candidates = navigator.languages && navigator.languages.length
+        ? navigator.languages
+        : [navigator.language || ''];
+    return candidates.some(l => /^sv\b/i.test(l)) ? 'sv' : 'en';
+}
+
 function resolveInitialAppState() {
     const params = new URLSearchParams(location.search);
     const requestedLang = params.get('lang');
-    const storedLang = localStorage.getItem('topo_lang') || 'en';
+    const storedLang = localStorage.getItem('topo_lang');
+    const langChosen = localStorage.getItem('topo_lang_chosen');
     const sharedMapState = parseSharedMapHash(location.hash);
-    const initialLang = translations[requestedLang] ? requestedLang : (translations[storedLang] ? storedLang : 'en');
+    // Precedence: explicit ?lang= -> a previously chosen language -> auto-detect
+    // from the browser. Auto-detect re-runs every visit until the user overrides.
+    let initialLang;
+    if (translations[requestedLang]) {
+        initialLang = requestedLang;
+    } else if (langChosen && translations[storedLang]) {
+        initialLang = storedLang;
+    } else {
+        initialLang = detectBrowserLang();
+    }
 
     let initialLayer = localStorage.getItem('topo_layer') || 'opentopo';
     if (!isSupportedLayer(initialLayer)) {
@@ -2071,6 +2090,8 @@ function setLanguage(lang) {
     if (lang !== 'en' && lang !== 'sv') return;
     currentLang = lang;
     localStorage.setItem('topo_lang', currentLang);
+    // Mark this as a deliberate user choice so auto-detection no longer overrides it.
+    localStorage.setItem('topo_lang_chosen', '1');
     updateLanguage();
 }
 
