@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.8.0";
-const BUILD_NUMBER = "2954";
+const BUILD_NUMBER = "2956";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -134,6 +134,8 @@ const ROUTE_ISOLATED_COLOR_KEY = 'topo_route_isolated_color'; // its draw color
 const HILLSHADE_ENABLED_KEY = 'topo_hillshade';               // 'true' when the hillshade relief layer is on
 const HILLSHADE_OPACITY_KEY = 'topo_hillshade_opacity';       // hillshade strength as a 0-100 percentage
 const HILLSHADE_SLIDER_KEY = 'topo_hillshade_slider';        // 'true' when the on-map opacity slider is shown
+const EXAGGERATION_VALUE_KEY = 'topo_3d_exaggeration';        // 3D terrain exaggeration multiplier
+const EXAGGERATION_SLIDER_KEY = 'topo_3d_exaggeration_slider';// 'true' when the on-map exaggeration slider is shown
 
 const OVERLAY_WMT_ACTIVITY = {
     "waymarked_hiking": 'hiking',
@@ -1382,7 +1384,6 @@ const overzoomCheckbox = document.getElementById('enableOverzoom');
 const tiltCheckbox = document.getElementById('enableTilt');
 const enable3dBtn = document.getElementById('enable3dBtn');
 const hillshadeBtn = document.getElementById('hillshadeBtn');
-const exaggerationInput = document.getElementById('exaggerationInput');
 
 // ==========================================
 // 3. LANGUAGE & TRANSLATIONS
@@ -1966,7 +1967,13 @@ function updateLanguage() {
         if (routeLegend) refreshRouteLegend();
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
         if (enable3dBtn) enable3dBtn.title = t.lbl_enable_3d;
-        if (document.getElementById('lbl-3d-exaggeration')) document.getElementById('lbl-3d-exaggeration').textContent = t.lbl_3d_exaggeration;
+        if (document.getElementById('lbl-enable-exaggeration-slider')) document.getElementById('lbl-enable-exaggeration-slider').textContent = t.lbl_enable_exaggeration_slider;
+        const exaggerationSliderControl = document.getElementById('exaggeration-slider-control');
+        if (exaggerationSliderControl) {
+            const exaggerationLabel = t.lbl_3d_exaggeration || '3D Exaggeration';
+            exaggerationSliderControl.title = exaggerationLabel;
+            exaggerationSliderControl.setAttribute('aria-label', exaggerationLabel);
+        }
         document.querySelector('#scan-btn .btn-label').textContent = t.btn_scan;
         document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
@@ -2207,7 +2214,13 @@ function applyCurrentLayerMaxZoom() {
 }
 
 function getTerrainExaggeration() {
-    return exaggerationInput ? (parseFloat(exaggerationInput.value) || DEFAULT_TERRAIN_EXAGGERATION) : DEFAULT_TERRAIN_EXAGGERATION;
+    let val;
+    try {
+        val = parseFloat(localStorage.getItem(EXAGGERATION_VALUE_KEY));
+    } catch (error) {
+        val = NaN;
+    }
+    return Number.isFinite(val) ? val : DEFAULT_TERRAIN_EXAGGERATION;
 }
 
 function is3dEnabled() {
@@ -2220,6 +2233,7 @@ function syncTerrainControls() {
 
 function setTerrainEnabled(enabled) {
     if (enable3dBtn) enable3dBtn.classList.toggle('active', enabled);
+    syncExaggerationSlider();
     if (!map) return;
     if (enabled) {
         map.setTerrain({ exaggeration: getTerrainExaggeration() });
@@ -2260,6 +2274,7 @@ function setHillshadeEnabled(enabled) {
     } catch (error) { /* storage unavailable */ }
     if (hillshadeBtn) hillshadeBtn.classList.toggle('active', !!enabled);
     if (map) map.setHillshade(!!enabled, getHillshadeExaggeration());
+    syncHillshadeSlider();
 }
 
 window.toggleHillshade = function () {
@@ -2274,11 +2289,31 @@ function syncHillshadeSlider() {
     try {
         show = localStorage.getItem(HILLSHADE_SLIDER_KEY) === 'true';
     } catch (error) { /* storage unavailable */ }
+    // Only show the opacity slider when its setting is on AND hillshade is enabled.
+    show = show && isHillshadeEnabled();
     control.classList.toggle('visible', show);
-    // The slider occupies the bottom-left corner, so temporarily hide the
-    // attribution control it replaces while the slider is visible.
+    updateMapSliderChrome();
+}
+
+function syncExaggerationSlider() {
+    const control = document.getElementById('exaggeration-slider-control');
+    if (!control) return;
+    let show = false;
+    try {
+        show = localStorage.getItem(EXAGGERATION_SLIDER_KEY) === 'true';
+    } catch (error) { /* storage unavailable */ }
+    // Only show the exaggeration slider when its setting is on AND 3D is enabled.
+    show = show && is3dEnabled();
+    control.classList.toggle('visible', show);
+    updateMapSliderChrome();
+}
+
+// The on-map slider stack occupies the bottom-left corner, so temporarily hide the
+// attribution control it replaces whenever any slider is visible.
+function updateMapSliderChrome() {
+    const anyVisible = !!document.querySelector('#map-slider-stack .map-slider.visible');
     const attribCorner = document.querySelector('.maplibregl-ctrl-bottom-left');
-    if (attribCorner) attribCorner.style.display = show ? 'none' : '';
+    if (attribCorner) attribCorner.style.display = anyVisible ? 'none' : '';
     adjustMapControlsForElevation();
 }
 
@@ -4740,11 +4775,11 @@ function adjustMapControlsForElevation() {
             ? `calc(${Math.ceil(h)}px + env(safe-area-inset-bottom, 0px))`
             : '';
     }
-    // Keep the on-map hillshade slider (which replaces the bottom-left attribution)
+    // Keep the on-map slider stack (which replaces the bottom-left attribution)
     // above the elevation profile bar as well.
-    const hillshadeSlider = document.getElementById('hillshade-slider-control');
-    if (hillshadeSlider) {
-        hillshadeSlider.style.bottom = h > 0
+    const mapSliderStack = document.getElementById('map-slider-stack');
+    if (mapSliderStack) {
+        mapSliderStack.style.bottom = h > 0
             ? `calc(${Math.ceil(h)}px + 10px + env(safe-area-inset-bottom, 0px))`
             : '';
     }
@@ -6870,6 +6905,32 @@ if (mapHillshadeOpacity) {
     });
 }
 syncHillshadeSlider();
+
+const exaggerationSliderToggle = document.getElementById('enableExaggerationSlider');
+if (exaggerationSliderToggle) {
+    let exagSliderOn = false;
+    try { exagSliderOn = localStorage.getItem(EXAGGERATION_SLIDER_KEY) === 'true'; } catch (error) { /* storage unavailable */ }
+    exaggerationSliderToggle.checked = exagSliderOn;
+    exaggerationSliderToggle.addEventListener('change', (e) => {
+        try { localStorage.setItem(EXAGGERATION_SLIDER_KEY, e.target.checked); } catch (error) { /* storage unavailable */ }
+        syncExaggerationSlider();
+    });
+}
+
+const mapExaggeration = document.getElementById('mapExaggeration');
+const mapExaggerationVal = document.getElementById('mapExaggerationVal');
+if (mapExaggeration) {
+    const exag = getTerrainExaggeration();
+    mapExaggeration.value = exag;
+    if (mapExaggerationVal) mapExaggerationVal.textContent = exag.toFixed(1) + '×';
+    mapExaggeration.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (mapExaggerationVal) mapExaggerationVal.textContent = val.toFixed(1) + '×';
+        try { localStorage.setItem(EXAGGERATION_VALUE_KEY, val); } catch (error) { /* storage unavailable */ }
+        if (is3dEnabled() && map) map.setTerrain({ exaggeration: val });
+    });
+}
+syncExaggerationSlider();
 if (extraLayerSelect) {
     // Route names are always shown whenever an overlay is selected; the dropdown's
     // inline onchange (handleExtraLayerChange) drives all user-initiated changes.
@@ -6894,14 +6955,6 @@ if (tiltCheckbox) {
 }
 if (enable3dBtn) {
     enable3dBtn.classList.remove('active');
-}
-if (exaggerationInput) {
-    exaggerationInput.value = DEFAULT_TERRAIN_EXAGGERATION.toFixed(1);
-    exaggerationInput.addEventListener('input', () => {
-        if (is3dEnabled() && map) {
-            map.setTerrain({ exaggeration: getTerrainExaggeration() });
-        }
-    });
 }
 setTiltEnabled(!(tiltCheckbox && tiltCheckbox.checked === false));
 syncTerrainControls();
