@@ -1829,13 +1829,20 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     stroke-linejoin: round;
 }
 
-/* On-map hillshade opacity slider (toggled from Advanced settings). Sits in the
-   bottom-left corner, temporarily replacing the attribution control while shown. */
-#hillshade-slider-control {
+/* On-map sliders (toggled from Advanced settings). The stack sits in the bottom-left
+   corner, temporarily replacing the attribution control while any slider is shown. */
+#map-slider-stack {
     position: absolute;
     left: 10px;
     bottom: 10px;
     z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.map-slider {
     display: none;
     align-items: center;
     gap: 8px;
@@ -1848,22 +1855,22 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     color: #333;
 }
 
-#hillshade-slider-control.visible {
+.map-slider.visible {
     display: flex;
 }
 
-#hillshade-slider-control .icon-svg {
+.map-slider .icon-svg {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
 }
 
-#hillshade-slider-control input[type="range"] {
+.map-slider input[type="range"] {
     width: 110px;
     margin: 0;
 }
 
-#hillshade-slider-control #mapHillshadeOpacityVal {
+.map-slider .map-slider-val {
     font-size: 12px;
     min-width: 34px;
     text-align: right;
