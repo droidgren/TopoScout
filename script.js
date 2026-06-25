@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.8.0";
-const BUILD_NUMBER = "2956";
+const APP_VERSION = "2.8.1";
+const BUILD_NUMBER = "2957";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -136,6 +136,9 @@ const HILLSHADE_OPACITY_KEY = 'topo_hillshade_opacity';       // hillshade stren
 const HILLSHADE_SLIDER_KEY = 'topo_hillshade_slider';        // 'true' when the on-map opacity slider is shown
 const EXAGGERATION_VALUE_KEY = 'topo_3d_exaggeration';        // 3D terrain exaggeration multiplier
 const EXAGGERATION_SLIDER_KEY = 'topo_3d_exaggeration_slider';// 'true' when the on-map exaggeration slider is shown
+const MAX_PITCH_KEY = 'topo_max_pitch';                       // tilt cap in degrees (0-85); the Tilt/3D buttons ease to it
+const DEFAULT_MAX_PITCH = 60;                                 // MapLibre's default pitch cap
+const MAPLIBRE_MAX_PITCH = 85;                                // MapLibre's hard upper limit for pitch
 
 const OVERLAY_WMT_ACTIVITY = {
     "waymarked_hiking": 'hiking',
@@ -713,6 +716,7 @@ function createMapAdapter(containerId, options) {
         maxZoom: toNativeZoom(getEffectiveLayerMaxZoom(initialMaxZoom)),
         bearing: options.bearing || 0,
         pitch: 0,
+        maxPitch: getMaxPitch(),
         dragRotate: true,
         pitchWithRotate: true,
         touchPitch: true,
@@ -1100,6 +1104,12 @@ function createMapAdapter(containerId, options) {
         },
         getPitch() {
             return nativeMap.getPitch();
+        },
+        setMaxPitch(maxPitch) {
+            if (typeof maxPitch === 'number' && Number.isFinite(maxPitch)) {
+                nativeMap.setMaxPitch(maxPitch);
+            }
+            return this;
         },
         setTiltEnabled(enabled) {
             this._tiltEnabled = enabled !== false;
@@ -1966,6 +1976,7 @@ function updateLanguage() {
         }
         if (routeLegend) refreshRouteLegend();
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
+        if (document.getElementById('lbl-max-pitch')) document.getElementById('lbl-max-pitch').textContent = t.lbl_max_pitch;
         if (enable3dBtn) enable3dBtn.title = t.lbl_enable_3d;
         if (document.getElementById('lbl-enable-exaggeration-slider')) document.getElementById('lbl-enable-exaggeration-slider').textContent = t.lbl_enable_exaggeration_slider;
         const exaggerationSliderControl = document.getElementById('exaggeration-slider-control');
@@ -2223,6 +2234,19 @@ function getTerrainExaggeration() {
     return Number.isFinite(val) ? val : DEFAULT_TERRAIN_EXAGGERATION;
 }
 
+// The tilt cap (degrees) chosen under Advanced settings. It bounds manual pitch
+// gestures and is the angle the Tilt/3D buttons ease to. Clamped to MapLibre's range.
+function getMaxPitch() {
+    let val;
+    try {
+        val = parseFloat(localStorage.getItem(MAX_PITCH_KEY));
+    } catch (error) {
+        val = NaN;
+    }
+    if (!Number.isFinite(val)) val = DEFAULT_MAX_PITCH;
+    return Math.min(MAPLIBRE_MAX_PITCH, Math.max(0, val));
+}
+
 function is3dEnabled() {
     return !!(enable3dBtn && enable3dBtn.classList.contains('active'));
 }
@@ -2237,7 +2261,7 @@ function setTerrainEnabled(enabled) {
     if (!map) return;
     if (enabled) {
         map.setTerrain({ exaggeration: getTerrainExaggeration() });
-        map.easeTo({ pitch: 60, duration: 1000 });
+        map.easeTo({ pitch: getMaxPitch(), duration: 1000 });
         return;
     }
     map.setTerrain(null);
@@ -6931,6 +6955,26 @@ if (mapExaggeration) {
     });
 }
 syncExaggerationSlider();
+
+// Max tilt angle: bounds manual pitch gestures (map.maxPitch) and is the angle the
+// Tilt/3D buttons ease to. While 3D is on, dragging it re-tilts the view live.
+const maxPitchInput = document.getElementById('maxPitchInput');
+const maxPitchVal = document.getElementById('maxPitchVal');
+if (maxPitchInput) {
+    const pitchCap = getMaxPitch();
+    maxPitchInput.value = pitchCap;
+    if (maxPitchVal) maxPitchVal.textContent = pitchCap + '°';
+    maxPitchInput.addEventListener('input', (e) => {
+        const val = Math.min(MAPLIBRE_MAX_PITCH, Math.max(0, parseInt(e.target.value, 10) || 0));
+        if (maxPitchVal) maxPitchVal.textContent = val + '°';
+        try { localStorage.setItem(MAX_PITCH_KEY, val); } catch (error) { /* storage unavailable */ }
+        if (map) {
+            map.setMaxPitch(val);
+            if (is3dEnabled()) map.easeTo({ pitch: val, duration: 200 });
+        }
+    });
+}
+
 if (extraLayerSelect) {
     // Route names are always shown whenever an overlay is selected; the dropdown's
     // inline onchange (handleExtraLayerChange) drives all user-initiated changes.

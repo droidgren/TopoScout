@@ -24,6 +24,7 @@ const LANG_SV = {
     route_legend_collapse: "Fäll ihop",
     route_legend_expand: "Visa",
     lbl_enable_tilt: "Aktivera tilt",
+    lbl_max_pitch: "Maximal lutningsvinkel:",
     lbl_enable_3d: "Aktivera 3D",
     lbl_3d_exaggeration: "3D-förstärkning",
     lbl_enable_exaggeration_slider: "Visa skjutreglage för 3D-förstärkning",
