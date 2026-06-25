@@ -1,6 +1,6 @@
 # TopoScout
 
-TopoScout is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend.
+TopoScout is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend. Its designed to work on mobile devices as well, and can be [installed as an app](#installing-as-an-app-pwa).
 
 🌐 Open the [Live demo](https://toposcout.org/) with GPX store.
 
@@ -153,6 +153,26 @@ Optional overlays can be drawn on top of any base layer from the **Route Overlay
 - Click the share button in the header to copy a map-state link.
 - Install the app from the About dialog or the mobile install prompt when supported.
 
+## Installing as an App (PWA)
+
+TopoScout is a Progressive Web App, so you can install it to your home screen or desktop for a full-screen, app-like experience. Once installed, the core app shell works offline.
+
+### Android (Chrome)
+
+- Open [toposcout.org](https://toposcout.org/) in Chrome.
+- Tap the **⋮** menu → **Install app** (or **Add to Home screen**).
+- You can also use the in-app install prompt, or the **Install as App** button in the About dialog.
+
+### iPhone / iPad (Safari)
+
+- Open [toposcout.org](https://toposcout.org/) in **Safari** (installing isn't available in other iOS browsers).
+- Tap the **Share** button.
+- Scroll down and tap **Add to Home Screen**, then tap **Add**.
+
+### Desktop (Chrome / Edge)
+
+- Click the install icon in the address bar, or use the **Install as App** button in the About dialog.
+
 ## State, Sharing, And Storage
 
 - The app remembers language, map position, zoom, and selected layer in `localStorage`.
@@ -249,6 +269,13 @@ TopoScout is client-side by default.
 - No search history is stored on a backend.
 - API keys are only stored locally in the browser and sent directly to the relevant map provider when used.
 - The optional backend only stores the GPX files you explicitly upload, and only on the server you choose to run. The public live demo and static hosting run without it.
+
+## Feedback
+
+I'd love to hear from you — feedback helps shape where TopoScout goes next.
+
+- **Ideas, feature requests, and general feedback:** start a thread in [GitHub Discussions](https://github.com/droidgren/TopoScout/discussions).
+- **Bug reports:** open an issue on [GitHub Issues](https://github.com/droidgren/TopoScout/issues).
 
 ## Credits
 
