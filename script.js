@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.7.4";
-const BUILD_NUMBER = "2950";
+const APP_VERSION = "2.8.0";
+const BUILD_NUMBER = "2954";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -131,6 +131,9 @@ const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key,
 const ROUTE_LEGEND_COLLAPSED_KEY = 'topo_route_legend_collapsed'; // 'true' when the route-names legend is collapsed
 const ROUTE_ISOLATED_ID_KEY = 'topo_route_isolated_id';       // relation id of the persisted isolated trail
 const ROUTE_ISOLATED_COLOR_KEY = 'topo_route_isolated_color'; // its draw color
+const HILLSHADE_ENABLED_KEY = 'topo_hillshade';               // 'true' when the hillshade relief layer is on
+const HILLSHADE_OPACITY_KEY = 'topo_hillshade_opacity';       // hillshade strength as a 0-100 percentage
+const HILLSHADE_SLIDER_KEY = 'topo_hillshade_slider';        // 'true' when the on-map opacity slider is shown
 
 const OVERLAY_WMT_ACTIVITY = {
     "waymarked_hiking": 'hiking',
@@ -155,6 +158,16 @@ function isOverzoomEnabled() {
 function getEffectiveLayerMaxZoom(maxZoom) {
     const resolvedMaxZoom = Number(maxZoom) || 19;
     return isOverzoomEnabled() ? Math.max(resolvedMaxZoom, OVERZOOM_MAX_ZOOM) : resolvedMaxZoom;
+}
+
+function getHillshadeExaggeration() {
+    let pct;
+    try {
+        pct = parseInt(localStorage.getItem(HILLSHADE_OPACITY_KEY), 10);
+    } catch (error) {
+        pct = NaN;
+    }
+    return (Number.isFinite(pct) ? pct : 50) / 100;
 }
 
 function getTerrainSourceDefinition() {
@@ -718,6 +731,7 @@ function createMapAdapter(containerId, options) {
         _pendingOverlayLayers: new Set(),
         _tileLayer: null,
         _terrain: null,
+        _hillshade: { enabled: false, exaggeration: 0.5 },
         _tiltEnabled: options.tiltEnabled !== false,
         _maxZoom: initialMaxZoom,
         _controls: [],
@@ -1064,6 +1078,24 @@ function createMapAdapter(containerId, options) {
             }
             return this;
         },
+        setHillshade(enabled, exaggeration) {
+            this._hillshade = {
+                enabled: !!enabled,
+                exaggeration: typeof exaggeration === 'number' ? exaggeration : this._hillshade.exaggeration
+            };
+            if (this._styleReady) {
+                applyHillshade();
+            }
+            return this;
+        },
+        setHillshadeExaggeration(exaggeration) {
+            if (typeof exaggeration !== 'number') return this;
+            this._hillshade.exaggeration = exaggeration;
+            if (this._styleReady && nativeMap.getLayer('hillshade-layer')) {
+                nativeMap.setPaintProperty('hillshade-layer', 'hillshade-exaggeration', exaggeration);
+            }
+            return this;
+        },
         getPitch() {
             return nativeMap.getPitch();
         },
@@ -1149,6 +1181,36 @@ function createMapAdapter(containerId, options) {
         nativeMap.setTerrain(adapter._terrain);
     }
 
+    function applyHillshade() {
+        if (!adapter._styleReady) return;
+        const id = 'hillshade-layer';
+        if (adapter._hillshade && adapter._hillshade.enabled) {
+            ensureTerrainSource();
+            const exaggeration = adapter._hillshade.exaggeration;
+            if (!nativeMap.getLayer(id)) {
+                // Insert directly above the basemap but below every overlay/marker so the
+                // hillshade only shades the basemap (waymarks, climbs, GPX, POI/GPS stay on top).
+                const styleLayers = (nativeMap.getStyle() && nativeMap.getStyle().layers) || [];
+                const firstOverlayLayer = styleLayers.find((styleLayer) => styleLayer.id !== 'basemap-layer' && styleLayer.id !== id);
+                const hillshadeLayer = {
+                    id,
+                    type: 'hillshade',
+                    source: TERRAIN_SOURCE_ID,
+                    paint: { 'hillshade-exaggeration': exaggeration }
+                };
+                if (firstOverlayLayer) {
+                    nativeMap.addLayer(hillshadeLayer, firstOverlayLayer.id);
+                } else {
+                    nativeMap.addLayer(hillshadeLayer);
+                }
+            } else {
+                nativeMap.setPaintProperty(id, 'hillshade-exaggeration', exaggeration);
+            }
+        } else if (nativeMap.getLayer(id)) {
+            nativeMap.removeLayer(id);
+        }
+    }
+
     function flushPendingStyleLayers() {
         if (!adapter._styleReady) return;
         ensureTerrainSource();
@@ -1166,6 +1228,7 @@ function createMapAdapter(containerId, options) {
             }
         }
         syncTerrain();
+        applyHillshade();
     }
 
     function markStyleReady() {
@@ -1318,6 +1381,7 @@ const extraLayerSelect = document.getElementById('extraLayerSelect');
 const overzoomCheckbox = document.getElementById('enableOverzoom');
 const tiltCheckbox = document.getElementById('enableTilt');
 const enable3dBtn = document.getElementById('enable3dBtn');
+const hillshadeBtn = document.getElementById('hillshadeBtn');
 const exaggerationInput = document.getElementById('exaggerationInput');
 
 // ==========================================
@@ -1882,6 +1946,18 @@ function updateLanguage() {
         if (document.getElementById('lbl-enable-overzoom')) document.getElementById('lbl-enable-overzoom').textContent = t.lbl_enable_overzoom;
         if (document.getElementById('lbl-show-crosshair')) document.getElementById('lbl-show-crosshair').textContent = t.lbl_show_crosshair;
         if (document.getElementById('lbl-crosshair-color')) document.getElementById('lbl-crosshair-color').textContent = t.lbl_crosshair_color;
+        if (document.getElementById('lbl-enable-hillshade-slider')) document.getElementById('lbl-enable-hillshade-slider').textContent = t.lbl_enable_hillshade_slider;
+        if (hillshadeBtn) {
+            const hillshadeLabel = t.btn_hillshade || 'Hillshade';
+            hillshadeBtn.title = hillshadeLabel;
+            hillshadeBtn.setAttribute('aria-label', hillshadeLabel);
+        }
+        const hillshadeSliderControl = document.getElementById('hillshade-slider-control');
+        if (hillshadeSliderControl) {
+            const opacityLabel = t.lbl_hillshade_opacity || 'Hillshade opacity';
+            hillshadeSliderControl.title = opacityLabel;
+            hillshadeSliderControl.setAttribute('aria-label', opacityLabel);
+        }
         if (document.getElementById('lbl-extra-layer-select')) document.getElementById('lbl-extra-layer-select').textContent = t.lbl_extra_layer_select;
         if (extraLayerSelect) {
             const noneOpt = extraLayerSelect.querySelector('option[value="none"]');
@@ -2165,6 +2241,46 @@ function setTiltEnabled(enabled) {
 window.toggle3dView = function () {
     setTerrainEnabled(!is3dEnabled());
 };
+
+function isHillshadeEnabled() {
+    try {
+        return localStorage.getItem(HILLSHADE_ENABLED_KEY) === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+function syncHillshadeControls() {
+    if (hillshadeBtn) hillshadeBtn.classList.toggle('active', isHillshadeEnabled());
+}
+
+function setHillshadeEnabled(enabled) {
+    try {
+        localStorage.setItem(HILLSHADE_ENABLED_KEY, enabled);
+    } catch (error) { /* storage unavailable */ }
+    if (hillshadeBtn) hillshadeBtn.classList.toggle('active', !!enabled);
+    if (map) map.setHillshade(!!enabled, getHillshadeExaggeration());
+}
+
+window.toggleHillshade = function () {
+    setHillshadeEnabled(!isHillshadeEnabled());
+};
+
+// Show/hide the on-map opacity slider based on the Advanced-settings preference.
+function syncHillshadeSlider() {
+    const control = document.getElementById('hillshade-slider-control');
+    if (!control) return;
+    let show = false;
+    try {
+        show = localStorage.getItem(HILLSHADE_SLIDER_KEY) === 'true';
+    } catch (error) { /* storage unavailable */ }
+    control.classList.toggle('visible', show);
+    // The slider occupies the bottom-left corner, so temporarily hide the
+    // attribution control it replaces while the slider is visible.
+    const attribCorner = document.querySelector('.maplibregl-ctrl-bottom-left');
+    if (attribCorner) attribCorner.style.display = show ? 'none' : '';
+    adjustMapControlsForElevation();
+}
 
 function switchLayerTo(layerKey) {
     if (currentLayer) map.removeLayer(currentLayer);
@@ -4624,6 +4740,14 @@ function adjustMapControlsForElevation() {
             ? `calc(${Math.ceil(h)}px + env(safe-area-inset-bottom, 0px))`
             : '';
     }
+    // Keep the on-map hillshade slider (which replaces the bottom-left attribution)
+    // above the elevation profile bar as well.
+    const hillshadeSlider = document.getElementById('hillshade-slider-control');
+    if (hillshadeSlider) {
+        hillshadeSlider.style.bottom = h > 0
+            ? `calc(${Math.ceil(h)}px + 10px + env(safe-area-inset-bottom, 0px))`
+            : '';
+    }
 }
 
 function showElevationProfile() {
@@ -6715,6 +6839,37 @@ if (crosshairColorSelect) {
     });
 }
 syncCrosshairVisibility();
+
+// Hillshade: the search-bar button toggles the layer; an optional on-map slider
+// (enabled under Advanced settings) adjusts its opacity. All persist in localStorage.
+syncHillshadeControls();
+if (map) map.setHillshade(isHillshadeEnabled(), getHillshadeExaggeration());
+
+const hillshadeSliderToggle = document.getElementById('enableHillshadeSlider');
+if (hillshadeSliderToggle) {
+    let sliderOn = false;
+    try { sliderOn = localStorage.getItem(HILLSHADE_SLIDER_KEY) === 'true'; } catch (error) { /* storage unavailable */ }
+    hillshadeSliderToggle.checked = sliderOn;
+    hillshadeSliderToggle.addEventListener('change', (e) => {
+        try { localStorage.setItem(HILLSHADE_SLIDER_KEY, e.target.checked); } catch (error) { /* storage unavailable */ }
+        syncHillshadeSlider();
+    });
+}
+
+const mapHillshadeOpacity = document.getElementById('mapHillshadeOpacity');
+const mapHillshadeOpacityVal = document.getElementById('mapHillshadeOpacityVal');
+if (mapHillshadeOpacity) {
+    const hillshadePct = Math.round(getHillshadeExaggeration() * 100);
+    mapHillshadeOpacity.value = hillshadePct;
+    if (mapHillshadeOpacityVal) mapHillshadeOpacityVal.textContent = hillshadePct + '%';
+    mapHillshadeOpacity.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (mapHillshadeOpacityVal) mapHillshadeOpacityVal.textContent = val + '%';
+        try { localStorage.setItem(HILLSHADE_OPACITY_KEY, val); } catch (error) { /* storage unavailable */ }
+        if (map) map.setHillshadeExaggeration(val / 100);
+    });
+}
+syncHillshadeSlider();
 if (extraLayerSelect) {
     // Route names are always shown whenever an overlay is selected; the dropdown's
     // inline onchange (handleExtraLayerChange) drives all user-initiated changes.

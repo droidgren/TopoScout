@@ -1829,6 +1829,46 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     stroke-linejoin: round;
 }
 
+/* On-map hillshade opacity slider (toggled from Advanced settings). Sits in the
+   bottom-left corner, temporarily replacing the attribution control while shown. */
+#hillshade-slider-control {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 1500;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.6);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: #333;
+}
+
+#hillshade-slider-control.visible {
+    display: flex;
+}
+
+#hillshade-slider-control .icon-svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+#hillshade-slider-control input[type="range"] {
+    width: 110px;
+    margin: 0;
+}
+
+#hillshade-slider-control #mapHillshadeOpacityVal {
+    font-size: 12px;
+    min-width: 34px;
+    text-align: right;
+}
+
 /* Leading icon inside a text button or label */
 .btn-icon {
     width: 18px;
