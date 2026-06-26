@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.8.1";
-const BUILD_NUMBER = "2959";
+const APP_VERSION = "2.9.0";
+const BUILD_NUMBER = "2962";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -415,7 +415,10 @@ function getMarkerOffset(options = {}, element) {
 function getPopupOptions(options = {}) {
     const popupGap = 8;
     const popupOptions = {
-        className: 'result-popup'
+        className: 'result-popup',
+        // Raise MapLibre's 240px default so long (4+ digit) result lines size the box
+        // to fit instead of crowding the right padding. Short popups stay compact.
+        maxWidth: '320px'
     };
     if (!options.icon || !options.icon.options) {
         popupOptions.offset = 18 + popupGap;
@@ -1950,7 +1953,7 @@ function updateLanguage() {
         document.title = t.title;
         document.getElementById('liveLabel').textContent = t.live_label;
         document.getElementById('lbl-layers').textContent = t.lbl_layers;
-        document.getElementById('lbl-radius').textContent = t.lbl_radius;
+        document.getElementById('lbl-radius').textContent = t.lbl_radius + ' (' + distUnitLabel() + '):';
         document.getElementById('lbl-points').textContent = t.lbl_points;
         document.getElementById('lbl-show-circle').textContent = t.lbl_show_circle;
         document.querySelector('#lbl-lock-circle .btn-label').textContent = t.lbl_lock_circle;
@@ -1986,7 +1989,7 @@ function updateLanguage() {
             exaggerationSliderControl.setAttribute('aria-label', exaggerationLabel);
         }
         document.querySelector('#scan-btn .btn-label').textContent = t.btn_scan;
-        document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist;
+        document.getElementById('lbl-climb-dist').textContent = t.lbl_climb_dist + ' (' + elevUnitLabel() + '):';
         document.getElementById('lbl-num-climbs').textContent = t.lbl_num_climbs;
         document.querySelector('#climb-btn .btn-label').textContent = t.btn_climb;
         document.querySelector('#clear-btn .btn-label').textContent = t.btn_clear;
@@ -2007,7 +2010,7 @@ function updateLanguage() {
         if (document.getElementById('info-advanced-title')) document.getElementById('info-advanced-title').textContent = t.advanced_settings;
         if (document.getElementById('info-debug-title')) document.getElementById('info-debug-title').textContent = t.debug_settings;
         if (document.getElementById('lbl-water-analysis')) document.getElementById('lbl-water-analysis').textContent = t.lbl_water_analysis;
-        if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size;
+        if (document.getElementById('lbl-step-size')) document.getElementById('lbl-step-size').textContent = t.lbl_step_size + ' (' + elevUnitLabel() + '):';
         if (document.getElementById('lbl-peak-min-pixels')) document.getElementById('lbl-peak-min-pixels').textContent = t.lbl_peak_min_pixels;
         if (document.getElementById('lbl-scan-angles')) document.getElementById('lbl-scan-angles').textContent = t.lbl_scan_angles;
         if (document.getElementById('slope-btn')) document.querySelector('#slope-btn .btn-label').textContent = t.btn_slope;
@@ -2040,8 +2043,8 @@ function updateLanguage() {
         if (document.getElementById('lbl-color-slope')) document.getElementById('lbl-color-slope').textContent = t.lbl_color_slope;
         if (document.getElementById('lbl-show-waypoints')) document.getElementById('lbl-show-waypoints').textContent = t.lbl_show_waypoints;
         if (document.getElementById('lbl-show-minmax')) document.getElementById('lbl-show-minmax').textContent = t.lbl_show_minmax;
-        if (document.getElementById('opt-unit-km')) document.getElementById('opt-unit-km').textContent = t.unit_km;
-        if (document.getElementById('opt-unit-mi')) document.getElementById('opt-unit-mi').textContent = t.unit_mi;
+        if (document.getElementById('opt-units-metric')) document.getElementById('opt-units-metric').textContent = t.units_metric;
+        if (document.getElementById('opt-units-imperial')) document.getElementById('opt-units-imperial').textContent = t.units_imperial;
         if (document.getElementById('lbl-show-elev-profile')) document.getElementById('lbl-show-elev-profile').textContent = t.lbl_show_elev_profile;
         if (document.getElementById('lbl-elev-map-sync')) document.getElementById('lbl-elev-map-sync').textContent = t.lbl_elev_map_sync;
         if (document.getElementById('elevation-profile-title')) document.getElementById('elevation-profile-title').textContent = t.elevation_profile;
@@ -2093,7 +2096,7 @@ function updateLanguage() {
         const waterToggle = document.getElementById('water-analysis-toggle');
         if (waterToggle) waterToggle.checked = waterAnalysisEnabled;
         const stepInput = document.getElementById('stepSizeInput');
-        if (stepInput) stepInput.value = climbStepRes;
+        if (stepInput) stepInput.value = climbStepDisplayValue();
         const peakMinPixelInput = document.getElementById('peakMinPixelDistInput');
         if (peakMinPixelInput) peakMinPixelInput.value = peakMinPixelDistance;
         const anglesInput = document.getElementById('scanAnglesInput');
@@ -3212,7 +3215,7 @@ function renderPoiList() {
         const created = poi.created_at ? new Date(poi.created_at) : null;
         const dateStr = (created && !Number.isNaN(created.getTime())) ? created.toLocaleDateString() : '';
         const hasElev = (poi.elevation || poi.elevation === 0);
-        sub.textContent = [dateStr, hasElev ? Math.round(poi.elevation) + ' m' : ''].filter(Boolean).join(' · ');
+        sub.textContent = [dateStr, hasElev ? formatElevation(poi.elevation) : ''].filter(Boolean).join(' · ');
         meta.appendChild(sub);
 
         const actions = document.createElement('div');
@@ -3412,7 +3415,7 @@ function openPoiForm(state) {
     if (coordsEl) {
         const hasElev = (state.elevation || state.elevation === 0);
         coordsEl.textContent = Number(state.lat).toFixed(5) + ', ' + Number(state.lng).toFixed(5)
-            + (hasElev ? '  ·  ' + Math.round(state.elevation) + ' m' : '');
+            + (hasElev ? '  ·  ' + formatElevation(state.elevation) : '');
     }
 
     const modal = document.getElementById('poi-form-modal');
@@ -3599,20 +3602,133 @@ function updateGpxTrackInfo() {
     }
     let html = `<span>${t.gpx_info_length}:</span> ${lengthStr}`;
     if (d.gain > 0 || d.loss > 0) {
-        html += `<br><span>${t.gpx_info_gain}:</span> +${Math.round(d.gain)} m`;
-        html += `<br><span>${t.gpx_info_loss}:</span> -${Math.round(d.loss)} m`;
+        html += `<br><span>${t.gpx_info_gain}:</span> +${formatElevation(d.gain)}`;
+        html += `<br><span>${t.gpx_info_loss}:</span> -${formatElevation(d.loss)}`;
     }
     if (d.minElev !== null) {
-        html += `<br><span>${t.gpx_info_min_elev}:</span> ${Math.round(d.minElev)} m`;
-        html += `<br><span>${t.gpx_info_max_elev}:</span> ${Math.round(d.maxElev)} m`;
+        html += `<br><span>${t.gpx_info_min_elev}:</span> ${formatElevation(d.minElev)}`;
+        html += `<br><span>${t.gpx_info_max_elev}:</span> ${formatElevation(d.maxElev)}`;
     }
     infoDiv.innerHTML = html;
     infoDiv.style.display = 'block';
 }
 
+// Global unit system: 'metric' (km, m) or 'imperial' (mi, ft). Metric is the
+// canonical internal unit everywhere; we only convert at the UI boundary.
+let unitSystem = 'metric';
+function getUnitSystem() { return unitSystem; }
+
+// Short unit labels for input/axis suffixes.
+function distUnitLabel() { return getUnitSystem() === 'imperial' ? 'mi' : 'km'; }
+function elevUnitLabel() { return getUnitSystem() === 'imperial' ? 'ft' : 'm'; }
+
+// Kept so existing distance code keeps working; now derived from the global system.
 function getDistanceUnit() {
-    const el = document.getElementById('distanceUnit');
-    return el ? el.value : 'km';
+    return getUnitSystem() === 'imperial' ? 'mi' : 'km';
+}
+
+// Format a distance in meters for display, respecting the active unit system.
+function formatDistance(meters) {
+    if (getDistanceUnit() === 'mi') {
+        const mi = meters / 1609.344;
+        return mi >= 1 ? mi.toFixed(2) + ' mi' : (meters * 3.28084).toFixed(0) + ' ft';
+    }
+    return meters >= 1000 ? (meters / 1000).toFixed(2) + ' km' : Math.round(meters) + ' m';
+}
+
+// Format an elevation/height in meters for display (m or ft). Sign is preserved;
+// callers that want a leading '+' add it themselves.
+function formatElevation(meters) {
+    if (getUnitSystem() === 'imperial') {
+        return Math.round(meters * 3.28084) + ' ft';
+    }
+    return Math.round(meters) + ' m';
+}
+
+// Search radius from its input, in meters (input holds km in metric, mi in imperial).
+function getRadiusMeters() {
+    const v = parseFloat(radiusInput.value) || 5;
+    return getUnitSystem() === 'imperial' ? v * 1609.344 : v * 1000;
+}
+
+// Climb "measure distance" from its input, in meters (m in metric, ft in imperial).
+function getClimbDistMeters() {
+    const v = parseFloat(climbDistInput.value) || 200;
+    return getUnitSystem() === 'imperial' ? v * 0.3048 : v;
+}
+
+// Climb step resolution from its input, in meters (m in metric, ft in imperial).
+function getClimbStepMeters() {
+    const el = document.getElementById('stepSizeInput');
+    const v = parseInt(el ? el.value : '', 10) || (getUnitSystem() === 'imperial' ? 33 : 10);
+    return getUnitSystem() === 'imperial' ? v * 0.3048 : v;
+}
+
+// Value to display in the step-resolution input for the current unit system
+// (canonical `climbStepRes` is always meters).
+function climbStepDisplayValue() {
+    return getUnitSystem() === 'imperial' ? Math.round(climbStepRes * 3.28084) : climbStepRes;
+}
+
+// Per-unit min/max/step for the numeric inputs. Imperial ranges roughly mirror the
+// metric ones (e.g. 100 km ≈ 60 mi, 5000 m ≈ 16000 ft).
+function setInputUnitAttrs(input, attrs) {
+    if (!input) return;
+    input.setAttribute('min', attrs.min);
+    input.setAttribute('max', attrs.max);
+    input.setAttribute('step', attrs.step);
+}
+
+// Convert one input's displayed value when the unit system changes, then clamp it
+// to the (already updated) min/max. kind: 'distance' (km<->mi) or 'length' (m<->ft).
+function convertInputValue(input, fromU, toU, kind) {
+    if (!input || fromU === toU) return;
+    let v = parseFloat(input.value);
+    if (!isFinite(v)) return;
+    if (kind === 'distance') {
+        v = (fromU === 'metric') ? v / 1.609344 : v * 1.609344;
+        v = Math.round(v * 10) / 10;
+    } else {
+        v = (fromU === 'metric') ? v * 3.28084 : v / 3.28084;
+        v = Math.round(v);
+    }
+    const min = parseFloat(input.getAttribute('min'));
+    const max = parseFloat(input.getAttribute('max'));
+    if (isFinite(min)) v = Math.max(min, v);
+    if (isFinite(max)) v = Math.min(max, v);
+    input.value = v;
+}
+
+// Apply the current unitSystem to the numeric inputs: set unit-appropriate
+// min/max/step, then convert their displayed values from prevUnit.
+function applyUnitSystem(prevUnit) {
+    const imperial = getUnitSystem() === 'imperial';
+    const stepInput = document.getElementById('stepSizeInput');
+    setInputUnitAttrs(radiusInput, imperial ? { min: 0.5, max: 60, step: 0.5 } : { min: 0.5, max: 100, step: 0.5 });
+    setInputUnitAttrs(climbDistInput, imperial ? { min: 150, max: 16000, step: 50 } : { min: 50, max: 5000, step: 10 });
+    setInputUnitAttrs(stepInput, imperial ? { min: 5, max: 160, step: 5 } : { min: 2, max: 50, step: 1 });
+    convertInputValue(radiusInput, prevUnit, getUnitSystem(), 'distance');
+    convertInputValue(climbDistInput, prevUnit, getUnitSystem(), 'length');
+    // Step res mirrors the canonical `climbStepRes` (meters), so set its display directly.
+    if (stepInput) stepInput.value = climbStepDisplayValue();
+}
+
+// Global units dropdown handler (About modal). Switches metric <-> imperial and
+// re-renders every unit-bearing readout/input.
+function setUnitSystem(value) {
+    if (value !== 'imperial') value = 'metric';
+    const prev = unitSystem;
+    unitSystem = value;
+    try { localStorage.setItem('topo_units', value); } catch (e) { /* storage unavailable */ }
+    applyUnitSystem(prev);
+    const sel = document.getElementById('units-select');
+    if (sel) sel.value = value;
+    updateLanguage();
+    updateUI();
+    rebuildGpxLayer();
+    updateGpxTrackInfo();
+    updateCenterElevation();
+    if (elevationProfileData && !elevationProfileMinimized) drawElevationProfile();
 }
 
 function computeVisibleTrackLength(allSegments) {
@@ -3998,7 +4114,7 @@ function rebuildGpxMarkers() {
         if (maxPt) {
             const el = document.createElement('div');
             el.className = 'gpx-elev-label';
-            el.innerHTML = `▲ ${Math.round(maxPt.ele)} m`;
+            el.innerHTML = `▲ ${formatElevation(maxPt.ele)}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([maxPt.lon, maxPt.lat])
                 .addTo(map._map));
@@ -4006,7 +4122,7 @@ function rebuildGpxMarkers() {
         if (minPt) {
             const el = document.createElement('div');
             el.className = 'gpx-elev-label min-elev';
-            el.innerHTML = `▼ ${Math.round(minPt.ele)} m`;
+            el.innerHTML = `▼ ${formatElevation(minPt.ele)}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([minPt.lon, minPt.lat])
                 .addTo(map._map));
@@ -4413,32 +4529,11 @@ async function postAuthLogin() {
             headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
             body: JSON.stringify({ credential: googleAuth.token })
         });
-        console.log('[GPX auth] POST /api/auth/login ->', response.status,
-            response.status === 404 ? '(old backend? route missing)' : '');
         if (response.status === 401) { clearGoogleAuthState(); return null; }
         if (!response.ok) return null;
         return await response.json();
     } catch (e) {
-        console.log('[GPX auth] /api/auth/login request failed', e);
         return null;
-    }
-}
-
-// Logs exactly what reaches the backend so deployment issues (old build, proxy
-// stripping Authorization, clock skew, wrong client id) are visible in the console.
-async function runGoogleAuthDiagnostics() {
-    if (!isBackendEnabled() || !googleAuth || !googleAuth.token) return;
-    try {
-        const r = await fetch(API_BASE + '/auth/debug', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-            body: JSON.stringify({ credential: googleAuth.token })
-        });
-        const data = await r.json().catch(() => null);
-        console.log('[GPX auth] /api/auth/debug ->', r.status, data);
-    } catch (e) {
-        console.log('[GPX auth] /api/auth/debug request failed', e);
     }
 }
 
@@ -4469,7 +4564,6 @@ function handleGoogleCredential(response) {
             .replace('{email}', googleAuth.email || googleAuth.name || '');
     }
     // Merge anonymous uploads into the account, then show the account's files + POIs.
-    runGoogleAuthDiagnostics();
     postAuthLogin().finally(() => { refreshUploadedFiles(); refreshPoiList(); });
 }
 
@@ -4592,7 +4686,6 @@ async function refreshUploadedFiles(authRetried) {
         }
         const payload = await response.json();
         const files = Array.isArray(payload.files) ? payload.files : [];
-        console.log('[GPX auth] GET /api/files ->', response.status, 'count:', files.length, 'signedIn:', isGoogleSignedIn());
         uploadedGpxFiles = files.map(normalizeUploadedFileEntry).filter(fileEntry => fileEntry.id);
         uploadedGpxListState = 'ready';
         renderUploadedFiles();
@@ -4721,13 +4814,6 @@ document.getElementById('gpxShowMinMax').addEventListener('change', function () 
 document.getElementById('gpxShowElevProfile').addEventListener('change', function () {
     if (this.checked) { showElevationProfile(); } else { hideElevationProfile(); }
 });
-document.getElementById('distanceUnit').addEventListener('change', function () {
-    localStorage.setItem('topo_distance_unit', this.value);
-    rebuildGpxLayer();
-    updateGpxTrackInfo();
-    if (elevationProfileData && !elevationProfileMinimized) drawElevationProfile();
-});
-
 // ==========================================
 // ELEVATION PROFILE BAR
 // ==========================================
@@ -4941,7 +5027,7 @@ function drawElevationProfile() {
         ctx.moveTo(PAD_LEFT, y);
         ctx.lineTo(W - PAD_RIGHT, y);
         ctx.stroke();
-        ctx.fillText(Math.round(e) + ' m', PAD_LEFT - 4, y);
+        ctx.fillText(formatElevation(e), PAD_LEFT - 4, y);
     }
 
     // Grid lines - X axis (distance)
@@ -5058,8 +5144,8 @@ function updateElevationProfileInfo(point) {
     const unitMeters = unit === 'mi' ? 1609.344 : 1000;
     const unitLabel = unit === 'mi' ? 'mi' : 'km';
     const distVal = point.dist / unitMeters;
-    const distStr = distVal >= 1 ? distVal.toFixed(1) + ' ' + unitLabel : Math.round(point.dist) + ' m';
-    infoEl.textContent = distStr + '  •  ' + Math.round(point.ele) + ' m';
+    const distStr = distVal >= 1 ? distVal.toFixed(1) + ' ' + unitLabel : formatDistance(point.dist);
+    infoEl.textContent = distStr + '  •  ' + formatElevation(point.ele);
 }
 
 function drawElevationCursor(canvasX, point) {
@@ -5493,11 +5579,10 @@ function updateUI() {
     const displayZoom = Number.isInteger(zoom) ? zoom.toString() : zoom.toFixed(1);
     zoomLabel.innerText = 'Zoom: ' + displayZoom;
     const searchCenter = getSearchCenter();
-    const radiusKm = parseFloat(radiusInput.value) || 5;
     const markerColor = isLocked ? '#e67e22' : '#007bff';
 
     // Show circle when checkbox is checked OR when a slope map is active
-    const radiusM = radiusKm * 1000;
+    const radiusM = getRadiusMeters();
     const slopeMapHasRadiusArea = slopeMapCenter !== null && slopeMapUsesRadius;
     // Circle is completely outside the generated slope area when there is no overlap at all
     const completelyOutsideSlopeArea = slopeMapHasRadiusArea &&
@@ -5511,36 +5596,67 @@ function updateUI() {
     updateSearchOverlay(searchCenter, radiusM, markerColor, showCircle, fillOpacity);
 }
 
-// Sample the terrain elevation (meters) at an arbitrary coordinate from a single
-// Terrarium tile pixel (same decode as updateCenterElevation). Resolves null when
-// there is no data / the tile fails to load. Used when saving a POI.
-function getElevationAtLatLng(lat, lng) {
-    return new Promise((resolve) => {
-        try {
-            const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
-            const point = map.project(L.latLng(lat, lng), zoom);
-            const tileX = Math.floor(point.x / 256);
-            const tileY = Math.floor(point.y / 256);
-            const pixelX = Math.floor((point.x - tileX * 256) * 2);
-            const pixelY = Math.floor((point.y - tileY * 256) * 2);
-            const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
+// LRU cache of loaded elevation tiles (HTMLImageElement) keyed by "z/x/y". Panning
+// around within one tile would otherwise refetch it on every move/zoom event.
+const ELEVATION_TILE_CACHE_MAX = 64;
+const elevationTileCache = new Map(); // key -> Promise<HTMLImageElement>
 
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => {
-                try {
-                    spCtx.imageSmoothingEnabled = false;
-                    spCtx.clearRect(0, 0, 1, 1);
-                    spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
-                    const pData = spCtx.getImageData(0, 0, 1, 1).data;
-                    if (pData[3] === 0) { resolve(null); return; }
-                    resolve(Math.round((pData[0] * 256 + pData[1] + pData[2] / 256) - 32768));
-                } catch (e) { resolve(null); }
-            };
-            img.onerror = () => resolve(null);
-            img.src = url;
-        } catch (e) { resolve(null); }
+function loadElevationTile(z, x, y) {
+    const key = z + '/' + x + '/' + y;
+    const cached = elevationTileCache.get(key);
+    if (cached) {
+        // Refresh recency so this tile is evicted last.
+        elevationTileCache.delete(key);
+        elevationTileCache.set(key, cached);
+        return cached;
+    }
+    const url = DATA_TILE_URL.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+    const promise = new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('elevation tile load failed'));
+        img.src = url;
     });
+    // Don't keep a failed load cached, so a transient error can be retried later.
+    promise.catch(() => { elevationTileCache.delete(key); });
+    elevationTileCache.set(key, promise);
+    while (elevationTileCache.size > ELEVATION_TILE_CACHE_MAX) {
+        elevationTileCache.delete(elevationTileCache.keys().next().value);
+    }
+    return promise;
+}
+
+// Decode the elevation (meters) of a single pixel within a loaded Terrarium tile.
+// Returns null for no-data (transparent) pixels.
+function decodeElevationPixel(img, pixelX, pixelY) {
+    spCtx.imageSmoothingEnabled = false;
+    spCtx.clearRect(0, 0, 1, 1);
+    spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
+    const pData = spCtx.getImageData(0, 0, 1, 1).data;
+    if (pData[3] === 0) return null;
+    return (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
+}
+
+// Sample the terrain elevation (meters) at an arbitrary coordinate from a single
+// Terrarium tile pixel. Resolves null when there is no data / the tile fails to
+// load. Used when saving a POI.
+function getElevationAtLatLng(lat, lng) {
+    let zoom, tileX, tileY, pixelX, pixelY;
+    try {
+        zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
+        const point = map.project(L.latLng(lat, lng), zoom);
+        tileX = Math.floor(point.x / 256);
+        tileY = Math.floor(point.y / 256);
+        pixelX = Math.floor((point.x - tileX * 256) * 2);
+        pixelY = Math.floor((point.y - tileY * 256) * 2);
+    } catch (e) { return Promise.resolve(null); }
+    return loadElevationTile(zoom, tileX, tileY).then((img) => {
+        try {
+            const h = decodeElevationPixel(img, pixelX, pixelY);
+            return h === null ? null : Math.round(h);
+        } catch (e) { return null; }
+    }).catch(() => null);
 }
 
 async function updateCenterElevation() {
@@ -5557,60 +5673,37 @@ async function updateCenterElevation() {
     const tileX = Math.floor(point.x / 256);
     const tileY = Math.floor(point.y / 256);
 
-
-
-    // Correct Update: offset within the 256-unit tile grid, scaled to 512px tile
+    // offset within the 256-unit tile grid, scaled to the 512px tile
     const pixelX = Math.floor((point.x - tileX * 256) * 2);
     const pixelY = Math.floor((point.y - tileY * 256) * 2);
 
-    const url = DATA_TILE_URL.replace('{z}', zoom).replace('{x}', tileX).replace('{y}', tileY);
-
-    try {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = url;
-        img.onload = () => {
-            spCtx.imageSmoothingEnabled = false; // UPDATED: Disable smoothing
-            spCtx.clearRect(0, 0, 1, 1);
-            spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
-            const pData = spCtx.getImageData(0, 0, 1, 1).data;
-
-            if (pData[3] === 0) { // UPDATED: Handle transparent pixels (no data)
-                centerHeightDisplay.textContent = "N/A";
-                if (useCompactElevationStatus) {
-                    mobileElevationText = "N/A";
-                    const t = translations[currentLang];
-                    statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
-                }
-            } else {
-                const h = (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
-                centerHeightDisplay.textContent = Math.round(h) + " m";
-                if (useCompactElevationStatus) {
-                    const t = translations[currentLang];
-                    mobileElevationText = Math.round(h) + " m";
-                    statusDiv.textContent = (t.status_elevation || "Elevation") + ": " + mobileElevationText;
-                }
-            }
-
-            if (scanBtn) scanBtn.disabled = false;
-            if (climbBtn) climbBtn.disabled = false;
-            if (slopeBtn) slopeBtn.disabled = false;
-        };
-        img.onerror = () => {
-            centerHeightDisplay.textContent = "N/A";
-            if (useCompactElevationStatus) {
-                mobileElevationText = "N/A";
-                const t = translations[currentLang];
-                statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
-            }
-        };
-    } catch (err) {
+    const showNoData = () => {
         centerHeightDisplay.textContent = "N/A";
         if (useCompactElevationStatus) {
             mobileElevationText = "N/A";
             const t = translations[currentLang];
             statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
         }
+    };
+
+    try {
+        const img = await loadElevationTile(zoom, tileX, tileY);
+        const h = decodeElevationPixel(img, pixelX, pixelY);
+        if (h === null) {
+            showNoData();
+        } else {
+            centerHeightDisplay.textContent = formatElevation(h);
+            if (useCompactElevationStatus) {
+                const t = translations[currentLang];
+                mobileElevationText = formatElevation(h);
+                statusDiv.textContent = (t.status_elevation || "Elevation") + ": " + mobileElevationText;
+            }
+        }
+        if (scanBtn) scanBtn.disabled = false;
+        if (climbBtn) climbBtn.disabled = false;
+        if (slopeBtn) slopeBtn.disabled = false;
+    } catch (err) {
+        showNoData();
     }
 }
 
@@ -5715,7 +5808,7 @@ function _renderSlopeMap() {
     const imgData = ctx.getImageData(0, 0, w, h).data;
 
     const searchCenterLatLng = getSearchCenter();
-    const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+    const searchRadiusMeters = getRadiusMeters();
     const useRadius = circleCheckbox && circleCheckbox.checked;
 
     // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
@@ -5851,7 +5944,7 @@ function findPeaks() {
     const waterData = waterAnalysisEnabled ? waterCtx.getImageData(0, 0, w, h).data : null;
 
     const searchCenterLatLng = getSearchCenter();
-    const maxRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
+    const maxRadiusMeters = getRadiusMeters();
     let candidates = [];
     for (let y = 0; y < h; y += 2) {
         for (let x = 0; x < w; x += 2) {
@@ -5892,17 +5985,16 @@ function findPeaks() {
     }
     if (finalPoints.length === 0) { statusDiv.textContent = t.status_no_data; return; }
     finalPoints.forEach((p, idx) => {
-        const distKm = (p.dist / 1000).toFixed(2);
         const isHighest = (idx === 0);
         const markerOptions = (idx < 3) ? { icon: rankIcons[idx], zIndexOffset: 1000 - idx } : {};
 
         const popupContent = `
             <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${t.res_rank} #${idx + 1}</span>
-            <span class="popup-height">${Math.round(p.h)} m</span>
-            <span class="popup-meta">${t.res_dist}: ${distKm} km</span>
+            <span class="popup-height">${formatElevation(p.h)}</span>
+            <span class="popup-meta">${t.res_dist}: ${formatDistance(p.dist)}</span>
             <div class="coord-box">
                 <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                <button class="copy-btn" title="Kopiera" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
+                <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
             </div>`;
         const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
         if (isHighest) marker.openPopup();
@@ -5921,8 +6013,8 @@ function calculateMaxClimb() {
     const waterData = waterAnalysisEnabled ? waterCtx.getImageData(0, 0, w, h).data : null;
 
     const searchCenterLatLng = getSearchCenter();
-    const searchRadiusMeters = (parseFloat(radiusInput.value) || 5) * 1000;
-    const climbDistMeters = parseFloat(climbDistInput.value) || 200;
+    const searchRadiusMeters = getRadiusMeters();
+    const climbDistMeters = getClimbDistMeters();
     const maxResults = parseInt(numClimbsInput.value) || 1;
 
     const p1 = map.project(searchCenterLatLng, analysisZoom);
@@ -5975,8 +6067,8 @@ function calculateMaxClimb() {
                     const h2 = (imgData[i2] * 256 + imgData[i2 + 1] + imgData[i2 + 2] / 256) - 32768;
 
                     // Calculate cumulative ascent along the path
-                    // We take steps based on user defined resolution (default 10m)
-                    const res = parseInt(document.getElementById('stepSizeInput').value) || 10;
+                    // We take steps based on user defined resolution (default 10m), in meters
+                    const res = getClimbStepMeters();
                     const numSteps = Math.max(1, Math.floor(climbDistMeters / res));
                     let cumulativeAscent = 0;
 
@@ -6073,20 +6165,19 @@ function calculateMaxClimb() {
             // Compute shared climb stats
             const searchCenter = getSearchCenter();
             const distStartEnd = res.start.latlng.distanceTo(res.end.latlng);
-            const distStartEndStr = distStartEnd >= 1000 ? (distStartEnd / 1000).toFixed(2) + ' km' : Math.round(distStartEnd) + ' m';
+            const distStartEndStr = formatDistance(distStartEnd);
             const verticalDrop = Math.round(res.end.h - res.start.h);
             const slopePercent = distStartEnd > 0 ? ((verticalDrop / distStartEnd) * 100).toFixed(1) : 0;
 
             // START POPUP
             const distStart = searchCenter.distanceTo(res.start.latlng);
-            const distKmStart = (distStart / 1000).toFixed(2);
             const startPopup = `
                 <span class="popup-header">${t.res_rank} #${rank} (${t.res_start})</span>
-                <span class="popup-height">${t.res_elev}: ${Math.round(res.start.h)} m</span>
-                <span class="popup-meta">${t.res_dist_center}: ${distKmStart} km</span>
+                <span class="popup-height">${t.res_elev}: ${formatElevation(res.start.h)}</span>
+                <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distStart)}</span>
                 <div class="coord-box">
                     <span>${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
@@ -6095,18 +6186,17 @@ function calculateMaxClimb() {
 
             // PEAK POPUP
             const distEnd = searchCenter.distanceTo(res.end.latlng);
-            const distKmEnd = (distEnd / 1000).toFixed(2);
             const endPopup = `
                 <span class="popup-header" style="${isWinner ? 'color:#b8860b' : ''}">${t.res_rank} #${rank} (${t.res_peak})</span>
-                <span class="popup-height">${t.res_climb}: +${Math.round(res.diff)} m</span>
-                <span class="popup-meta">${t.res_elev}: ${Math.round(res.end.h)} m</span>
-                <span class="popup-meta">${t.res_vertical_drop}: ${verticalDrop >= 0 ? '+' : ''}${verticalDrop} m</span>
+                <span class="popup-height">${t.res_climb}: +${formatElevation(res.diff)}</span>
+                <span class="popup-meta">${t.res_elev}: ${formatElevation(res.end.h)}</span>
+                <span class="popup-meta">${t.res_vertical_drop}: ${verticalDrop >= 0 ? '+' : ''}${formatElevation(verticalDrop)}</span>
                 <span class="popup-meta">${t.res_dist_start_end}: ${distStartEndStr}</span>
                 <span class="popup-meta">${t.res_slope}: ${slopePercent}%</span>
-                <span class="popup-meta">${t.res_dist_center}: ${distKmEnd} km</span>
+                <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distEnd)}</span>
                 <div class="coord-box">
                     <span>${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="Kopiera" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
@@ -6771,9 +6861,7 @@ window.runManualClimbCalculation = async function () {
         const endElev = ptElevs[ptElevs.length - 1];
         const vertDrop = Math.round(endElev - startElev);
         const slopePct = totalDist > 0 ? ((vertDrop / totalDist) * 100).toFixed(1) : 0;
-        const distStr = totalDist >= 1000
-            ? (totalDist / 1000).toFixed(2) + ' km'
-            : Math.round(totalDist) + ' m';
+        const distStr = formatDistance(totalDist);
 
         _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slopePct, distStr, t);
         cancelManualClimbMode();
@@ -6801,7 +6889,7 @@ function _sampleSegmentElevations(a, b) {
     const p2 = map.project(b, analysisZoom).subtract(analysisNwOrigin);
     const w = canvas.width;
     const h = canvas.height;
-    const res = parseInt(document.getElementById('stepSizeInput').value, 10) || 10;
+    const res = getClimbStepMeters();
     const numSteps = Math.max(1, Math.floor(a.distanceTo(b) / res));
     const all = ctx.getImageData(0, 0, w, h).data;
     const elevs = [];
@@ -6835,7 +6923,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
 
     const startM = L.marker(s, { icon: greenIcon }).addTo(map).bindPopup(`
         <span class="popup-header">${t.res_start}</span>
-        <span class="popup-height">${t.res_elev}: ${Math.round(startElev)} m</span>
+        <span class="popup-height">${t.res_elev}: ${formatElevation(startElev)}</span>
         <div class="coord-box">
             <span>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
             <button class="copy-btn"
@@ -6845,9 +6933,9 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
 
     const endM = L.marker(e, { icon: redIcon }).addTo(map).bindPopup(`
         <span class="popup-header">ߓanual Climb</span>
-        <span class="popup-height">${t.res_climb}: +${Math.round(totalAscent)} m</span>
-        <span class="popup-meta">${t.res_elev}: ${Math.round(endElev)} m</span>
-        <span class="popup-meta">${t.res_vertical_drop}: ${vertDrop >= 0 ? '+' : ''}${vertDrop} m</span>
+        <span class="popup-height">${t.res_climb}: +${formatElevation(totalAscent)}</span>
+        <span class="popup-meta">${t.res_elev}: ${formatElevation(endElev)}</span>
+        <span class="popup-meta">${t.res_vertical_drop}: ${vertDrop >= 0 ? '+' : ''}${formatElevation(vertDrop)}</span>
         <span class="popup-meta">${t.res_dist_start_end}: ${distStr}</span>
         <span class="popup-meta">${t.res_slope}: ${slopePct}%</span>
         <div class="coord-box">
@@ -7038,9 +7126,10 @@ if (slopeOpacitySlider) {
 
 const stepInput = document.getElementById('stepSizeInput');
 if (stepInput) {
-    stepInput.value = climbStepRes;
-    stepInput.addEventListener('change', (e) => {
-        climbStepRes = parseInt(e.target.value) || 10;
+    stepInput.value = climbStepDisplayValue();
+    stepInput.addEventListener('change', () => {
+        // Store the canonical meters value regardless of the displayed unit.
+        climbStepRes = Math.round(getClimbStepMeters());
     });
 }
 
@@ -7064,8 +7153,16 @@ if (anglesInput) {
 
 // Map Events
 map.on('zoomend', () => { updateUI(); updateCenterElevation(); refreshGpxKmLabels(); });
+// 'move' fires many times per frame during a pan; coalesce updateUI() to at most
+// once per animation frame so panning stays smooth.
+let _moveUiRafPending = false;
 map.on('move', () => {
-    updateUI();
+    if (_moveUiRafPending) return;
+    _moveUiRafPending = true;
+    requestAnimationFrame(() => {
+        _moveUiRafPending = false;
+        updateUI();
+    });
 });
 map.on('moveend', () => { // Data saved/fetched at end of movement
     const center = map.getCenter();
@@ -7115,11 +7212,19 @@ initServiceWorker();
 if (layerSelect) {
     layerSelect.value = savedLayer;
 }
-const savedUnit = localStorage.getItem('topo_distance_unit');
-if (savedUnit) {
-    const unitSel = document.getElementById('distanceUnit');
-    if (unitSel) unitSel.value = savedUnit;
+// Global unit system. Migrate legacy per-route choice (topo_distance_unit) the first
+// time, then drive everything from topo_units.
+let savedUnits = localStorage.getItem('topo_units');
+if (!savedUnits) {
+    savedUnits = (localStorage.getItem('topo_distance_unit') === 'mi') ? 'imperial' : 'metric';
 }
+unitSystem = (savedUnits === 'imperial') ? 'imperial' : 'metric';
+const unitsSelect = document.getElementById('units-select');
+if (unitsSelect) unitsSelect.value = unitSystem;
+// Convert the metric HTML-default inputs into the active unit system (no-op for metric).
+applyUnitSystem('metric');
+// Re-apply labels so the unit suffixes (km/mi, m/ft) reflect the restored system.
+updateLanguage();
 
 const showPoiCheckbox = document.getElementById('showPoi');
 if (showPoiCheckbox) showPoiCheckbox.checked = poiLayerVisible;
