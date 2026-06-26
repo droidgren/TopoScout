@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.8.1";
-const BUILD_NUMBER = "2957";
+const BUILD_NUMBER = "2959";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2947,7 +2947,7 @@ function locateUser() {
     const GPS_PINPOINT_M = 5;
     // Cap the rendered ring so a coarse "Approximate Location" fix (accuracy of many
     // kilometres) doesn't swamp the map; beyond this it just reads as "low accuracy".
-    const GPS_MAX_RING_M = 1000;
+    const GPS_MAX_RING_M = 1500;
 
     function updateGpsMarker(pos) {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
@@ -2979,6 +2979,11 @@ function locateUser() {
         } else if (gpsAccuracyCircle) {
             gpsAccuracyCircle.remove();
             gpsAccuracyCircle = null;
+            // Signal just tightened to pinpoint — snap to the now-precise position,
+            // keeping the user's current zoom.
+            if (Number.isFinite(acc)) {
+                map.setView([lat, lng], map.getZoom());
+            }
         }
     }
 
