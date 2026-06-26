@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.9.0";
-const BUILD_NUMBER = "2962";
+const APP_VERSION = "2.10.0";
+const BUILD_NUMBER = "2969";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -103,6 +103,15 @@ const ELEVATION_TILE_MAX_ZOOM = 15;
 const OVERZOOM_STORAGE_KEY = 'topo_overzoom';
 const OVERZOOM_MAX_ZOOM = 22;
 const TERRAIN_SOURCE_ID = 'elevation-dem';
+// Contour overlay: client-side contour lines generated from the same Mapterhorn DEM
+// via maplibre-contour. Labels need a glyphs/font source (the raster basemap has none).
+const GLYPHS_URL = 'fonts/{fontstack}/{range}.pbf'; // self-hosted, same-origin (offline-capable)
+const CONTOUR_FONT = 'noto-sans-regular';           // bundled under fonts/; swap to 'open-sans-regular' to compare
+const CONTOUR_SOURCE_ID = 'contour-source';
+const CONTOUR_LINE_LAYER_ID = 'contour-lines';
+const CONTOUR_LABEL_LAYER_ID = 'contour-labels';
+const CONTOURS_ENABLED_KEY = 'topo_contours';        // 'true' when the contour overlay is on
+const CONTOUR_LABELS_KEY = 'topo_contour_labels';    // 'true' when elevation labels are shown
 const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
 
 const MAP_SOURCES = {
@@ -687,6 +696,7 @@ function createMapAdapter(containerId, options) {
         : 19;
     const initialStyle = initialTileLayer ? {
         version: 8,
+        glyphs: GLYPHS_URL,
         sources: {
             basemap: {
                 type: 'raster',
@@ -706,6 +716,7 @@ function createMapAdapter(containerId, options) {
         }]
     } : {
         version: 8,
+        glyphs: GLYPHS_URL,
         sources: {},
         layers: []
     };
@@ -741,6 +752,7 @@ function createMapAdapter(containerId, options) {
         _tileLayer: null,
         _terrain: null,
         _hillshade: { enabled: false, exaggeration: 0.5 },
+        _contours: { enabled: false, labels: true },
         _tiltEnabled: options.tiltEnabled !== false,
         _maxZoom: initialMaxZoom,
         _controls: [],
@@ -1105,6 +1117,28 @@ function createMapAdapter(containerId, options) {
             }
             return this;
         },
+        setContours(enabled) {
+            this._contours.enabled = !!enabled;
+            if (this._styleReady) {
+                applyContours();
+            }
+            return this;
+        },
+        setContourLabels(labels) {
+            this._contours.labels = !!labels;
+            if (this._styleReady) {
+                applyContours();
+            }
+            return this;
+        },
+        // Tear the contour source/layers down and rebuild them; used when the unit
+        // system changes so the interval and labels regenerate for metres/feet.
+        refreshContours() {
+            if (!this._styleReady) return this;
+            removeContourLayers();
+            applyContours();
+            return this;
+        },
         getPitch() {
             return nativeMap.getPitch();
         },
@@ -1226,6 +1260,111 @@ function createMapAdapter(containerId, options) {
         }
     }
 
+    let contourDemSource = null;
+
+    // Lazily build the maplibre-contour DEM source and register its protocol once.
+    // Returns false when the library failed to load, so the overlay quietly no-ops.
+    function ensureContourSetup() {
+        if (contourDemSource) return true;
+        if (typeof mlcontour === 'undefined') return false;
+        contourDemSource = new mlcontour.DemSource({
+            url: getTileUrls(DATA_TILE_URL)[0],
+            encoding: 'terrarium',
+            maxzoom: ELEVATION_TILE_MAX_ZOOM,
+            worker: true
+        });
+        contourDemSource.setupMaplibre(maplibregl);
+        return true;
+    }
+
+    // Vector source backed by maplibre-contour. The interval (and the unit the
+    // elevations are emitted in) follow the active metric/imperial setting.
+    function getContourSourceDefinition() {
+        const imperial = getUnitSystem() === 'imperial';
+        return {
+            type: 'vector',
+            tiles: [contourDemSource.contourProtocolUrl({
+                multiplier: imperial ? 3.28084 : 1,
+                overzoom: 1,
+                elevationKey: 'ele',
+                levelKey: 'level',
+                contourLayer: 'contours',
+                thresholds: imperial
+                    ? { 11: [500, 2500], 12: [200, 1000], 13: [100, 500], 14: [40, 200], 15: [20, 100] }
+                    : { 11: [200, 1000], 12: [100, 500], 13: [50, 250], 14: [20, 100], 15: [10, 50] }
+            })],
+            maxzoom: ELEVATION_TILE_MAX_ZOOM
+        };
+    }
+
+    function removeContourLayers() {
+        [CONTOUR_LABEL_LAYER_ID, CONTOUR_LINE_LAYER_ID].forEach((layerId) => {
+            if (nativeMap.getLayer(layerId)) nativeMap.removeLayer(layerId);
+        });
+        if (nativeMap.getSource(CONTOUR_SOURCE_ID)) nativeMap.removeSource(CONTOUR_SOURCE_ID);
+    }
+
+    // Draw (or remove) the contour line + label layers. Lines sit just above the
+    // basemap/hillshade but below every overlay, route and marker.
+    function applyContours() {
+        if (!adapter._styleReady) return;
+        if (!adapter._contours || !adapter._contours.enabled) {
+            removeContourLayers();
+            return;
+        }
+        if (!ensureContourSetup()) return; // maplibre-contour unavailable
+
+        if (!nativeMap.getSource(CONTOUR_SOURCE_ID)) {
+            nativeMap.addSource(CONTOUR_SOURCE_ID, getContourSourceDefinition());
+        }
+
+        // Insert above the basemap/hillshade but below the first overlay/marker layer.
+        const styleLayers = (nativeMap.getStyle() && nativeMap.getStyle().layers) || [];
+        const reserved = ['basemap-layer', 'hillshade-layer', CONTOUR_LINE_LAYER_ID, CONTOUR_LABEL_LAYER_ID];
+        const firstOverlayLayer = styleLayers.find((styleLayer) => !reserved.includes(styleLayer.id));
+        const beforeId = firstOverlayLayer ? firstOverlayLayer.id : undefined;
+
+        if (!nativeMap.getLayer(CONTOUR_LINE_LAYER_ID)) {
+            nativeMap.addLayer({
+                id: CONTOUR_LINE_LAYER_ID,
+                type: 'line',
+                source: CONTOUR_SOURCE_ID,
+                'source-layer': 'contours',
+                paint: {
+                    'line-color': 'rgba(120, 72, 48, 0.6)',
+                    'line-width': ['match', ['get', 'level'], 1, 1.4, 0.6],
+                    'line-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0, 11.5, 0.85]
+                }
+            }, beforeId);
+        }
+
+        const wantLabels = !!adapter._contours.labels;
+        const hasLabels = !!nativeMap.getLayer(CONTOUR_LABEL_LAYER_ID);
+        if (wantLabels && !hasLabels) {
+            const imperial = getUnitSystem() === 'imperial';
+            nativeMap.addLayer({
+                id: CONTOUR_LABEL_LAYER_ID,
+                type: 'symbol',
+                source: CONTOUR_SOURCE_ID,
+                'source-layer': 'contours',
+                filter: ['==', ['get', 'level'], 1],
+                layout: {
+                    'symbol-placement': 'line',
+                    'text-size': 10,
+                    'text-field': ['concat', ['number-format', ['get', 'ele'], {}], imperial ? "'" : ' m'],
+                    'text-font': [CONTOUR_FONT]
+                },
+                paint: {
+                    'text-color': '#5a3a26',
+                    'text-halo-color': 'rgba(255, 255, 255, 0.85)',
+                    'text-halo-width': 1
+                }
+            }, beforeId);
+        } else if (!wantLabels && hasLabels) {
+            nativeMap.removeLayer(CONTOUR_LABEL_LAYER_ID);
+        }
+    }
+
     function flushPendingStyleLayers() {
         if (!adapter._styleReady) return;
         ensureTerrainSource();
@@ -1244,6 +1383,7 @@ function createMapAdapter(containerId, options) {
         }
         syncTerrain();
         applyHillshade();
+        applyContours();
     }
 
     function markStyleReady() {
@@ -1961,6 +2101,17 @@ function updateLanguage() {
         if (document.getElementById('lbl-show-crosshair')) document.getElementById('lbl-show-crosshair').textContent = t.lbl_show_crosshair;
         if (document.getElementById('lbl-crosshair-color')) document.getElementById('lbl-crosshair-color').textContent = t.lbl_crosshair_color;
         if (document.getElementById('lbl-enable-hillshade-slider')) document.getElementById('lbl-enable-hillshade-slider').textContent = t.lbl_enable_hillshade_slider;
+        if (document.getElementById('lbl-enable-contours')) document.getElementById('lbl-enable-contours').textContent = t.lbl_enable_contours;
+        if (document.getElementById('lbl-enable-contour-labels')) document.getElementById('lbl-enable-contour-labels').textContent = t.lbl_enable_contour_labels;
+        // Advanced-settings help tooltips: fill each row's tip text + the icon's accessible label.
+        ['crosshair-color', 'enable-exaggeration-slider', 'enable-hillshade-slider', 'enable-contours', 'enable-contour-labels', 'elev-map-sync', 'enable-tilt', 'max-pitch', 'enable-overzoom', 'show-crosshair', 'water-analysis', 'step-size', 'peak-min-pixels', 'scan-angles'].forEach((base) => {
+            const tipText = t['tip_' + base.replace(/-/g, '_')];
+            if (!tipText) return;
+            const tipEl = document.getElementById('tip-' + base);
+            if (tipEl) tipEl.textContent = tipText;
+            const helpEl = document.getElementById('help-' + base);
+            if (helpEl) helpEl.setAttribute('aria-label', tipText);
+        });
         if (hillshadeBtn) {
             const hillshadeLabel = t.btn_hillshade || 'Hillshade';
             hillshadeBtn.title = hillshadeLabel;
@@ -2288,6 +2439,24 @@ function isHillshadeEnabled() {
         return localStorage.getItem(HILLSHADE_ENABLED_KEY) === 'true';
     } catch (error) {
         return false;
+    }
+}
+
+function isContoursEnabled() {
+    try {
+        return localStorage.getItem(CONTOURS_ENABLED_KEY) === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+// Labels default on (only the absence of an explicit 'false' matters), so enabling
+// contours shows labelled major lines out of the box.
+function isContourLabelsEnabled() {
+    try {
+        return localStorage.getItem(CONTOUR_LABELS_KEY) !== 'false';
+    } catch (error) {
+        return true;
     }
 }
 
@@ -3728,6 +3897,7 @@ function setUnitSystem(value) {
     rebuildGpxLayer();
     updateGpxTrackInfo();
     updateCenterElevation();
+    if (map) map.refreshContours();
     if (elevationProfileData && !elevationProfileMinimized) drawElevationProfile();
 }
 
@@ -7022,6 +7192,31 @@ if (mapHillshadeOpacity) {
     });
 }
 syncHillshadeSlider();
+
+// Contour overlay: one Advanced-settings checkbox toggles the client-side contour
+// lines, a second toggles the elevation labels along the major contours. Both persist.
+if (map) {
+    map.setContourLabels(isContourLabelsEnabled());
+    map.setContours(isContoursEnabled());
+}
+
+const contoursToggle = document.getElementById('enableContours');
+if (contoursToggle) {
+    contoursToggle.checked = isContoursEnabled();
+    contoursToggle.addEventListener('change', (e) => {
+        try { localStorage.setItem(CONTOURS_ENABLED_KEY, e.target.checked); } catch (error) { /* storage unavailable */ }
+        if (map) map.setContours(e.target.checked);
+    });
+}
+
+const contourLabelsToggle = document.getElementById('enableContourLabels');
+if (contourLabelsToggle) {
+    contourLabelsToggle.checked = isContourLabelsEnabled();
+    contourLabelsToggle.addEventListener('change', (e) => {
+        try { localStorage.setItem(CONTOUR_LABELS_KEY, e.target.checked); } catch (error) { /* storage unavailable */ }
+        if (map) map.setContourLabels(e.target.checked);
+    });
+}
 
 const exaggerationSliderToggle = document.getElementById('enableExaggerationSlider');
 if (exaggerationSliderToggle) {
