@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#2196F3">
     <title>TopoScout</title>
 
@@ -11,11 +11,18 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="apple-touch-icon" href="icon.svg">
 
+    <!-- Warm up connections to the library CDN and the elevation-tile host so the
+         first MapLibre/tile request skips DNS + TLS setup. -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="preconnect" href="https://tiles.mapterhorn.com" crossorigin>
+    <link rel="dns-prefetch" href="https://tiles.mapterhorn.com">
+
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2959">
+    <link rel="stylesheet" href="style.css?v=2962">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -52,10 +59,18 @@
                 </select>
             </label>
 
+            <label style="display: flex; align-items: center; justify-content: center; margin: 10px 0;">
+                <select id="units-select" onchange="setUnitSystem(this.value)"
+                    style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                    <option value="metric" id="opt-units-metric">Metric (km, m)</option>
+                    <option value="imperial" id="opt-units-imperial">Imperial (mi, ft)</option>
+                </select>
+            </label>
+
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.8.1</span> (Build <span id="app-build">2957</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.9.0</span> (Build <span id="app-build">2962</span>)
             </p>
 
             <details
@@ -63,11 +78,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.9.0:</strong> Added a Units setting (Metric / Imperial) in the About menu, right below Language. Switch to Imperial to show all distances in miles/feet and every elevation in feet — across the live elevation, peak and climb results, GPX stats and the elevation profile — and the Search Radius and Climb inputs switch too. Replaces the old per-route km/mi dropdown. Also: result popups now fit long (4-digit) numbers without crowding the edge, and the route/POI checkboxes are tidied into two columns.</li>
+                    <li><strong>v2.8.2:</strong> Speed and polish. Map tiles you've already viewed are now cached, so revisiting an area loads instantly and the map keeps working offline, and the app starts faster. Fixes: the copy-coordinates tooltip now follows your language, popup distances respect your km/mi choice, and pinch-to-zoom works again on phones.</li>
                     <li><strong>v2.8.1:</strong> Added a Max tilt angle control under Advanced settings. Drag the slider (0–85°) to choose how far the map can tilt — the Tilt and 3D buttons now lean to the angle you pick, and you can pitch manually up to the same limit. Defaults to 60°.</li>
                     <li><strong>v2.8.0:</strong> Added an optional Hillshade relief layer. Toggle it with the new Hillshade button next to Search — it shades the terrain beneath the map while keeping your routes, climbs, and markers fully visible. Turn on "Enable Hillshade opacity slider" under Advanced settings to fine-tune its strength with a slider directly on the map. 3D exaggeration can be adjusted the same way via its own on-map slider.</li>
                     <li><strong>v2.7.4:</strong> The app now opens in Swedish automatically when your browser or device language is Swedish. You can still switch languages manually in this menu at any time, and your choice is remembered.</li>
-                    <li><strong>v2.7.3:</strong> Added a shaded accuracy ring around the live GPS marker. The ring grows or shrinks to match how precise your location fix is, and disappears for a pinpoint fix. A coarse "Approximate Location" fix is capped so the ring won't swamp the map.</li>
-                    <li><strong>v2.7.2:</strong> Your Points of Interest now stay visible on the map after you sign out of Google or reload the page — the most recently synced pins are cached on your device. Adding, editing, and deleting still require signing in. Also fixed the copy-coordinates button, which had stopped showing its icon correctly in popups.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -456,7 +471,7 @@
                         <span id="lbl-slope-max" class="control-label">Max (°):</span>
                         <div class="number-input-group">
                             <button class="num-btn" onclick="adjustNumber('slopeFilterMax', -1)">-</button>
-                            <input type="number" id="slopeFilterMax" value="100" min="0" max="100" step="1">
+                            <input type="number" id="slopeFilterMax" value="90" min="0" max="90" step="1">
                             <button class="num-btn" onclick="adjustNumber('slopeFilterMax', 1)">+</button>
                         </div>
                     </div>
@@ -486,37 +501,27 @@
                         <input type="range" id="gpxTrackWidth" min="1" max="10" value="4" step="1" style="flex:1; margin: 0 6px;">
                         <span id="gpxTrackWidthVal" style="min-width:25px;text-align:right;font-size:13px;">4</span>
                     </div>
-                    <div class="checkbox-group">
+                    <div class="checkbox-grid">
                         <div class="checkbox-row">
-                                <input type="checkbox" id="gpxShowKmLabels" checked>
+                            <input type="checkbox" id="gpxShowKmLabels" checked>
                             <label id="lbl-km-labels" for="gpxShowKmLabels">Show Distance labels</label>
                         </div>
-                        <select id="distanceUnit" style="width:auto; max-width:min-content; padding:2px 4px; border:1px solid #ccc; border-radius:6px; font-size:12px;">
-                            <option value="km" id="opt-unit-km">Kilometers</option>
-                            <option value="mi" id="opt-unit-mi">Miles</option>
-                        </select>
-                    </div>
-                    <div class="checkbox-group">
                         <div class="checkbox-row">
                             <input type="checkbox" id="gpxShowWaypoints" checked>
                             <label id="lbl-show-waypoints" for="gpxShowWaypoints">Show Waypoints</label>
                         </div>
                         <div class="checkbox-row">
-                            <input type="checkbox" id="gpxShowMinMax">
-                            <label id="lbl-show-minmax" for="gpxShowMinMax">Show Max/Min Height</label>
-                        </div>
-                    </div>
-                    <div class="checkbox-group">
-                        <div class="checkbox-row">
                             <input type="checkbox" id="gpxColorBySlope">
                             <label id="lbl-color-slope" for="gpxColorBySlope">Color by slope</label>
+                        </div>
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="gpxShowMinMax">
+                            <label id="lbl-show-minmax" for="gpxShowMinMax">Show Max/Min Height</label>
                         </div>
                         <div class="checkbox-row">
                             <input type="checkbox" id="gpxShowElevProfile" checked>
                             <label id="lbl-show-elev-profile" for="gpxShowElevProfile">Show Elevation Profile</label>
                         </div>
-                    </div>
-                    <div class="checkbox-group">
                         <div class="checkbox-row">
                             <input type="checkbox" id="showPoi" checked onchange="setPoiVisibility(this.checked)">
                             <label id="lbl-show-poi" for="showPoi">Show POIs</label>
@@ -601,10 +606,10 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script src="lang/en.js?v=2959"></script>
-    <script src="lang/sv.js?v=2959"></script>
-    <script src="script.js?v=2959"></script>
+    <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+    <script defer src="lang/en.js?v=2962"></script>
+    <script defer src="lang/sv.js?v=2962"></script>
+    <script defer src="script.js?v=2962"></script>
 </body>
 
 </html>
