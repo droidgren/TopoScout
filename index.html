@@ -22,7 +22,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2962">
+    <link rel="stylesheet" href="style.css?v=2969">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -70,7 +70,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.9.0</span> (Build <span id="app-build">2962</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.10.0</span> (Build <span id="app-build">2969</span>)
             </p>
 
             <details
@@ -78,11 +78,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.10.0:</strong> Added an optional Contour lines overlay. Turn on "Enable contour line layer" under Advanced settings to draw topographic contour lines over the terrain, with elevation labels along the major contours — toggle those separately with "Enable contour labels". The contour interval and labels follow your Metric / Imperial choice.</li>
                     <li><strong>v2.9.0:</strong> Added a Units setting (Metric / Imperial) in the About menu, right below Language. Switch to Imperial to show all distances in miles/feet and every elevation in feet — across the live elevation, peak and climb results, GPX stats and the elevation profile — and the Search Radius and Climb inputs switch too. Replaces the old per-route km/mi dropdown. Also: result popups now fit long (4-digit) numbers without crowding the edge, and the route/POI checkboxes are tidied into two columns.</li>
                     <li><strong>v2.8.2:</strong> Speed and polish. Map tiles you've already viewed are now cached, so revisiting an area loads instantly and the map keeps working offline, and the app starts faster. Fixes: the copy-coordinates tooltip now follows your language, popup distances respect your km/mi choice, and pinch-to-zoom works again on phones.</li>
                     <li><strong>v2.8.1:</strong> Added a Max tilt angle control under Advanced settings. Drag the slider (0–85°) to choose how far the map can tilt — the Tilt and 3D buttons now lean to the angle you pick, and you can pitch manually up to the same limit. Defaults to 60°.</li>
                     <li><strong>v2.8.0:</strong> Added an optional Hillshade relief layer. Toggle it with the new Hillshade button next to Search — it shades the terrain beneath the map while keeping your routes, climbs, and markers fully visible. Turn on "Enable Hillshade opacity slider" under Advanced settings to fine-tune its strength with a slider directly on the map. 3D exaggeration can be adjusted the same way via its own on-map slider.</li>
-                    <li><strong>v2.7.4:</strong> The app now opens in Swedish automatically when your browser or device language is Swedish. You can still switch languages manually in this menu at any time, and your choice is remembered.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -95,6 +95,8 @@
                 <div style="margin-top: 10px;">
                     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                         <span id="lbl-crosshair-color" style="font-size: 13px; min-width: 140px;">Crosshair color:</span>
+                        <span class="adv-help" id="help-crosshair-color" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-crosshair-color">Color of the crosshair marking the map's center. Choose one that stands out against your usual basemap. (Default: Dark)</span>
                         <select id="crosshairColor"
                             style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
                             <option value="#333333">Dark</option>
@@ -110,24 +112,48 @@
                         <input type="checkbox" id="enableExaggerationSlider"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-enable-exaggeration-slider" style="font-size: 13px; line-height: 1;">Enable 3D exaggeration slider</span>
+                        <span class="adv-help" id="help-enable-exaggeration-slider" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-exaggeration-slider">Adds an on-map slider to exaggerate terrain height in 3D, making slopes look steeper or flatter. (Default: Disabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
                         <input type="checkbox" id="enableHillshadeSlider"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-enable-hillshade-slider" style="font-size: 13px; line-height: 1;">Enable Hillshade opacity slider</span>
+                        <span class="adv-help" id="help-enable-hillshade-slider" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-hillshade-slider">Adds an on-map slider to set the strength (opacity) of the Hillshade relief shading. (Default: Disabled)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="enableContours"
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-enable-contours" style="font-size: 13px; line-height: 1;">Enable contour line layer</span>
+                        <span class="adv-help" id="help-enable-contours" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-contours">Draws topographic contour lines over the terrain, generated from the elevation data. (Default: Disabled)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="enableContourLabels"
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-enable-contour-labels" style="font-size: 13px; line-height: 1;">Enable contour labels</span>
+                        <span class="adv-help" id="help-enable-contour-labels" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-contour-labels">Labels the major contour lines with their elevation. Only applies when the contour layer is on. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
                         <input type="checkbox" id="gpxElevMapSync" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-elev-map-sync" style="font-size: 13px; line-height: 1;">Enable sync map with elevation profile</span>
+                        <span class="adv-help" id="help-elev-map-sync" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-elev-map-sync">While viewing a GPX route's elevation profile, moves a marker along the map as you scrub the profile. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
                         <input type="checkbox" id="enableTilt" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-enable-tilt" style="font-size: 13px; line-height: 1;">Enable tilt</span>
+                        <span class="adv-help" id="help-enable-tilt" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-tilt">Lets you tilt the map into a 3D view with a two-finger drag or the Tilt button. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                         <span id="lbl-max-pitch" style="font-size: 13px; min-width: 140px;">Max tilt angle:</span>
+                        <span class="adv-help" id="help-max-pitch" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-max-pitch">How far the map may tilt, from 0° (flat) to 85°. The Tilt and 3D buttons ease to this angle. (Default: 60°)</span>
                         <input type="range" id="maxPitchInput" min="0" max="85" value="60" step="5"
                             style="flex: 1; min-width: 0;">
                         <span id="maxPitchVal" style="font-size: 13px; min-width: 32px; text-align: right;">60°</span>
@@ -136,11 +162,15 @@
                         <input type="checkbox" id="enableOverzoom"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-enable-overzoom" style="font-size: 13px; line-height: 1;">Overzoom</span>
+                        <span class="adv-help" id="help-enable-overzoom" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-enable-overzoom">Lets you zoom in beyond the map tiles' native detail. Tiles are stretched, so they may look blurry. (Default: Disabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
                         <input type="checkbox" id="showCrosshair" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-crosshair" style="font-size: 13px; line-height: 1;">Show crosshair</span>
+                        <span class="adv-help" id="help-show-crosshair" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-show-crosshair">Shows a crosshair at the center of the map marking the exact point being measured. (Default: Enabled)</span>
                     </label>
                 </div>
             </details>
@@ -155,19 +185,27 @@
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-water-analysis" style="font-size: 13px; line-height: 1;">Water analysis (filter
                             water from results)</span>
+                        <span class="adv-help" id="help-water-analysis" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-water-analysis">Filters out water bodies (lakes, sea) from the highest-points results, so peaks found on water are ignored. (Default: Disabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                         <span id="lbl-step-size" style="font-size: 13px; min-width: 140px;">Climb Step Res. (m):</span>
+                        <span class="adv-help" id="help-step-size" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-step-size">Spacing between elevation samples taken along a climb. Smaller values are more precise but slower to compute. (Default: 10)</span>
                         <input type="number" id="stepSizeInput" value="10" min="2" max="50" step="1"
                             style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                         <span id="lbl-peak-min-pixels" style="font-size: 13px; min-width: 140px;">Peak Min Dist. (px):</span>
+                        <span class="adv-help" id="help-peak-min-pixels" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-peak-min-pixels">Minimum distance, in pixels, between two detected peaks. Larger values spread the highest points further apart. (Default: 40)</span>
                         <input type="number" id="peakMinPixelDistInput" value="40" min="1" max="200" step="1"
                             style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px;">
                         <span id="lbl-scan-angles" style="font-size: 13px; min-width: 140px;">Scan Angles:</span>
+                        <span class="adv-help" id="help-scan-angles" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-scan-angles">Number of directions sampled around each point when measuring the steepest ascent. More angles are more accurate but slower. (Default: 32)</span>
                         <input type="number" id="scanAnglesInput" value="32" min="8" max="72" step="4"
                             style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
                     </label>
@@ -607,9 +645,10 @@
     </div>
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script defer src="lang/en.js?v=2962"></script>
-    <script defer src="lang/sv.js?v=2962"></script>
-    <script defer src="script.js?v=2962"></script>
+    <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
+    <script defer src="lang/en.js?v=2969"></script>
+    <script defer src="lang/sv.js?v=2969"></script>
+    <script defer src="script.js?v=2969"></script>
 </body>
 
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = '2962';
+const CACHE_NAME = '2969';
 const ASSETS = [
     './',
     './index.html',
@@ -7,7 +7,9 @@ const ASSETS = [
     './manifest.json',
     './icon.svg',
     './lang/en.js',
-    './lang/sv.js'
+    './lang/sv.js',
+    './fonts/noto-sans-regular/0-255.pbf',
+    './fonts/open-sans-regular/0-255.pbf'
 ];
 
 // Runtime cache for cross-origin map/elevation tiles. Its name is intentionally
