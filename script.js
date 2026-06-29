@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.10.0";
-const BUILD_NUMBER = "2969";
+const BUILD_NUMBER = "2970";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -5916,12 +5916,32 @@ async function fetchAnalysisData() {
     await Promise.all(tilePromises);
 }
 
+// Tilted/3D views make map.getBounds() and map.project() return a skewed,
+// trapezoidal area, so the analysis scan rectangle would be wrong. Flatten to a
+// pitch-0 view (and turn off the Tilt/3D toggles) before any terrain scan, then
+// resolve once the camera has settled.
+function flattenViewForAnalysis() {
+    if (!map) return Promise.resolve();
+    const wasTilted = map.getPitch() > 0;
+    if (is3dEnabled()) {
+        setTerrainEnabled(false); // eases pitch back to 0
+    } else if (wasTilted) {
+        map.easeTo({ pitch: 0, duration: 300 });
+    }
+    if (!wasTilted) return Promise.resolve();
+    return new Promise((resolve) => {
+        const done = () => { map.off('moveend', done); resolve(); };
+        map.on('moveend', done);
+    });
+}
+
 async function analyzeTerrain() {
     const t = translations[currentLang];
     clearResults();
     if (scanBtn) scanBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
+        await flattenViewForAnalysis();
         await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
@@ -5941,6 +5961,7 @@ async function findSteepestClimb() {
     if (climbBtn) climbBtn.disabled = true;
     statusDiv.textContent = t.status_loading;
     try {
+        await flattenViewForAnalysis();
         await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
