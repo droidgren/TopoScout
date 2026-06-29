@@ -1,7 +1,7 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.10.0";
+const APP_VERSION = "2.11.0";
 const BUILD_NUMBER = "2970";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
@@ -6415,12 +6415,12 @@ function moveLatLng(latlng, distMeters, angleDeg) {
 // ==========================================
 // 5.1 SERVICE WORKER & UPDATES
 // ==========================================
-let newWorker;
 let isAppRefreshInProgress = false;
 let swRegistration = null;
 let lastUpdateCheck = 0;
 const SW_UPDATE_THROTTLE_MS = 60 * 1000;        // don't re-check more than once a minute
 const SW_UPDATE_INTERVAL_MS = 30 * 60 * 1000;   // periodic check for long-running sessions
+const SW_UPDATED_FLAG = 'swJustUpdated';        // sessionStorage flag carried across an auto-update reload
 
 function clearRefreshUrlFlag() {
     const url = new URL(window.location.href);
@@ -6484,6 +6484,10 @@ function checkForSwUpdate(force) {
 function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
+    // If we just auto-reloaded onto a freshly activated worker, confirm it to the user
+    // (no action needed). The flag is set in controllerchange just before the reload.
+    maybeShowUpdatedConfirmation();
+
     // Whether a SW already controls this page at load time. Used to suppress the
     // one-off reload that clients.claim() triggers on the very first install.
     const hadControllerAtStartup = !!navigator.serviceWorker.controller;
@@ -6493,22 +6497,12 @@ function initServiceWorker() {
     navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).then(reg => {
         swRegistration = reg;
 
-        // A new SW that finished installing in a previous session sits in `waiting`
-        // and never re-fires `updatefound`. On iOS the PWA is suspended/resumed rather
-        // than reloaded, so this is the common case where the prompt was never shown.
+        // The new SW auto-activates (skipWaiting on install), so there's no prompt to
+        // show. Defensive only: a worker left waiting from before auto-activation shipped
+        // won't skip on its own — nudge it so it activates and controllerchange fires.
         if (reg.waiting && navigator.serviceWorker.controller) {
-            newWorker = reg.waiting;
-            showUpdateNotification();
+            reg.waiting.postMessage({ action: 'skipWaiting' });
         }
-
-        reg.addEventListener('updatefound', () => {
-            newWorker = reg.installing;
-            newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    showUpdateNotification();
-                }
-            });
-        });
 
         // Check immediately, then again whenever the app is brought back to the
         // foreground (key for iOS standalone PWAs) and periodically while it stays open.
@@ -6522,37 +6516,66 @@ function initServiceWorker() {
     });
     setInterval(() => checkForSwUpdate(false), SW_UPDATE_INTERVAL_MS);
 
+    // A new SW now takes control on its own (no "Update" tap). Reload onto it only when it
+    // won't interrupt: right away if the app is backgrounded, otherwise the next time the
+    // user leaves it. A sessionStorage flag survives the reload so the fresh page can
+    // confirm the update with a snackbar.
     let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const reloadForUpdate = () => {
         if (refreshing) return;
-        if (isAppRefreshInProgress) return;
-        // Skip the reload that clients.claim() fires on the first-ever install; only
-        // reload when an existing controller is being replaced by an accepted update.
-        if (!hadControllerAtStartup) return;
         refreshing = true;
+        try { sessionStorage.setItem(SW_UPDATED_FLAG, '1'); } catch (e) { /* private mode */ }
         window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (isAppRefreshInProgress) return;      // the manual "Refresh app" path reloads itself
+        if (!hadControllerAtStartup) return;     // skip the first-ever install (clients.claim)
+        if (document.visibilityState === 'hidden') {
+            reloadForUpdate();
+        } else {
+            document.addEventListener('visibilitychange', function onHide() {
+                if (document.visibilityState === 'hidden') {
+                    document.removeEventListener('visibilitychange', onHide);
+                    reloadForUpdate();
+                }
+            });
+        }
     });
 }
 
-function showUpdateNotification() {
-    const t = translations[currentLang];
+// Show a brief, dismissable "app updated" confirmation (no action button) when the page
+// was just reloaded onto a new service worker. The auto-dismiss timer only starts once
+// the page is visible, so a reload that happened in the background is still seen on return.
+function maybeShowUpdatedConfirmation() {
+    let updated = false;
+    try {
+        updated = sessionStorage.getItem(SW_UPDATED_FLAG) === '1';
+        if (updated) sessionStorage.removeItem(SW_UPDATED_FLAG);
+    } catch (e) { /* private mode */ }
+    if (!updated) return;
+
+    const t = translations[currentLang] || translations.en || {};
     const snackbar = document.getElementById('update-notification');
     const msg = document.getElementById('update-msg');
     const btn = document.getElementById('update-btn');
+    if (!snackbar || !msg) return;
 
-    if (!snackbar || !msg || !btn) return;
-    if (snackbar.classList.contains('show')) return; // already prompting; avoid re-binding
-
-    msg.textContent = t.update_available;
-    btn.textContent = t.update_btn;
+    msg.textContent = (t.update_applied || 'App updated.').replace('{version}', APP_VERSION);
+    if (btn) btn.style.display = 'none';   // informational only — nothing to tap
     snackbar.classList.add('show');
 
-    btn.onclick = () => {
-        // Always message the latest detected worker (module-level newWorker).
-        if (newWorker) {
-            newWorker.postMessage({ action: 'skipWaiting' });
-        }
-    };
+    const dismiss = () => snackbar.classList.remove('show');
+    const startTimer = () => setTimeout(dismiss, 6000);
+    if (document.visibilityState === 'visible') {
+        startTimer();
+    } else {
+        document.addEventListener('visibilitychange', function onShow() {
+            if (document.visibilityState === 'visible') {
+                document.removeEventListener('visibilitychange', onShow);
+                startTimer();
+            }
+        });
+    }
 }
 
 function isMobileDevice() {

@@ -115,6 +115,7 @@ const LANG_SV = {
     lbl_scan_angles: "Skanningsvinklar:",
     update_available: "En ny version finns tillgänglig.",
     update_btn: "Uppdatera",
+    update_applied: "Uppdaterad till v{version}.",
     btn_install_app: "Installera som app",
     mobile_install_msg: "Installera TopoScout som app!",
     btn_install: "Installera",

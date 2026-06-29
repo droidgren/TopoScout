@@ -54,7 +54,9 @@ self.addEventListener('install', (event) => {
             // `cache: 'reload'` forces each asset to come from the network instead of
             // the browser HTTP cache, so a new release never re-caches stale files.
             return cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' })));
-        })
+        // Activate as soon as the new shell is cached instead of waiting for every tab to
+        // close, so updates apply on their own — no "Update" tap needed (key for iOS PWAs).
+        }).then(() => self.skipWaiting())
     );
 });
 
@@ -103,6 +105,16 @@ self.addEventListener('fetch', (event) => {
     // Same-origin: serve the precached app shell, falling back to the network.
     // Let the optional backend API hit the network directly.
     if (url.pathname.startsWith('/api/')) return;
+
+    // Navigations (the HTML document) go network-first so an online PWA always boots the
+    // freshest index.html; fall back to the cached shell only when the network is down.
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request).catch(() => caches.match('./index.html', { ignoreSearch: true }))
+        );
+        return;
+    }
+
     event.respondWith(
         caches.match(event.request, { ignoreSearch: true }).then((response) => {
             return response || fetch(event.request);
