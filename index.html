@@ -22,7 +22,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2975">
+    <link rel="stylesheet" href="style.css?v=2976">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -70,7 +70,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.13.0</span> (Build <span id="app-build">2975</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.13.0</span> (Build <span id="app-build">2976</span>)
             </p>
 
             <details
@@ -180,18 +180,18 @@
                         <span class="adv-tip" id="tip-show-zoom">Shows the current zoom level in the panel footer. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
-                        <input type="checkbox" id="showScale" checked
+                        <input type="checkbox" id="showScale"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-scale" style="font-size: 13px; line-height: 1;">Show scale</span>
                         <span class="adv-help" id="help-show-scale" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-scale">Shows the current map scale (e.g. 1:50 000) in the panel footer. (Default: Enabled)</span>
+                        <span class="adv-tip" id="tip-show-scale">Shows the current map scale (e.g. 1:50 000) in the panel footer. (Default: Disabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
-                        <input type="checkbox" id="showCenterGps" checked
+                        <input type="checkbox" id="showCenterGps"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-center-gps" style="font-size: 13px; line-height: 1;">Show center to GPS</span>
                         <span class="adv-help" id="help-show-center-gps" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-center-gps">Shows the distance from your GPS position to the map crosshair while GPS is on. (Default: Enabled)</span>
+                        <span class="adv-tip" id="tip-show-center-gps">Shows the distance from your GPS position to the map crosshair while GPS is on. (Default: Disabled)</span>
                     </label>
                 </div>
             </details>
@@ -695,9 +695,9 @@
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
-    <script defer src="lang/en.js?v=2975"></script>
-    <script defer src="lang/sv.js?v=2975"></script>
-    <script defer src="script.js?v=2975"></script>
+    <script defer src="lang/en.js?v=2976"></script>
+    <script defer src="lang/sv.js?v=2976"></script>
+    <script defer src="script.js?v=2976"></script>
 </body>
 
 </html>
