@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.12.0";
-const BUILD_NUMBER = "2972";
+const APP_VERSION = "2.13.0";
+const BUILD_NUMBER = "2975";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -113,6 +113,14 @@ const CONTOUR_LABEL_LAYER_ID = 'contour-labels';
 const CONTOURS_ENABLED_KEY = 'topo_contours';        // 'true' when the contour overlay is on
 const CONTOUR_LABELS_KEY = 'topo_contour_labels';    // 'true' when elevation labels are shown
 const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
+
+// Footer readout visibility. Each defaults to shown; only an explicit 'false' hides it.
+const SHOW_ZOOM_KEY = 'topo_show_zoom';
+const SHOW_SCALE_KEY = 'topo_show_scale';
+const SHOW_CENTER_GPS_KEY = 'topo_show_center_gps';
+function isZoomShown() { try { return localStorage.getItem(SHOW_ZOOM_KEY) !== 'false'; } catch (e) { return true; } }
+function isScaleShown() { try { return localStorage.getItem(SHOW_SCALE_KEY) !== 'false'; } catch (e) { return true; } }
+function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) !== 'false'; } catch (e) { return true; } }
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
@@ -1661,6 +1669,7 @@ let manualClimbPolyline = null; // L.polyline (blue preview line)
 let gpsMarker = null;          // native maplibregl.Marker for live GPS position
 let gpsAccuracyCircle = null;  // L.circle showing GPS margin of error (meters)
 let gpsWatchId = null;         // navigator.geolocation watch id (null = tracking off)
+let lastGpsPosition = null;    // {lat, lng} of the most recent GPS fix, or null when tracking is off
 let slopeOverlay = null;
 let extraOverlayLayer = null;
 let slopeLegend = null;
@@ -2103,8 +2112,11 @@ function updateLanguage() {
         if (document.getElementById('lbl-enable-hillshade-slider')) document.getElementById('lbl-enable-hillshade-slider').textContent = t.lbl_enable_hillshade_slider;
         if (document.getElementById('lbl-enable-contours')) document.getElementById('lbl-enable-contours').textContent = t.lbl_enable_contours;
         if (document.getElementById('lbl-enable-contour-labels')) document.getElementById('lbl-enable-contour-labels').textContent = t.lbl_enable_contour_labels;
+        if (document.getElementById('lbl-show-zoom')) document.getElementById('lbl-show-zoom').textContent = t.lbl_show_zoom;
+        if (document.getElementById('lbl-show-scale')) document.getElementById('lbl-show-scale').textContent = t.lbl_show_scale;
+        if (document.getElementById('lbl-show-center-gps')) document.getElementById('lbl-show-center-gps').textContent = t.lbl_show_center_gps;
         // Advanced-settings help tooltips: fill each row's tip text + the icon's accessible label.
-        ['crosshair-color', 'enable-exaggeration-slider', 'enable-hillshade-slider', 'enable-contours', 'enable-contour-labels', 'elev-map-sync', 'enable-tilt', 'max-pitch', 'enable-overzoom', 'show-crosshair', 'water-analysis', 'step-size', 'peak-min-pixels', 'scan-angles'].forEach((base) => {
+        ['crosshair-color', 'enable-exaggeration-slider', 'enable-hillshade-slider', 'enable-contours', 'enable-contour-labels', 'show-zoom', 'show-scale', 'show-center-gps', 'elev-map-sync', 'enable-tilt', 'max-pitch', 'enable-overzoom', 'show-crosshair', 'water-analysis', 'step-size', 'peak-min-pixels', 'scan-angles'].forEach((base) => {
             const tipText = t['tip_' + base.replace(/-/g, '_')];
             if (!tipText) return;
             const tipEl = document.getElementById('tip-' + base);
@@ -3118,6 +3130,8 @@ function stopGpsTracking() {
     if (gpsMarker) { gpsMarker.remove(); gpsMarker = null; }
     if (gpsAccuracyCircle) { gpsAccuracyCircle.remove(); gpsAccuracyCircle = null; }
     document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.remove('active'));
+    lastGpsPosition = null;
+    updateUI(); // hide the Center-to-GPS readout now that tracking is off
 }
 
 function locateUser() {
@@ -3135,6 +3149,8 @@ function locateUser() {
 
     function updateGpsMarker(pos) {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        lastGpsPosition = { lat, lng };
+        updateUI(); // refresh the Center-to-GPS distance for the new fix
         if (gpsMarker) {
             gpsMarker.setLngLat([lng, lat]);
         } else {
@@ -3735,6 +3751,32 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
     const dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Current map scale denominator (the X in "1:X"). Measures the ground distance
+// spanned by 100 CSS pixels at the map center, then divides by the OGC standard
+// pixel size (0.28 mm) to get a real-world scale.
+function computeScaleDenominator() {
+    const nm = map._map;
+    const cont = nm.getContainer();
+    const cx = cont.clientWidth / 2, cy = cont.clientHeight / 2;
+    const a = nm.unproject([cx, cy]), b = nm.unproject([cx + 100, cy]);
+    const mPerPx = haversineDistance(a.lat, a.lng, b.lat, b.lng) / 100;
+    return mPerPx / 0.00028;
+}
+
+// Snap a scale denominator to a readable round value (e.g. 1:50 000, 1:15 000).
+function niceScaleDenominator(d) {
+    const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+    const mag = Math.pow(10, Math.floor(Math.log10(d)));
+    const norm = d / mag;
+    let best = steps[0];
+    for (const s of steps) if (Math.abs(s - norm) < Math.abs(best - norm)) best = s;
+    return Math.round(best * mag);
+}
+
+function formatScale(d) {
+    return '1:' + Math.round(d).toLocaleString('en-US').replace(/,/g, ' ');
 }
 
 function computeTrackStats(allSegments) {
@@ -5757,9 +5799,33 @@ window.adjustNumber = function (inputId, amount) {
 
 function updateUI() {
     if (!zoomLabel) return;
+    const t = translations[currentLang];
     const zoom = map.getZoom();
     const displayZoom = Number.isInteger(zoom) ? zoom.toString() : zoom.toFixed(1);
     zoomLabel.innerText = 'Zoom: ' + displayZoom;
+    zoomLabel.style.display = isZoomShown() ? '' : 'none';
+
+    const scaleLabel = document.getElementById('scale-level');
+    if (scaleLabel) {
+        if (isScaleShown()) {
+            scaleLabel.innerText = (t.scale_label || 'Scale') + ': ' + formatScale(niceScaleDenominator(computeScaleDenominator()));
+            scaleLabel.style.display = '';
+        } else {
+            scaleLabel.style.display = 'none';
+        }
+    }
+
+    const gpsDist = document.getElementById('center-gps-dist');
+    if (gpsDist) {
+        if (lastGpsPosition && isCenterGpsShown()) {
+            const c = map.getCenter();
+            const m = haversineDistance(c.lat, c.lng, lastGpsPosition.lat, lastGpsPosition.lng);
+            gpsDist.innerText = (t.center_to_gps_label || 'Center to GPS') + ': ' + formatDistance(m);
+            gpsDist.style.display = '';
+        } else {
+            gpsDist.style.display = 'none';
+        }
+    }
     const searchCenter = getSearchCenter();
     const markerColor = isLocked ? '#e67e22' : '#007bff';
 
@@ -7306,6 +7372,22 @@ if (contourLabelsToggle) {
         if (map) map.setContourLabels(e.target.checked);
     });
 }
+
+// Footer readout visibility toggles. Each persists a 'false' when unchecked and
+// re-runs updateUI() so the badge shows/hides immediately.
+[
+    ['showZoom', SHOW_ZOOM_KEY, isZoomShown],
+    ['showScale', SHOW_SCALE_KEY, isScaleShown],
+    ['showCenterGps', SHOW_CENTER_GPS_KEY, isCenterGpsShown],
+].forEach(([id, key, isShown]) => {
+    const cb = document.getElementById(id);
+    if (!cb) return;
+    cb.checked = isShown();
+    cb.addEventListener('change', (e) => {
+        try { localStorage.setItem(key, e.target.checked); } catch (error) { /* storage unavailable */ }
+        updateUI();
+    });
+});
 
 const exaggerationSliderToggle = document.getElementById('enableExaggerationSlider');
 if (exaggerationSliderToggle) {

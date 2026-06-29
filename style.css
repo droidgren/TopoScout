@@ -130,8 +130,15 @@ h3 {
 .footer-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
     margin-top: 4px;
+}
+
+.footer-metrics {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
 }
 
 /* MODAL (COMMON DESIGN) */
