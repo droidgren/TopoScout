@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.13.0";
-const BUILD_NUMBER = "2975";
+const BUILD_NUMBER = "2976";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -114,13 +114,14 @@ const CONTOURS_ENABLED_KEY = 'topo_contours';        // 'true' when the contour 
 const CONTOUR_LABELS_KEY = 'topo_contour_labels';    // 'true' when elevation labels are shown
 const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
 
-// Footer readout visibility. Each defaults to shown; only an explicit 'false' hides it.
+// Footer readout visibility. Zoom defaults to shown (only an explicit 'false' hides it);
+// scale and center GPS default to hidden (only an explicit 'true' shows them).
 const SHOW_ZOOM_KEY = 'topo_show_zoom';
 const SHOW_SCALE_KEY = 'topo_show_scale';
 const SHOW_CENTER_GPS_KEY = 'topo_show_center_gps';
 function isZoomShown() { try { return localStorage.getItem(SHOW_ZOOM_KEY) !== 'false'; } catch (e) { return true; } }
-function isScaleShown() { try { return localStorage.getItem(SHOW_SCALE_KEY) !== 'false'; } catch (e) { return true; } }
-function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) !== 'false'; } catch (e) { return true; } }
+function isScaleShown() { try { return localStorage.getItem(SHOW_SCALE_KEY) === 'true'; } catch (e) { return false; } }
+function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) === 'true'; } catch (e) { return false; } }
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
