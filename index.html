@@ -22,7 +22,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2970">
+    <link rel="stylesheet" href="style.css?v=2972">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -70,7 +70,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.11.0</span> (Build <span id="app-build">2970</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.12.0</span> (Build <span id="app-build">2972</span>)
             </p>
 
             <details
@@ -78,11 +78,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.12.0:</strong> You can now install TopoScout to your Home Screen on iPhone &amp; iPad — the "Install as App" button now appears in Safari and shows simple step-by-step "Add to Home Screen" instructions.</li>
                     <li><strong>v2.11.0:</strong> The app now updates itself automatically — no more tapping "Update". When a new version is ready it refreshes in the background and shows a brief "Updated" note, so the home-screen app (especially on iPhone) is always on the latest build.</li>
                     <li><strong>v2.10.0:</strong> Added an optional Contour lines overlay. Turn on "Enable contour line layer" under Advanced settings to draw topographic contour lines over the terrain, with elevation labels along the major contours — toggle those separately with "Enable contour labels". The contour interval and labels follow your Metric / Imperial choice.</li>
                     <li><strong>v2.9.0:</strong> Added a Units setting (Metric / Imperial) in the About menu, right below Language. Switch to Imperial to show all distances in miles/feet and every elevation in feet — across the live elevation, peak and climb results, GPX stats and the elevation profile — and the Search Radius and Climb inputs switch too. Replaces the old per-route km/mi dropdown. Also: result popups now fit long (4-digit) numbers without crowding the edge, and the route/POI checkboxes are tidied into two columns.</li>
                     <li><strong>v2.8.2:</strong> Speed and polish. Map tiles you've already viewed are now cached, so revisiting an area loads instantly and the map keeps working offline, and the app starts faster. Fixes: the copy-coordinates tooltip now follows your language, popup distances respect your km/mi choice, and pinch-to-zoom works again on phones.</li>
-                    <li><strong>v2.8.1:</strong> Added a Max tilt angle control under Advanced settings. Drag the slider (0–85°) to choose how far the map can tilt — the Tilt and 3D buttons now lean to the angle you pick, and you can pitch manually up to the same limit. Defaults to 60°.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -234,6 +234,30 @@
             <div class="modal-btns">
                 <button id="modal-save" class="save-btn" onclick="saveApiKey()">Save</button>
                 <button id="modal-cancel" class="cancel-btn" onclick="cancelApiKey()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ios-install-modal" class="modal-overlay" onclick="if (event.target === this) closeIOSInstallInstructions()">
+        <div class="modal-content">
+            <h4 id="ios-install-title">Install TopoScout</h4>
+            <p id="ios-install-intro">Add TopoScout to your Home Screen for a full-screen, app-like experience:</p>
+            <ul class="ios-install-steps">
+                <li class="ios-install-step">
+                    <svg class="icon-svg ios-step-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                    <span id="ios-install-step1">Tap the Share button in Safari's toolbar.</span>
+                </li>
+                <li class="ios-install-step">
+                    <svg class="icon-svg ios-step-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                    <span id="ios-install-step2">Scroll down and tap "Add to Home Screen".</span>
+                </li>
+                <li class="ios-install-step">
+                    <svg class="icon-svg ios-step-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span id="ios-install-step3">Tap "Add" — TopoScout appears on your Home Screen.</span>
+                </li>
+            </ul>
+            <div class="modal-btns">
+                <button id="ios-install-close" class="save-btn" onclick="closeIOSInstallInstructions()">Got it</button>
             </div>
         </div>
     </div>
@@ -646,9 +670,9 @@
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
-    <script defer src="lang/en.js?v=2970"></script>
-    <script defer src="lang/sv.js?v=2970"></script>
-    <script defer src="script.js?v=2970"></script>
+    <script defer src="lang/en.js?v=2972"></script>
+    <script defer src="lang/sv.js?v=2972"></script>
+    <script defer src="script.js?v=2972"></script>
 </body>
 
 </html>

@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.11.0";
-const BUILD_NUMBER = "2970";
+const APP_VERSION = "2.12.0";
+const BUILD_NUMBER = "2972";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2284,6 +2284,18 @@ function updateLanguage() {
         if (installMsg) installMsg.textContent = t.mobile_install_msg;
         const mobileInstallBtn = document.getElementById('mobile-install-btn');
         if (mobileInstallBtn) mobileInstallBtn.textContent = t.btn_install;
+        const iosInstallTitle = document.getElementById('ios-install-title');
+        if (iosInstallTitle) iosInstallTitle.textContent = t.ios_install_title;
+        const iosInstallIntro = document.getElementById('ios-install-intro');
+        if (iosInstallIntro) iosInstallIntro.textContent = t.ios_install_intro;
+        const iosInstallStep1 = document.getElementById('ios-install-step1');
+        if (iosInstallStep1) iosInstallStep1.textContent = t.ios_install_step1;
+        const iosInstallStep2 = document.getElementById('ios-install-step2');
+        if (iosInstallStep2) iosInstallStep2.textContent = t.ios_install_step2;
+        const iosInstallStep3 = document.getElementById('ios-install-step3');
+        if (iosInstallStep3) iosInstallStep3.textContent = t.ios_install_step3;
+        const iosInstallClose = document.getElementById('ios-install-close');
+        if (iosInstallClose) iosInstallClose.textContent = t.ios_install_close;
         const languageLabel = document.getElementById('lbl-language');
         if (languageLabel) languageLabel.textContent = t.lbl_language || 'Select Language';
         const infoBtn = document.querySelector('.info-btn');
@@ -6583,21 +6595,40 @@ function isMobileDevice() {
         (window.innerWidth <= 600 && 'ontouchstart' in window);
 }
 
+// iPhone/iPad Safari never fires `beforeinstallprompt`, so PWA install is manual
+// (Share -> Add to Home Screen). True when we should offer that manual path: an
+// iOS/iPadOS device that is not already running as an installed standalone app.
+function isIOSInstallEligible() {
+    const ua = navigator.userAgent || '';
+    // iPadOS 13+ defaults to "desktop" mode: the UA reports "Macintosh" with no
+    // iPad token, so a real iPad is detected by touch capability on a Mac UA /
+    // platform (navigator.platform is deprecated, so the UA check is the fallback).
+    const isIpadOS = (navigator.maxTouchPoints || 0) > 1 &&
+        (navigator.platform === 'MacIntel' || /Mac/.test(ua));
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || isIpadOS;
+    if (!isIOS) return false;
+    const standalone = navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches;
+    return !standalone; // already installed -> don't offer install
+}
+
 function shouldDelayInstallUiUntilTutorialCompletes() {
     return !localStorage.getItem('topo_tutorial_done') && !hasSharedMapView && !hasSharedGpxLink;
 }
 
 function showDeferredInstallUi(mobileDelayMs = 0) {
-    if (!deferredInstallPrompt) return;
+    if (!deferredInstallPrompt && !isIOSInstallEligible()) return;
     if (shouldDelayInstallUiUntilTutorialCompletes() || isTutorialVisible()) return;
 
     const installBtn = document.getElementById('install-app-btn');
     if (installBtn) installBtn.style.display = 'block';
 
-    if (!isMobileDevice() || localStorage.getItem('topo_install_dismissed')) return;
+    // iPad in desktop mode fails isMobileDevice() (no iPad token, wide viewport),
+    // so allow the bar for any install-eligible iOS device too.
+    if ((!isMobileDevice() && !isIOSInstallEligible()) || localStorage.getItem('topo_install_dismissed')) return;
 
     const showMobileBar = () => {
-        if (!deferredInstallPrompt || shouldDelayInstallUiUntilTutorialCompletes() || isTutorialVisible()) return;
+        if ((!deferredInstallPrompt && !isIOSInstallEligible()) || shouldDelayInstallUiUntilTutorialCompletes() || isTutorialVisible()) return;
         const mobileBar = document.getElementById('mobile-install-bar');
         if (mobileBar) mobileBar.classList.add('show');
     };
@@ -6611,7 +6642,11 @@ function showDeferredInstallUi(mobileDelayMs = 0) {
 }
 
 function triggerInstallPrompt() {
-    if (!deferredInstallPrompt) return;
+    if (!deferredInstallPrompt) {
+        // No native prompt on iPhone/iPad: show manual Add to Home Screen steps.
+        if (isIOSInstallEligible()) showIOSInstallInstructions();
+        return;
+    }
     deferredInstallPrompt.prompt();
     deferredInstallPrompt.userChoice.then(() => {
         deferredInstallPrompt = null;
@@ -6620,6 +6655,16 @@ function triggerInstallPrompt() {
         const mobileBar = document.getElementById('mobile-install-bar');
         if (mobileBar) mobileBar.classList.remove('show');
     });
+}
+
+function showIOSInstallInstructions() {
+    const modal = document.getElementById('ios-install-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeIOSInstallInstructions() {
+    const modal = document.getElementById('ios-install-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 function dismissInstallBar() {
@@ -7557,3 +7602,8 @@ function whenGpxMapReady(callback) {
 if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView && !hasSharedGpxLink) {
     setTimeout(() => startTutorial(), 1000);
 }
+
+// Surface the install UI on load for cases where no `beforeinstallprompt` fires
+// (notably iPhone/iPad). Safe no-op otherwise; returns early until the tutorial is
+// done, after which hideTutorial() re-invokes it.
+showDeferredInstallUi(1500);
