@@ -22,7 +22,7 @@
 
     <!-- ?v= must match CACHE_NAME in service-worker.js; bump both on every release
          so a refresh can't be served stale local assets from the browser cache. -->
-    <link rel="stylesheet" href="style.css?v=2972">
+    <link rel="stylesheet" href="style.css?v=2975">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -70,7 +70,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.12.0</span> (Build <span id="app-build">2972</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.13.0</span> (Build <span id="app-build">2975</span>)
             </p>
 
             <details
@@ -78,11 +78,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.13.0:</strong> The footer now shows the current map <strong>Scale</strong> (e.g. 1:50 000) and, while GPS is on, the <strong>Center to GPS</strong> distance — the straight-line distance from your GPS position to the map crosshair — both stacked under the Zoom value. Each readout can be shown or hidden individually under Advanced settings.</li>
                     <li><strong>v2.12.0:</strong> You can now install TopoScout to your Home Screen on iPhone &amp; iPad — the "Install as App" button now appears in Safari and shows simple step-by-step "Add to Home Screen" instructions.</li>
                     <li><strong>v2.11.0:</strong> The app now updates itself automatically — no more tapping "Update". When a new version is ready it refreshes in the background and shows a brief "Updated" note, so the home-screen app (especially on iPhone) is always on the latest build.</li>
                     <li><strong>v2.10.0:</strong> Added an optional Contour lines overlay. Turn on "Enable contour line layer" under Advanced settings to draw topographic contour lines over the terrain, with elevation labels along the major contours — toggle those separately with "Enable contour labels". The contour interval and labels follow your Metric / Imperial choice.</li>
                     <li><strong>v2.9.0:</strong> Added a Units setting (Metric / Imperial) in the About menu, right below Language. Switch to Imperial to show all distances in miles/feet and every elevation in feet — across the live elevation, peak and climb results, GPX stats and the elevation profile — and the Search Radius and Climb inputs switch too. Replaces the old per-route km/mi dropdown. Also: result popups now fit long (4-digit) numbers without crowding the edge, and the route/POI checkboxes are tidied into two columns.</li>
-                    <li><strong>v2.8.2:</strong> Speed and polish. Map tiles you've already viewed are now cached, so revisiting an area loads instantly and the map keeps working offline, and the app starts faster. Fixes: the copy-coordinates tooltip now follows your language, popup distances respect your km/mi choice, and pinch-to-zoom works again on phones.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -171,6 +171,27 @@
                         <span id="lbl-show-crosshair" style="font-size: 13px; line-height: 1;">Show crosshair</span>
                         <span class="adv-help" id="help-show-crosshair" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
                         <span class="adv-tip" id="tip-show-crosshair">Shows a crosshair at the center of the map marking the exact point being measured. (Default: Enabled)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="showZoom" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-show-zoom" style="font-size: 13px; line-height: 1;">Show zoom</span>
+                        <span class="adv-help" id="help-show-zoom" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-show-zoom">Shows the current zoom level in the panel footer. (Default: Enabled)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="showScale" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-show-scale" style="font-size: 13px; line-height: 1;">Show scale</span>
+                        <span class="adv-help" id="help-show-scale" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-show-scale">Shows the current map scale (e.g. 1:50 000) in the panel footer. (Default: Enabled)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="showCenterGps" checked
+                            style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
+                        <span id="lbl-show-center-gps" style="font-size: 13px; line-height: 1;">Show center to GPS</span>
+                        <span class="adv-help" id="help-show-center-gps" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
+                        <span class="adv-tip" id="tip-show-center-gps">Shows the distance from your GPS position to the map crosshair while GPS is on. (Default: Enabled)</span>
                     </label>
                 </div>
             </details>
@@ -607,7 +628,11 @@
 
         <div class="footer-row">
             <div id="status">Ready.</div>
-            <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
+            <div class="footer-metrics">
+                <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
+                <span id="scale-level" class="zoom-badge">Scale: --</span>
+                <span id="center-gps-dist" class="zoom-badge" style="display:none;">Center to GPS: -- m</span>
+            </div>
         </div>
     </div>
 
@@ -670,9 +695,9 @@
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
-    <script defer src="lang/en.js?v=2972"></script>
-    <script defer src="lang/sv.js?v=2972"></script>
-    <script defer src="script.js?v=2972"></script>
+    <script defer src="lang/en.js?v=2975"></script>
+    <script defer src="lang/sv.js?v=2975"></script>
+    <script defer src="script.js?v=2975"></script>
 </body>
 
 </html>
