@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 gpx-files/
 CLAUDE.md
+elevation_finder.yaml

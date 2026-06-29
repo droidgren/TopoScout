@@ -77,6 +77,28 @@ _poi_index_lock = threading.Lock()
 
 app = FastAPI(title="TopoScout Backend")
 app.mount("/lang", StaticFiles(directory=APP_DIR / "lang"), name="lang")
+app.mount("/fonts", StaticFiles(directory=APP_DIR / "fonts"), name="fonts")
+
+
+# The app shell must always be revalidated so a new release is picked up immediately and
+# Cloudflare's edge can't keep serving a stale service worker; the ?v=-versioned assets and
+# other static files are safe to cache hard because their URL changes every release. Set
+# here at the origin: the reverse proxy / compose add no cache headers, and FastAPI's
+# FileResponse / StaticFiles send none by default (Cloudflare was filling the gap with 4h).
+SHELL_NO_CACHE = {"/", "/index.html", "/service-worker.js", "/manifest.json"}
+STATIC_ASSET_SUFFIXES = (".js", ".css", ".pbf", ".svg")
+
+
+@app.middleware("http")
+async def set_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path in SHELL_NO_CACHE:
+        response.headers["Cache-Control"] = "no-cache"
+    elif path.startswith(("/lang/", "/fonts/")) or path.endswith(STATIC_ASSET_SUFFIXES):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Everything else (the /api/* endpoints) keeps whatever it set itself.
+    return response
 
 
 def ensure_storage_dirs() -> None:
