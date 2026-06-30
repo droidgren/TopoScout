@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.13.1";
-const BUILD_NUMBER = "2982";
+const BUILD_NUMBER = "2987";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6492,7 +6492,7 @@ let swRegistration = null;
 let lastUpdateCheck = 0;
 const SW_UPDATE_THROTTLE_MS = 60 * 1000;        // don't re-check more than once a minute
 const SW_UPDATE_INTERVAL_MS = 30 * 60 * 1000;   // periodic check for long-running sessions
-const SW_UPDATED_FLAG = 'swJustUpdated';        // sessionStorage flag carried across an auto-update reload
+const BUILD_SEEN_KEY = 'topo_last_build';       // localStorage: BUILD_NUMBER this device last ran (update-toast trigger)
 
 function clearRefreshUrlFlag() {
     const url = new URL(window.location.href);
@@ -6556,8 +6556,8 @@ function checkForSwUpdate(force) {
 function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    // If we just auto-reloaded onto a freshly activated worker, confirm it to the user
-    // (no action needed). The flag is set in controllerchange just before the reload.
+    // If the running build differs from the one this device last loaded, the app was
+    // updated since the user last saw it — confirm it to them (no action needed).
     maybeShowUpdatedConfirmation();
 
     // Whether a SW already controls this page at load time. Used to suppress the
@@ -6590,13 +6590,12 @@ function initServiceWorker() {
 
     // A new SW now takes control on its own (no "Update" tap). Reload onto it only when it
     // won't interrupt: right away if the app is backgrounded, otherwise the next time the
-    // user leaves it. A sessionStorage flag survives the reload so the fresh page can
-    // confirm the update with a snackbar.
+    // user leaves it. The fresh page detects the build change on its own and shows the
+    // "updated" snackbar (see maybeShowUpdatedConfirmation).
     let refreshing = false;
     const reloadForUpdate = () => {
         if (refreshing) return;
         refreshing = true;
-        try { sessionStorage.setItem(SW_UPDATED_FLAG, '1'); } catch (e) { /* private mode */ }
         window.location.reload();
     };
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -6615,23 +6614,29 @@ function initServiceWorker() {
     });
 }
 
-// Show a brief, dismissable "app updated" confirmation (no action button) when the page
-// was just reloaded onto a new service worker. The auto-dismiss timer only starts once
-// the page is visible, so a reload that happened in the background is still seen on return.
+// Show a brief, dismissable "app updated" confirmation (no action button) the first time
+// the app runs on a new build. We compare the running BUILD_NUMBER against the build this
+// device last recorded (localStorage): if it changed, the app updated since the user last
+// loaded it — however the update arrived (a background auto-reload OR a manual refresh onto
+// fresh assets). The auto-dismiss timer only starts once the page is visible, so an update
+// that landed while the app was backgrounded is still seen on return.
 function maybeShowUpdatedConfirmation() {
-    let updated = false;
+    let lastBuild = null;
     try {
-        updated = sessionStorage.getItem(SW_UPDATED_FLAG) === '1';
-        if (updated) sessionStorage.removeItem(SW_UPDATED_FLAG);
-    } catch (e) { /* private mode */ }
-    if (!updated) return;
+        lastBuild = localStorage.getItem(BUILD_SEEN_KEY);
+        localStorage.setItem(BUILD_SEEN_KEY, BUILD_NUMBER);   // record the build we're running now
+    } catch (e) { /* private mode / storage disabled */ }
+
+    // First run on this device (nothing recorded), or same build as last time: nothing to announce.
+    if (!lastBuild || lastBuild === BUILD_NUMBER) return;
 
     const t = translations[currentLang] || translations.en || {};
     const snackbar = document.getElementById('update-notification');
     const msg = document.getElementById('update-msg');
     if (!snackbar || !msg) return;
 
-    msg.textContent = (t.update_applied || 'App updated.').replace('{version}', APP_VERSION);
+    msg.textContent = (t.update_applied || 'Updated to v{version} (Build {build}).')
+        .replace('{version}', APP_VERSION).replace('{build}', BUILD_NUMBER);
     snackbar.classList.add('show');
 
     const dismiss = () => snackbar.classList.remove('show');
