@@ -123,8 +123,6 @@ const LANG_EN = {
     lbl_step_size: "Climb Step Res.",
     lbl_peak_min_pixels: "Peak Min Dist. (px):",
     lbl_scan_angles: "Scan Angles:",
-    update_available: "A new version is available.",
-    update_btn: "Update",
     update_applied: "Updated to v{version}.",
     btn_install_app: "Install as App",
     mobile_install_msg: "Install TopoScout as an app!",

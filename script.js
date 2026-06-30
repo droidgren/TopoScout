@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.13.1";
-const BUILD_NUMBER = "2978";
+const BUILD_NUMBER = "2981";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2281,13 +2281,6 @@ function updateLanguage() {
                 else if (val === 'satellite') layerSelect.options[i].text = t.layer_satellite + " (ESRI)";
                 else if (val === 'debug') layerSelect.options[i].text = t.layer_debug;
             }
-        }
-
-        // Update notification text if visible
-        const updateSnackbar = document.getElementById('update-notification');
-        if (updateSnackbar) {
-            document.getElementById('update-msg').textContent = t.update_available;
-            document.getElementById('update-btn').textContent = t.update_btn;
         }
 
         // Install button and mobile install bar
@@ -6636,11 +6629,9 @@ function maybeShowUpdatedConfirmation() {
     const t = translations[currentLang] || translations.en || {};
     const snackbar = document.getElementById('update-notification');
     const msg = document.getElementById('update-msg');
-    const btn = document.getElementById('update-btn');
     if (!snackbar || !msg) return;
 
     msg.textContent = (t.update_applied || 'App updated.').replace('{version}', APP_VERSION);
-    if (btn) btn.style.display = 'none';   // informational only — nothing to tap
     snackbar.classList.add('show');
 
     const dismiss = () => snackbar.classList.remove('show');
