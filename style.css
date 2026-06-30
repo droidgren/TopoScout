@@ -1318,7 +1318,7 @@ details[open] summary {
     position: fixed;
     bottom: calc(25px + env(safe-area-inset-bottom, 0px));
     left: 50%;
-    transform: translateX(-50%) translateY(150%);
+    transform: translateX(-50%) translateY(calc(100% + 25px + env(safe-area-inset-bottom, 0px) + 20px));
     background: rgba(33, 33, 33, 0.95);
     color: white;
     padding: 12px 20px;
