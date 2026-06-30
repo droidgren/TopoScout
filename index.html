@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all four tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=2977">
+    <link rel="stylesheet" href="style.css?v=2978">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -97,10 +97,10 @@
                     <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                         <span id="lbl-crosshair-color" style="font-size: 13px; min-width: 140px;">Crosshair color:</span>
                         <span class="adv-help" id="help-crosshair-color" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-crosshair-color">Color of the crosshair marking the map's center. Choose one that stands out against your usual basemap. (Default: Dark)</span>
+                        <span class="adv-tip" id="tip-crosshair-color">Color of the crosshair marking the map's center. Choose one that stands out against your usual basemap. (Default: Black)</span>
                         <select id="crosshairColor"
                             style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
-                            <option value="#333333">Dark</option>
+                            <option value="#333333">Black</option>
                             <option value="#FFFFFF">White</option>
                             <option value="#FF00FF">Magenta</option>
                             <option value="#00FFFF">Cyan</option>
@@ -696,9 +696,9 @@
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
-    <script defer src="lang/en.js?v=2977"></script>
-    <script defer src="lang/sv.js?v=2977"></script>
-    <script defer src="script.js?v=2977"></script>
+    <script defer src="lang/en.js?v=2978"></script>
+    <script defer src="lang/sv.js?v=2978"></script>
+    <script defer src="script.js?v=2978"></script>
 </body>
 
 </html>

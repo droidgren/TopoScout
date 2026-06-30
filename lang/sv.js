@@ -20,7 +20,7 @@ const LANG_SV = {
     tip_show_zoom: "Visar aktuell zoomnivå i panelens nederkant. (Standard: Aktiverad)",
     tip_show_scale: "Visar kartans aktuella skala (t.ex. 1:50 000) i panelens nederkant. (Standard: Inaktiverad)",
     tip_show_center_gps: "Visar avståndet från din GPS-position till kartans hårkors när GPS är på. (Standard: Inaktiverad)",
-    tip_crosshair_color: "Färgen på hårkorset som markerar kartans mitt. Välj en som syns tydligt mot din vanliga bakgrundskarta. (Standard: Mörk)",
+    tip_crosshair_color: "Färgen på hårkorset som markerar kartans mitt. Välj en som syns tydligt mot din vanliga bakgrundskarta. (Standard: Svart)",
     tip_enable_exaggeration_slider: "Lägger till ett skjutreglage på kartan för att överdriva terrängens höjd i 3D, så att sluttningar ser brantare eller flackare ut. (Standard: Inaktiverad)",
     tip_enable_hillshade_slider: "Lägger till ett skjutreglage på kartan för att ställa in styrkan (opaciteten) på skuggningsreliefen. (Standard: Inaktiverad)",
     tip_enable_contours: "Ritar topografiska höjdkurvor över terrängen, genererade från höjddatan. (Standard: Inaktiverad)",
