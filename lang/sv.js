@@ -121,7 +121,7 @@ const LANG_SV = {
     lbl_step_size: "Stigningssteg Upplösning",
     lbl_peak_min_pixels: "Minsta toppavstånd (px):",
     lbl_scan_angles: "Skanningsvinklar:",
-    update_applied: "Uppdaterad till v{version}.",
+    update_applied: "Uppdaterad till v{version} (Build {build})",
     btn_install_app: "Installera som app",
     mobile_install_msg: "Installera TopoScout som app!",
     btn_install: "Installera",
