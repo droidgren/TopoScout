@@ -1,16 +1,19 @@
-const CACHE_NAME = '2976';
-const ASSETS = [
+const CACHE_NAME = '2977';
+
+// Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
+// under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
+// requests; the fetch handler matches these search-SENSITIVELY, so a new build's ?v= misses
+// the old cache and falls through to the network. index.html's ?v= MUST equal CACHE_NAME.
+const VERSIONED = ['./style.css', './script.js', './lang/en.js', './lang/sv.js'];
+const STATIC = [
     './',
     './index.html',
-    './style.css',
-    './script.js',
     './manifest.json',
     './icon.svg',
-    './lang/en.js',
-    './lang/sv.js',
     './fonts/noto-sans-regular/0-255.pbf',
     './fonts/open-sans-regular/0-255.pbf'
 ];
+const ASSETS = [...STATIC, ...VERSIONED.map((url) => `${url}?v=${CACHE_NAME}`)];
 
 // Runtime cache for cross-origin map/elevation tiles. Its name is intentionally
 // version-independent so cached tiles survive app releases; it is capped instead.
@@ -50,13 +53,17 @@ async function putTileAndTrim(cache, request, response) {
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            // `cache: 'reload'` forces each asset to come from the network instead of
-            // the browser HTTP cache, so a new release never re-caches stale files.
-            return cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' })));
+        caches.open(CACHE_NAME).then((cache) => Promise.allSettled(
+            // `cache: 'reload'` forces each asset from the network, not the browser HTTP
+            // cache, so a new release never re-caches stale files. Settle per-asset (instead
+            // of the all-or-nothing cache.addAll) so one failed fetch can't abort the install
+            // and leave users stranded on the old worker.
+            ASSETS.map((url) => fetch(new Request(url, { cache: 'reload' })).then((resp) => {
+                if (resp && resp.ok) return cache.put(url, resp);
+            }))
         // Activate as soon as the new shell is cached instead of waiting for every tab to
         // close, so updates apply on their own — no "Update" tap needed (key for iOS PWAs).
-        }).then(() => self.skipWaiting())
+        )).then(() => self.skipWaiting())
     );
 });
 
@@ -115,8 +122,11 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // Other same-origin assets: cache-first, but search-SENSITIVE so a version-stamped URL
+    // (e.g. script.js?v=<new>) misses the old cache and falls through to the network. The
+    // ?v= shell assets are precached under their ?v= key, so this still hits when offline.
     event.respondWith(
-        caches.match(event.request, { ignoreSearch: true }).then((response) => {
+        caches.match(event.request).then((response) => {
             return response || fetch(event.request);
         })
     );
