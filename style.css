@@ -2010,6 +2010,17 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     color: #333;
 }
 
+/* Desktop: the header logo (only) doubles as the Print map launcher. The whole logo box
+   is clickable via bounding-box hit testing, not just its unfilled strokes. */
+.app-logo.printmap-launch {
+    cursor: pointer;
+    pointer-events: bounding-box;
+}
+
+.app-logo.printmap-launch:hover {
+    color: #2196F3;
+}
+
 /* Panel minimize +/- toggle */
 .toggle-btn {
     display: flex;
@@ -2089,4 +2100,98 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     width: 16px;
     height: 16px;
     display: block;
+}
+
+/* ---- Print map mode (?printmap) ---- */
+#printmap-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 900;
+    pointer-events: none; /* let pan/zoom pass through to the map for framing */
+}
+
+#printmap-overlay svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#printmap-overlay .printmap-shade {
+    fill: rgba(0, 0, 0, 0.45);
+}
+
+#printmap-overlay .printmap-window-border {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 2;
+    stroke-dasharray: 8 5;
+    paint-order: stroke;
+}
+
+#printmap-panel {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 1200;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+    padding: 12px 14px;
+    width: min(270px, calc(100vw - 24px));
+    font-size: 13px;
+    color: #222;
+}
+
+#printmap-panel .printmap-panel-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+#printmap-panel .printmap-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+#printmap-panel .printmap-row select {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+#printmap-panel .printmap-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 8px;
+    cursor: pointer;
+}
+
+#printmap-panel .printmap-hint {
+    font-size: 11.5px;
+    color: #666;
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+#printmap-panel .printmap-btns {
+    display: flex;
+    gap: 8px;
+}
+
+#printmap-panel .printmap-btns .action-btn {
+    flex: 1;
+    justify-content: center;
+}
+
+#printmap-panel .printmap-btns .action-btn.secondary {
+    background: #eceff1;
+    color: #333;
 }
