@@ -1,4 +1,4 @@
-const CACHE_NAME = '2987';
+const CACHE_NAME = '2998';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
@@ -10,6 +10,7 @@ const STATIC = [
     './index.html',
     './manifest.json',
     './icon.svg',
+    './vendor/jspdf.umd.min.js',
     './fonts/noto-sans-regular/0-255.pbf',
     './fonts/open-sans-regular/0-255.pbf'
 ];

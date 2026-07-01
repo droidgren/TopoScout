@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all four tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=2987">
+    <link rel="stylesheet" href="style.css?v=2998">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,7 +71,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.13.1</span> (Build <span id="app-build">2977</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.14.0</span> (Build <span id="app-build">2998</span>)
             </p>
 
             <details
@@ -79,11 +79,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.14.0:</strong> New <strong>Print map</strong> mode (desktop) — click the app logo to export the framed area as a PDF in <strong>A4 / A3 / A2</strong>, portrait or landscape. Pick the coordinate system (WGS 84 or SWEREF 99) and toggle the scale ruler, map source, coordinates, north arrow and border. Includes your layers, hillshade, GPX, POIs and results.</li>
                     <li><strong>v2.13.1:</strong> Fixed an ordinary refresh sometimes loading an older build than the latest — in any browser, not just the installed app. The service worker was ignoring the version stamp on the app's scripts and styles and serving a cached copy; a normal refresh now reliably loads the newest build, with no hard reload needed.</li>
                     <li><strong>v2.13.0:</strong> The footer now shows the current map <strong>Scale</strong> (e.g. 1:50 000) and, while GPS is on, the <strong>Center to GPS</strong> distance — the straight-line distance from your GPS position to the map crosshair — both stacked under the Zoom value. Each readout can be shown or hidden individually under Advanced settings.</li>
                     <li><strong>v2.12.0:</strong> You can now install TopoScout to your Home Screen on iPhone &amp; iPad — the "Install as App" button now appears in Safari and shows simple step-by-step "Add to Home Screen" instructions.</li>
                     <li><strong>v2.11.0:</strong> The app now updates itself automatically — no more tapping "Update". When a new version is ready it refreshes in the background and shows a brief "Updated" note, so the home-screen app (especially on iPhone) is always on the latest build.</li>
-                    <li><strong>v2.10.0:</strong> Added an optional Contour lines overlay. Turn on "Enable contour line layer" under Advanced settings to draw topographic contour lines over the terrain, with elevation labels along the major contours — toggle those separately with "Enable contour labels". The contour interval and labels follow your Metric / Imperial choice.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -695,9 +695,11 @@
 
     <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
-    <script defer src="lang/en.js?v=2987"></script>
-    <script defer src="lang/sv.js?v=2987"></script>
-    <script defer src="script.js?v=2987"></script>
+    <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
+    <script defer src="vendor/jspdf.umd.min.js"></script>
+    <script defer src="lang/en.js?v=2998"></script>
+    <script defer src="lang/sv.js?v=2998"></script>
+    <script defer src="script.js?v=2998"></script>
 </body>
 
 </html>

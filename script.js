@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.13.1";
-const BUILD_NUMBER = "2987";
+const APP_VERSION = "2.14.0";
+const BUILD_NUMBER = "2998";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -7686,3 +7686,599 @@ if (!localStorage.getItem('topo_tutorial_done') && !hasSharedMapView && !hasShar
 // (notably iPhone/iPad). Safe no-op otherwise; returns early until the tutorial is
 // done, after which hideTutorial() re-invokes it.
 showDeferredInstallUi(1500);
+
+// ==========================================
+// PRINT MAP — export the framed area to a print-ready PDF
+// ==========================================
+// Launched (desktop only) by clicking the app logo in the Control Panel.
+// A framing "window" is drawn over the live map (the area outside is shadowed out);
+// the user pans/zooms to frame the area, picks A4/A3 + portrait/landscape, then
+// "Generate PDF". Rendering uses a dedicated off-screen MapLibre map created with
+// preserveDrawingBuffer:true (the main map is not), so its WebGL canvas can be read.
+// Cloning the live style captures the base layer, hillshade, contours, overlays and the
+// GPX track line for free; DOM markers (POIs, analysis pins, GPX labels) are composited
+// on top by projecting their coordinates onto the print canvas.
+
+const PRINT_DPI = 200;
+const PRINT_PAPER_MM = { a4: [210, 297], a3: [297, 420], a2: [420, 594] };
+const PRINT_BASE_MARGIN_MM = 5;  // minimal outer margin, always present
+const PRINT_NBAND_MM = 3.5;      // horizontal N-coordinate label band (top & bottom)
+const PRINT_EBAND_MM = 3.5;      // vertical E-coordinate label band (left & right)
+const PRINT_FOOTER_MM = 6.5;     // bottom band height for the scale ruler + source
+const PRINT_PIN_TARGET_MM = 6.5; // on-paper height of composited marker pins
+
+let printModeState = null; // { overlay, panel, rect, paper, orientation, coordSystem, showScaleBar, showSource, showCoords, onResize }
+
+// Compute per-side margins from the enabled print options; any disabled annotation
+// frees its margin band back to the map, so the map grows to fill the freed space.
+function getPrintLayout(paper, orientation, opts) {
+    opts = opts || { coordinates: true, scaleRuler: true, mapSource: true };
+    const dims = PRINT_PAPER_MM[paper] || PRINT_PAPER_MM.a4;
+    const short = Math.min(dims[0], dims[1]);
+    const long = Math.max(dims[0], dims[1]);
+    const pageW = orientation === 'landscape' ? long : short;
+    const pageH = orientation === 'landscape' ? short : long;
+    const base = PRINT_BASE_MARGIN_MM;
+    // The scale ruler / source sit just below the map (same tight gap as the coordinates),
+    // sharing the bottom band with the lower-right coordinate rather than stacking below it.
+    const footerH = opts.scaleRuler ? PRINT_FOOTER_MM : (opts.mapSource ? 3.5 : 0);
+    const nBand = opts.coordinates ? PRINT_NBAND_MM : 0;
+    const eBand = opts.coordinates ? PRINT_EBAND_MM : 0;
+    const leftM = base + eBand;
+    const rightM = base + eBand;
+    const topM = base + nBand;
+    const bottomM = base + Math.max(nBand, footerH);
+    const mapX = leftM;
+    const mapY = topM;
+    const mapW = pageW - leftM - rightM;
+    const mapH = pageH - topM - bottomM;
+    return { pageW, pageH, mapX, mapY, mapW, mapH, aspect: mapW / mapH, leftM, rightM, topM, bottomM, base, footerH, nBand, eBand };
+}
+
+// The print options that affect layout margins (read from state, defaults for first paint).
+function currentPrintOpts() {
+    return {
+        coordinates: printModeState ? printModeState.showCoords : true,
+        scaleRuler: printModeState ? printModeState.showScaleBar : true,
+        mapSource: printModeState ? printModeState.showSource : true
+    };
+}
+
+// Rectangle (in map-container CSS px) of the print window for the current paper/orientation.
+function computePrintWindowRect() {
+    const cont = map._map.getContainer();
+    const CW = cont.clientWidth, CH = cont.clientHeight;
+    const layout = getPrintLayout(printModeState.paper, printModeState.orientation, currentPrintOpts());
+    const availW = CW * 0.86;
+    const availH = CH * 0.80; // leave headroom for the settings panel
+    let w = availW, h = w / layout.aspect;
+    if (h > availH) { h = availH; w = h * layout.aspect; }
+    return { x: (CW - w) / 2, y: (CH - h) / 2, w, h };
+}
+
+function redrawPrintWindow() {
+    if (!printModeState) return;
+    const cont = map._map.getContainer();
+    const CW = cont.clientWidth, CH = cont.clientHeight;
+    const rect = computePrintWindowRect();
+    printModeState.rect = rect;
+    const { x, y, w, h } = rect;
+    // A full-container path with a rectangular hole (evenodd) shades everything outside.
+    const shade = `M0 0 H${CW} V${CH} H0 Z M${x} ${y} H${x + w} V${y + h} H${x} Z`;
+    printModeState.svg.setAttribute('viewBox', `0 0 ${CW} ${CH}`);
+    printModeState.shadePath.setAttribute('d', shade);
+    printModeState.border.setAttribute('x', x);
+    printModeState.border.setAttribute('y', y);
+    printModeState.border.setAttribute('width', w);
+    printModeState.border.setAttribute('height', h);
+}
+
+function enterPrintMode() {
+    if (printModeState) return;
+    const t = translations[currentLang] || {};
+    const cont = map._map.getContainer();
+
+    // --- Framing overlay (inside the map container so coords line up with unproject) ---
+    const overlay = document.createElement('div');
+    overlay.id = 'printmap-overlay';
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const shadePath = document.createElementNS(svgNS, 'path');
+    shadePath.setAttribute('class', 'printmap-shade');
+    shadePath.setAttribute('fill-rule', 'evenodd');
+    const border = document.createElementNS(svgNS, 'rect');
+    border.setAttribute('class', 'printmap-window-border');
+    svg.appendChild(shadePath);
+    svg.appendChild(border);
+    overlay.appendChild(svg);
+    cont.appendChild(overlay);
+
+    // --- Settings panel ---
+    const panel = document.createElement('div');
+    panel.id = 'printmap-panel';
+    panel.innerHTML =
+        `<div class="printmap-panel-title">${t.print_title || 'Print map'}</div>` +
+        `<div class="printmap-row"><label>${t.print_paper_size || 'Paper size'}</label>` +
+        `<select id="printmap-paper"><option value="a4">A4</option><option value="a3">A3</option><option value="a2">A2</option></select></div>` +
+        `<div class="printmap-row"><label>${t.print_orientation || 'Orientation'}</label>` +
+        `<select id="printmap-orient"><option value="portrait">${t.print_portrait || 'Portrait'}</option>` +
+        `<option value="landscape">${t.print_landscape || 'Landscape'}</option></select></div>` +
+        `<div class="printmap-row"><label>${t.print_coord_system || 'Coordinate system'}</label>` +
+        `<select id="printmap-crs"><option value="wgs84">${t.print_wgs84 || 'WGS 84'}</option>` +
+        `<option value="sweref99">${t.print_sweref99 || 'SWEREF 99'}</option></select></div>` +
+        `<label class="printmap-check"><input type="checkbox" id="printmap-scalebar" checked> ${t.print_scale_ruler || 'Scale ruler'}</label>` +
+        `<label class="printmap-check"><input type="checkbox" id="printmap-source" checked> ${t.print_map_source || 'Map source'}</label>` +
+        `<label class="printmap-check"><input type="checkbox" id="printmap-coords" checked> ${t.print_coordinates || 'Coordinates'}</label>` +
+        `<label class="printmap-check"><input type="checkbox" id="printmap-northarrow" checked> ${t.print_north_arrow || 'North arrow'}</label>` +
+        `<label class="printmap-check"><input type="checkbox" id="printmap-border"> ${t.print_map_border || 'Map border'}</label>` +
+        `<div class="printmap-hint">${t.print_hint || ''}</div>` +
+        `<div class="printmap-btns">` +
+        `<button id="printmap-generate" class="action-btn">${t.print_generate || 'Generate PDF'}</button>` +
+        `<button id="printmap-exit" class="action-btn secondary">${t.print_exit || 'Exit'}</button>` +
+        `</div>`;
+    document.body.appendChild(panel);
+
+    printModeState = {
+        overlay, panel, svg, shadePath, border,
+        paper: 'a4', orientation: 'landscape', coordSystem: 'wgs84',
+        showScaleBar: true, showSource: true, showCoords: true, showNorthArrow: true, showBorder: false, rect: null, onResize: null
+    };
+
+    const paperSel = panel.querySelector('#printmap-paper');
+    const orientSel = panel.querySelector('#printmap-orient');
+    const crsSel = panel.querySelector('#printmap-crs');
+    const scaleChk = panel.querySelector('#printmap-scalebar');
+    const sourceChk = panel.querySelector('#printmap-source');
+    const coordsChk = panel.querySelector('#printmap-coords');
+    const northChk = panel.querySelector('#printmap-northarrow');
+    const borderChk = panel.querySelector('#printmap-border');
+    paperSel.value = printModeState.paper;
+    orientSel.value = printModeState.orientation;
+    crsSel.value = printModeState.coordSystem;
+    paperSel.addEventListener('change', () => { printModeState.paper = paperSel.value; redrawPrintWindow(); });
+    orientSel.addEventListener('change', () => { printModeState.orientation = orientSel.value; redrawPrintWindow(); });
+    crsSel.addEventListener('change', () => { printModeState.coordSystem = crsSel.value; });
+    scaleChk.addEventListener('change', () => { printModeState.showScaleBar = scaleChk.checked; redrawPrintWindow(); });
+    sourceChk.addEventListener('change', () => { printModeState.showSource = sourceChk.checked; redrawPrintWindow(); });
+    coordsChk.addEventListener('change', () => { printModeState.showCoords = coordsChk.checked; redrawPrintWindow(); });
+    northChk.addEventListener('change', () => { printModeState.showNorthArrow = northChk.checked; });
+    borderChk.addEventListener('change', () => { printModeState.showBorder = borderChk.checked; });
+    panel.querySelector('#printmap-exit').addEventListener('click', exitPrintMode);
+    panel.querySelector('#printmap-generate').addEventListener('click', () => { generatePrintPdf(); });
+
+    printModeState.onResize = () => redrawPrintWindow();
+    window.addEventListener('resize', printModeState.onResize);
+    // The container size is fixed, so only paper/orientation/resize change the window
+    // rect — the frame stays steady while the map pans/zooms underneath it.
+    redrawPrintWindow();
+}
+
+function exitPrintMode() {
+    if (!printModeState) return;
+    window.removeEventListener('resize', printModeState.onResize);
+    if (printModeState.overlay && printModeState.overlay.parentNode) printModeState.overlay.parentNode.removeChild(printModeState.overlay);
+    if (printModeState.panel && printModeState.panel.parentNode) printModeState.panel.parentNode.removeChild(printModeState.panel);
+    printModeState = null;
+}
+
+function setPrintStatus(msg) {
+    if (statusDiv) statusDiv.textContent = msg;
+}
+
+// WGS84 (lat/lon degrees) -> SWEREF 99 TM (EPSG:3006). Returns { n: northing, e: easting }.
+// Gauss conformal (Krüger n-series) on GRS80, per Lantmäteriet's published formulas.
+function wgs84ToSweref99tm(lat, lon) {
+    const a = 6378137.0, f = 1 / 298.257222101;
+    const k0 = 0.9996, FN = 0, FE = 500000.0, lon0 = 15 * Math.PI / 180;
+    const e2 = f * (2 - f);
+    const n = f / (2 - f);
+    const aRoof = a / (1 + n) * (1 + n ** 2 / 4 + n ** 4 / 64);
+    const A = e2;
+    const B = (5 * e2 ** 2 - e2 ** 3) / 6;
+    const C = (104 * e2 ** 3 - 45 * e2 ** 4) / 120;
+    const D = (1237 * e2 ** 4) / 1260;
+    const phi = lat * Math.PI / 180, lambda = lon * Math.PI / 180;
+    const phiStar = phi - Math.sin(phi) * Math.cos(phi) *
+        (A + B * Math.sin(phi) ** 2 + C * Math.sin(phi) ** 4 + D * Math.sin(phi) ** 6);
+    const dLambda = lambda - lon0;
+    const xiPrim = Math.atan(Math.tan(phiStar) / Math.cos(dLambda));
+    const etaPrim = Math.atanh(Math.cos(phiStar) * Math.sin(dLambda));
+    const b1 = n / 2 - 2 * n ** 2 / 3 + 5 * n ** 3 / 16 + 41 * n ** 4 / 180;
+    const b2 = 13 * n ** 2 / 48 - 3 * n ** 3 / 5 + 557 * n ** 4 / 1440;
+    const b3 = 61 * n ** 3 / 240 - 103 * n ** 4 / 140;
+    const b4 = 49561 * n ** 4 / 161280;
+    const north = k0 * aRoof * (xiPrim
+        + b1 * Math.sin(2 * xiPrim) * Math.cosh(2 * etaPrim)
+        + b2 * Math.sin(4 * xiPrim) * Math.cosh(4 * etaPrim)
+        + b3 * Math.sin(6 * xiPrim) * Math.cosh(6 * etaPrim)
+        + b4 * Math.sin(8 * xiPrim) * Math.cosh(8 * etaPrim)) + FN;
+    const east = k0 * aRoof * (etaPrim
+        + b1 * Math.cos(2 * xiPrim) * Math.sinh(2 * etaPrim)
+        + b2 * Math.cos(4 * xiPrim) * Math.sinh(4 * etaPrim)
+        + b3 * Math.cos(6 * xiPrim) * Math.sinh(6 * etaPrim)
+        + b4 * Math.cos(8 * xiPrim) * Math.sinh(8 * etaPrim)) + FE;
+    return { n: north, e: east };
+}
+
+function stripHtml(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html || '';
+    return (d.textContent || '').trim();
+}
+
+const _printImgCache = {};
+function loadImageCached(src) {
+    if (_printImgCache[src]) return _printImgCache[src];
+    const p = new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+    _printImgCache[src] = p;
+    return p;
+}
+
+// Normalize the app's various marker objects to { lat, lng, el, iconOptions }.
+function collectPrintOverlayItems() {
+    const items = [];
+    const add = (collection) => {
+        if (!collection) return;
+        for (const m of collection) {
+            if (!m) continue;
+            if (m._latlng && m._options) {           // adapter marker (POI / analysis pins)
+                const el = m._marker && m._marker.getElement ? m._marker.getElement() : null;
+                items.push({ lat: m._latlng.lat, lng: m._latlng.lng, el, iconOptions: m._options.icon && m._options.icon.options });
+            } else if (typeof m.getLngLat === 'function') { // native maplibregl.Marker (GPX labels)
+                const ll = m.getLngLat();
+                items.push({ lat: ll.lat, lng: ll.lng, el: (m.getElement ? m.getElement() : null), iconOptions: null });
+            }
+        }
+    };
+    if (poiLayerVisible) add(poiMarkers);
+    add(markers);
+    add(currentMarkers);
+    add(currentKmMarkers);
+    return items;
+}
+
+// Draw a small rounded text badge (used for GPX labels which are styled DOM, not images).
+function drawPrintTextBadge(ctx, text, x, y, scale, className) {
+    if (!text) return;
+    const fontPx = Math.round(11 * scale);
+    ctx.font = `600 ${fontPx}px sans-serif`;
+    const padX = 5 * scale, padY = 3 * scale;
+    const tw = ctx.measureText(text).width;
+    const bw = tw + padX * 2, bh = fontPx + padY * 2;
+    let fg = '#333';
+    if (className && className.indexOf('min-elev') !== -1) fg = '#1565C0';
+    else if (className && className.indexOf('gpx-elev-label') !== -1) fg = '#C62828';
+    const bx = x - bw / 2, by = y - bh / 2;
+    const r = 4 * scale;
+    ctx.beginPath();
+    ctx.moveTo(bx + r, by);
+    ctx.arcTo(bx + bw, by, bx + bw, by + bh, r);
+    ctx.arcTo(bx + bw, by + bh, bx, by + bh, r);
+    ctx.arcTo(bx, by + bh, bx, by, r);
+    ctx.arcTo(bx, by, bx + bw, by, r);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, scale);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.stroke();
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y + 0.5 * scale);
+}
+
+async function compositePrintDecorations(ctx, pmap, ratio, pxPerMm) {
+    const items = collectPrintOverlayItems();
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    for (const it of items) {
+        const p = pmap.project([it.lng, it.lat]);
+        const x = p.x * ratio, y = p.y * ratio;
+        if (x < -100 || y < -100 || x > W + 100 || y > H + 100) continue; // off-page
+        const el = it.el;
+        const img = el && el.tagName === 'IMG' ? el : (el && el.querySelector ? el.querySelector('img') : null);
+        const iconUrl = (it.iconOptions && it.iconOptions.iconUrl) || (img && img.getAttribute('src'));
+        if (iconUrl) {
+            const iconSize = (it.iconOptions && it.iconOptions.iconSize) || [25, 41];
+            const iconAnchor = (it.iconOptions && it.iconOptions.iconAnchor) || [iconSize[0] / 2, iconSize[1]];
+            const f = (PRINT_PIN_TARGET_MM * pxPerMm / iconSize[1]) * ratio;
+            try {
+                const loaded = await loadImageCached(iconUrl);
+                ctx.drawImage(loaded, x - iconAnchor[0] * f, y - iconAnchor[1] * f, iconSize[0] * f, iconSize[1] * f);
+            } catch (e) { /* skip a marker that fails to load */ }
+        } else if (el) {
+            drawPrintTextBadge(ctx, (el.textContent || '').trim(), x, y, ratio * (pxPerMm / 7.874), el.className);
+        }
+    }
+}
+
+// Build the off-screen print map, wait for it to settle, composite decorations, and
+// return the map image plus the geo/scale metadata the PDF needs.
+async function capturePrintComposite(rect, layout) {
+    const nm = map._map;
+    const pxPerMm = PRINT_DPI / 25.4;
+    const printW = Math.max(1, Math.round(layout.mapW * pxPerMm));
+    const printH = Math.max(1, Math.round(layout.mapH * pxPerMm));
+    const center = nm.unproject([rect.x + rect.w / 2, rect.y + rect.h / 2]);
+    const bearing = nm.getBearing();
+    // Same ground area as the framing window, rendered into printW px (independent of DPI).
+    const zoom = nm.getZoom() + Math.log2(printW / rect.w);
+
+    const style = nm.getStyle();
+    delete style.terrain; // flatten: a print is 2D (hillshade layer, which is separate, stays)
+
+    const holder = document.createElement('div');
+    holder.style.cssText = `position:fixed;left:-100000px;top:0;width:${printW}px;height:${printH}px;pointer-events:none;`;
+    document.body.appendChild(holder);
+
+    const pmap = new maplibregl.Map({
+        container: holder,
+        style,
+        center: [center.lng, center.lat],
+        zoom,
+        bearing,
+        pitch: 0,
+        interactive: false,
+        attributionControl: false,
+        fadeDuration: 0,
+        preserveDrawingBuffer: true
+    });
+    if (typeof pmap.setPixelRatio === 'function') { try { pmap.setPixelRatio(1); } catch (e) { /* older build */ } }
+
+    try {
+        await new Promise((resolve) => {
+            let done = false;
+            const finish = () => { if (done) return; done = true; resolve(); };
+            pmap.once('idle', finish);
+            setTimeout(finish, 9000); // safety net if tiles never fully settle
+        });
+
+        const glCanvas = pmap.getCanvas();
+        const ratio = glCanvas.width / printW;
+        const canvas = document.createElement('canvas');
+        canvas.width = glCanvas.width;
+        canvas.height = glCanvas.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(glCanvas, 0, 0);
+        await compositePrintDecorations(ctx, pmap, ratio, pxPerMm);
+
+        // Scale + corner metadata (computed while the print map is alive).
+        const c1 = pmap.unproject([printW / 2, printH / 2]);
+        const c2 = pmap.unproject([printW / 2 + 100, printH / 2]);
+        const mPerPx = haversineDistance(c1.lat, c1.lng, c2.lat, c2.lng) / 100;
+        const corners = {
+            nw: pmap.unproject([0, 0]),
+            ne: pmap.unproject([printW, 0]),
+            se: pmap.unproject([printW, printH]),
+            sw: pmap.unproject([0, printH])
+        };
+        const dataUrl = canvas.toDataURL('image/png');
+        return { dataUrl, printW, printH, mPerPx, corners, bearing };
+    } finally {
+        pmap.remove();
+        if (holder.parentNode) holder.parentNode.removeChild(holder);
+    }
+}
+
+// North-arrow symbol (an upward pointer with an "N"). Rendered from SVG so it can be
+// rasterised to a PNG and dropped into the PDF via addImage.
+const NORTH_ARROW_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="90.99" height="122.88" viewBox="0 0 90.99 122.88">' +
+    '<path d="M43.96,7.65L4.59,87.23l39.37-20.97V7.65L43.96,7.65L43.96,7.65z M40.9,93.74l14.03,17.65V99.16' +
+    'c0-1.73-0.24-2.89-0.74-3.49c-0.67-0.82-1.81-1.22-3.39-1.19v-0.73h9.41v0.73c-1.2,0.16-2.01,0.36-2.43,0.6' +
+    'c-0.41,0.25-0.73,0.65-0.97,1.21c-0.23,0.56-0.34,1.53-0.34,2.87v23.72h-0.71L36.53,99.13v18.17c0,1.64,0.37,2.77,1.12,3.35' +
+    'c0.75,0.58,1.62,0.87,2.59,0.87h0.67v0.73H30.77v-0.73c1.58-0.01,2.66-0.34,3.29-0.97c0.62-0.64,0.92-1.71,0.92-3.24V97.14' +
+    'l-0.59-0.74c-0.6-0.77-1.13-1.28-1.6-1.53c-0.46-0.24-1.12-0.38-1.99-0.41v-0.73H40.9L40.9,93.74z M46.78,0.94l44.05,89.04' +
+    'c0.35,0.71,0.06,1.58-0.66,1.93c-0.43,0.22-0.92,0.19-1.32-0.03v0.01L45.42,68.76L1.98,91.9L0,89.98L44.12,0.81h0.01' +
+    'C44.36,0.33,44.85,0,45.42,0l0,0C46.03,0,46.56,0.37,46.78,0.94L46.78,0.94L46.78,0.94L46.78,0.94z"/></svg>';
+const NORTH_ARROW_ASPECT = 90.99 / 122.88; // width / height
+
+// Rasterise the north-arrow SVG to a PNG data URL, rotated to point at true north
+// (on a map rotated by `bearingDeg`, north sits at screen angle -bearing). The arrow is
+// centred in a square canvas sized so it never clips at any rotation.
+async function rasterizeNorthArrow(bearingDeg) {
+    const SIZE = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    const uri = 'data:image/svg+xml,' + encodeURIComponent(NORTH_ARROW_SVG);
+    const img = await loadImageCached(uri);
+    ctx.translate(SIZE / 2, SIZE / 2);
+    ctx.rotate(-(bearingDeg || 0) * Math.PI / 180);
+    const h = SIZE * 0.78, w = h * NORTH_ARROW_ASPECT;
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    return canvas.toDataURL('image/png');
+}
+
+// Draws the segmented scale ruler with its 0/​d/​2d/​3d tick labels and unit.
+// Returns the total width in mm (bar + trailing unit) so the caller can place the
+// scale number + coordinate-system label immediately to its right.
+function drawPrintScaleBar(doc, x, yBottom, cap) {
+    // cap: { mmPerM } -> mm on paper per ground metre
+    const mmPerM = cap.mmPerM;
+    const targetMm = 40;
+    const targetM = targetMm / mmPerM;
+    const seg = niceScaleDenominator(targetM / 4); // nice per-segment ground distance
+    if (seg <= 0) return 0;
+    const segMm = seg * mmPerM;
+    const segs = 4;
+    const barH = 1.6;
+    const y = yBottom - barH;
+    doc.setLineWidth(0.2);
+    doc.setDrawColor(0, 0, 0);
+    for (let i = 0; i < segs; i++) {
+        const shade = i % 2 === 0 ? 0 : 255;
+        doc.setFillColor(shade, shade, shade);
+        doc.rect(x + i * segMm, y, segMm, barH, 'FD');
+    }
+    doc.setFontSize(6.5);
+    doc.setTextColor(30, 30, 30);
+    const unitKm = seg >= 1000;
+    for (let i = 0; i <= segs; i++) {
+        const val = unitKm ? (seg * i / 1000) : (seg * i);
+        const label = String(Math.round(val * 100) / 100);
+        doc.text(label, x + i * segMm, y - 1, { align: 'center' });
+    }
+    doc.text(unitKm ? 'km' : 'm', x + segs * segMm + 2, y + barH);
+    return segs * segMm + 7; // bar width + room for the unit label
+}
+
+function buildPrintPdf(cap, layout, meta) {
+    const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) throw new Error('jsPDF not loaded');
+    const orientation = layout.pageW >= layout.pageH ? 'landscape' : 'portrait';
+    const doc = new jsPDFCtor({ orientation, unit: 'mm', format: meta.paper });
+    const { mapX, mapY, mapW, mapH, pageW, pageH } = layout;
+
+    // Map image
+    doc.addImage(cap.dataUrl, 'PNG', mapX, mapY, mapW, mapH);
+    if (meta.showBorder) {
+        doc.setDrawColor(60, 60, 60);
+        doc.setLineWidth(0.3);
+        doc.rect(mapX, mapY, mapW, mapH, 'S');
+    }
+
+    const crsLabel = meta.coordSystem === 'sweref99' ? 'SWEREF 99 TM' : 'WGS 84';
+
+    // North arrow (top-left inside the map), optional. The SVG is pre-rasterised (rotated
+    // to true north) in generatePrintPdf and passed in as a PNG data URL.
+    if (meta.showNorthArrow && meta.northArrowDataUrl) {
+        const nSize = 11; // square image box (mm); the arrow sits centred within it
+        doc.addImage(meta.northArrowDataUrl, 'PNG', mapX + 1.5, mapY + 1.5, nSize, nSize);
+    }
+
+    // Corner coordinates: shown at the upper-left and lower-right corners only, just
+    // outside the map with a tight gap and a compact font. At each corner the N
+    // (northing/latitude) is horizontal and the E (easting/longitude) is vertical.
+    if (meta.showCoords) {
+        const fmt = (c) => {
+            if (meta.coordSystem === 'sweref99') {
+                const s = wgs84ToSweref99tm(c.lat, c.lng);
+                return { n: 'N ' + Math.round(s.n), e: 'E ' + Math.round(s.e) };
+            }
+            return { n: 'N ' + c.lat.toFixed(5) + '°', e: 'E ' + c.lng.toFixed(5) + '°' };
+        };
+        const nw = fmt(cap.corners.nw), se = fmt(cap.corners.se);
+        const gap = 0.8, capH = 2; // tiny map-to-label gap; approx glyph height (mm) at this size
+        doc.setFontSize(5.8);
+        doc.setTextColor(30, 30, 30);
+        // Upper-left corner: N horizontal above the top edge, E vertical left of the left edge
+        // (angle 90 reads bottom-to-top; glyphs extend left of the baseline).
+        doc.text(nw.n, mapX, mapY - gap);
+        doc.text(nw.e, mapX - gap, mapY + doc.getTextWidth(nw.e), { angle: 90 });
+        // Lower-right corner: N horizontal below the bottom edge (right-aligned to the edge),
+        // E vertical right of the right edge.
+        doc.text(se.n, mapX + mapW, mapY + mapH + gap + capH, { align: 'right' });
+        doc.text(se.e, mapX + mapW + gap + capH, mapY + mapH, { angle: 90 });
+    }
+
+    // Footer strip, all bottom-left: scale ruler + scale number + CRS, then the map source
+    // (to the right of the scale text when the ruler is shown). Positioned just below the
+    // map with the same tight gap as the coordinates.
+    const footerBaseline = mapY + mapH + (meta.showScaleBar ? 5.2 : 2.8);
+    let footerCursorX = mapX;
+    if (meta.showScaleBar) {
+        const mmPerM = mapW / (cap.printW * cap.mPerPx); // paper mm per ground metre
+        const barW = drawPrintScaleBar(doc, footerCursorX, footerBaseline, { mmPerM });
+        // Scale number + coordinate system, immediately to the right of the ruler.
+        const scaleDenom = niceScaleDenominator(cap.mPerPx / ((mapW / 1000) / cap.printW));
+        doc.setFontSize(8);
+        doc.setTextColor(20, 20, 20);
+        const scaleTxt = `${formatScale(scaleDenom)}  ·  ${crsLabel}`;
+        doc.text(scaleTxt, footerCursorX + barW + 3, footerBaseline - 0.5);
+        footerCursorX += barW + 3 + doc.getTextWidth(scaleTxt) + 6;
+    }
+    if (meta.showSource) {
+        doc.setFontSize(7.5);
+        doc.setTextColor(20, 20, 20);
+        const srcTxt = `${meta.sourceLabel}: ${meta.sourceName}${meta.attribution ? '  —  ' + meta.attribution : ''}`;
+        doc.text(srcTxt, footerCursorX, footerBaseline - 0.5);
+    }
+
+    // Brand stamp flush in the map's upper-right corner (over a faint white plate).
+    if (meta.stamp) {
+        doc.setFontSize(6.5);
+        const sTxt = meta.stamp;
+        const sW = doc.getTextWidth(sTxt);
+        const plateH = 3.4, plateW = sW + 1.2;
+        try { doc.setGState(new doc.GState({ opacity: 0.7 })); } catch (e) { /* older jsPDF */ }
+        doc.setFillColor(255, 255, 255);
+        doc.rect(mapX + mapW - plateW, mapY, plateW, plateH, 'F');
+        try { doc.setGState(new doc.GState({ opacity: 1 })); } catch (e) { /* older jsPDF */ }
+        doc.setTextColor(70, 70, 70);
+        doc.text(sTxt, mapX + mapW - 0.6, mapY + 2.4, { align: 'right' });
+    }
+
+    const name = (meta.sourceName || 'map').replace(/[^a-z0-9\-_]+/gi, '_').slice(0, 40);
+    doc.save(`toposcout_${name}_${meta.paper}.pdf`);
+}
+
+let _printBusy = false;
+async function generatePrintPdf() {
+    if (_printBusy || !printModeState) return;
+    _printBusy = true;
+    const t = translations[currentLang] || {};
+    const genBtn = printModeState.panel.querySelector('#printmap-generate');
+    if (genBtn) genBtn.disabled = true;
+    setPrintStatus(t.print_generating || 'Generating PDF…');
+    try {
+        const layout = getPrintLayout(printModeState.paper, printModeState.orientation, currentPrintOpts());
+        const rect = printModeState.rect || computePrintWindowRect();
+        const cap = await capturePrintComposite(rect, layout);
+        const layerKey = (layerSelect && layerSelect.value) || 'opentopo';
+        const sourceName = (layerSelect && layerSelect.options[layerSelect.selectedIndex])
+            ? layerSelect.options[layerSelect.selectedIndex].text : layerKey;
+        let northArrowDataUrl = null;
+        if (printModeState.showNorthArrow) {
+            try { northArrowDataUrl = await rasterizeNorthArrow(cap.bearing || 0); } catch (e) { /* skip arrow */ }
+        }
+        const meta = {
+            paper: printModeState.paper,
+            coordSystem: printModeState.coordSystem,
+            showScaleBar: printModeState.showScaleBar,
+            showSource: printModeState.showSource,
+            showCoords: printModeState.showCoords,
+            showNorthArrow: printModeState.showNorthArrow,
+            showBorder: printModeState.showBorder,
+            northArrowDataUrl,
+            scaleWord: t.print_scale_word || 'Scale',
+            sourceName,
+            sourceLabel: t.print_source_label || 'Map source',
+            attribution: stripHtml(MAP_SOURCES[layerKey] && MAP_SOURCES[layerKey].attribution),
+            stamp: t.print_stamp || 'TopoScout.org'
+        };
+        buildPrintPdf(cap, layout, meta);
+        setPrintStatus(t.print_done || 'PDF ready.');
+    } catch (err) {
+        console.error('Print map failed:', err);
+        setPrintStatus(t.print_error || 'Could not generate the PDF. Please try again.');
+    } finally {
+        if (genBtn) genBtn.disabled = false;
+        _printBusy = false;
+    }
+}
+
+// Launch Print map by clicking the app logo (not the title) in the Control Panel.
+// Desktop only — the modal needs room to be visible, so it is not offered on mobile.
+// CSS gives the logo `pointer-events: bounding-box` so its whole area is clickable, not
+// just the thin, unfilled SVG strokes.
+(function wirePrintMapLauncher() {
+    const logo = document.querySelector('#controls .app-logo');
+    if (!logo || isMobileDevice()) return;
+    logo.classList.add('printmap-launch');
+    const tip = (translations[currentLang] && translations[currentLang].print_title) || 'Print map';
+    const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    titleEl.textContent = tip;
+    logo.insertBefore(titleEl, logo.firstChild);
+    logo.addEventListener('click', () => {
+        if (isMobileDevice() || printModeState) return;
+        whenGpxMapReady(() => enterPrintMode());
+    });
+})();
