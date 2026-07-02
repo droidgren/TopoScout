@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.15.0";
-const BUILD_NUMBER = "3003";
+const BUILD_NUMBER = "3005";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1588,34 +1588,18 @@ function parseStoredZoom(key, fallback) {
 const layers = Object.fromEntries(Object.entries(MAP_SOURCES).map(([key, source]) => [key, L.tileLayer(source.url, { attribution: source.attribution, maxZoom: source.maxZoom, opacity: source.opacity })]));
 
 // Icons
-const _shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
 const rankIcons = [
     new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjRkZCMzAwIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNGRkIzMDAiPjE8L3RleHQ+PC9zdmc+',
-        shadowUrl: _shadowUrl,
-        iconSize: [28, 45], iconAnchor: [14, 45], popupAnchor: [1, -38], shadowSize: [45, 45]
-    }),
+        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjRkZCMzAwIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNGRkIzMDAiPjE8L3RleHQ+PC9zdmc+',        iconSize: [28, 45], iconAnchor: [14, 45], popupAnchor: [1, -38]    }),
     new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkE4MUNCIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMyQTgxQ0IiPjI8L3RleHQ+PC9zdmc+',
-        shadowUrl: _shadowUrl,
-        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-    }),
+        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkE4MUNCIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMyQTgxQ0IiPjI8L3RleHQ+PC9zdmc+',        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]    }),
     new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkE4MUNCIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMyQTgxQ0IiPjM8L3RleHQ+PC9zdmc+',
-        shadowUrl: _shadowUrl,
-        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-    })
+        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkE4MUNCIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNy44IiBmaWxsPSIjZmZmZmZmIi8+PHRleHQgeD0iMTIuNSIgeT0iMTYuNSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMyQTgxQ0IiPjM8L3RleHQ+PC9zdmc+',        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]    })
 ];
 const greenIcon = new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkFBRDI3IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNCIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==',
-    shadowUrl: _shadowUrl,
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
+    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjMkFBRDI3IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNCIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==',    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]});
 const redIcon = new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjQ0IyQjNFIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNCIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==',
-    shadowUrl: _shadowUrl,
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
+    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNSA0MSIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPjxwYXRoIGQ9Ik0gMTIuNSAxIEMgNi4xIDEgMSA2LjEgMSAxMi41IEMgMSAyMiAxMi41IDM5LjUgMTIuNSAzOS41IEMgMTIuNSAzOS41IDI0IDIyIDI0IDEyLjUgQyAyNCA2LjEgMTguOSAxIDEyLjUgMSBaIiBmaWxsPSIjQ0IyQjNFIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMi41IiBjeT0iMTIuNSIgcj0iNCIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==',    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]});
 
 // --- Points of Interest (POI) ---------------------------------------------
 // Every POI uses the same teardrop pin (like the rank markers) with a star in
@@ -1630,10 +1614,7 @@ function makePoiIcon(color) {
         + '<polygon points="12.5,6 14,10.4 18.7,10.5 15,13.3 16.3,17.8 12.5,15.1 8.7,17.8 10,13.3 6.3,10.5 11,10.4" fill="' + color + '"/>'
         + '</svg>';
     return new L.Icon({
-        iconUrl: 'data:image/svg+xml,' + encodeURIComponent(svg),
-        shadowUrl: _shadowUrl,
-        iconSize: [28, 45], iconAnchor: [14, 45], popupAnchor: [1, -38], shadowSize: [45, 45]
-    });
+        iconUrl: 'data:image/svg+xml,' + encodeURIComponent(svg),        iconSize: [28, 45], iconAnchor: [14, 45], popupAnchor: [1, -38]    });
 }
 
 const poiIconCache = {};
@@ -1693,7 +1674,6 @@ let routeRefreshTimer = null;  // debounce timer for legend refresh
 let slopeMapCenter = null;
 let slopeMapRadius = 0;
 let slopeMapUsesRadius = false;
-let gpxLayer = null;
 let gpxTrackData = null; // stores parsed GPX stats for info panel
 let currentMarkers = [];
 let currentKmMarkers = [];
@@ -3671,9 +3651,7 @@ window.clearGpxRoute = function () {
     clearMarkerCollection(currentKmMarkers);
     currentKmMarkers = [];
     removeLegendControl(gpxSlopeLegend);
-    gpxSlopeLegend = null;
-    gpxLayer = null;
-    gpxTrackData = null;
+    gpxSlopeLegend = null;    gpxTrackData = null;
     currentSharedGpxId = null;
     currentGpxFilename = null;
     currentGpxShareUrl = null;
@@ -4198,11 +4176,7 @@ function createSlopeLegendControl(legendItems) {
 function clearGpxTrackSourceAndLayers() {
     const nativeMap = map._map;
     if (nativeMap.getLayer('gpx-line-0')) {
-        let i = 0;
-        while (nativeMap.getLayer(`gpx-line-${i}`)) {
-            nativeMap.removeLayer(`gpx-line-${i}`);
-            i++;
-        }
+        nativeMap.removeLayer('gpx-line-0');
     }
     if (nativeMap.getSource('gpx-track')) {
         nativeMap.removeSource('gpx-track');
@@ -4475,9 +4449,7 @@ function setActiveGpxSource(source) {
 }
 
 function applyParsedGpxData(parsedGpx, options = {}) {
-    const t = translations[currentLang];
-    gpxLayer = null;
-    gpxTrackData = {
+    const t = translations[currentLang];    gpxTrackData = {
         segments: parsedGpx.segments,
         waypoints: parsedGpx.waypoints,
         ...parsedGpx.stats
@@ -5884,6 +5856,11 @@ function loadElevationTile(z, x, y) {
     return promise;
 }
 
+// Decode a Terrarium-encoded RGB triplet to elevation in meters.
+function terrariumToMeters(r, g, b) {
+    return (r * 256 + g + b / 256) - 32768;
+}
+
 // Decode the elevation (meters) of a single pixel within a loaded Terrarium tile.
 // Returns null for no-data (transparent) pixels.
 function decodeElevationPixel(img, pixelX, pixelY) {
@@ -5892,7 +5869,7 @@ function decodeElevationPixel(img, pixelX, pixelY) {
     spCtx.drawImage(img, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
     const pData = spCtx.getImageData(0, 0, 1, 1).data;
     if (pData[3] === 0) return null;
-    return (pData[0] * 256 + pData[1] + pData[2] / 256) - 32768;
+    return terrariumToMeters(pData[0], pData[1], pData[2]);
 }
 
 // Sample the terrain elevation (meters) at an arbitrary coordinate from a single
@@ -5916,13 +5893,28 @@ function getElevationAtLatLng(lat, lng) {
     }).catch(() => null);
 }
 
+// Shared enable/disable for the three analysis buttons (Scan / Climbs / Slope map).
+function setAnalysisButtonsDisabled(disabled) {
+    if (scanBtn) scanBtn.disabled = disabled;
+    if (climbBtn) climbBtn.disabled = disabled;
+    if (slopeBtn) slopeBtn.disabled = disabled;
+}
+
+// True while a scan/climb/slope analysis owns the shared analysis canvas. Blocks a
+// second analysis from starting mid-run and stops updateCenterElevation() from
+// re-enabling the buttons while one is still working.
+let analysisInProgress = false;
+
+// Monotonic id so only the newest in-flight center-elevation lookup writes the UI;
+// a slow tile load from an older map position must not clobber a newer result.
+let centerElevationRunId = 0;
+
 async function updateCenterElevation() {
     if (!centerHeightDisplay) return;
+    const runId = ++centerElevationRunId;
     const useCompactElevationStatus = window.innerWidth <= 600;
     const center = map.getCenter();
-    if (scanBtn) scanBtn.disabled = true;
-    if (climbBtn) climbBtn.disabled = true;
-    if (slopeBtn) slopeBtn.disabled = true;
+    setAnalysisButtonsDisabled(true);
     centerHeightDisplay.textContent = "...";
 
     const zoom = Math.min(Math.floor(map.getZoom()), ELEVATION_TILE_MAX_ZOOM);
@@ -5945,6 +5937,7 @@ async function updateCenterElevation() {
 
     try {
         const img = await loadElevationTile(zoom, tileX, tileY);
+        if (runId !== centerElevationRunId) return; // superseded by a newer lookup
         const h = decodeElevationPixel(img, pixelX, pixelY);
         if (h === null) {
             showNoData();
@@ -5956,11 +5949,15 @@ async function updateCenterElevation() {
                 statusDiv.textContent = (t.status_elevation || "Elevation") + ": " + mobileElevationText;
             }
         }
-        if (scanBtn) scanBtn.disabled = false;
-        if (climbBtn) climbBtn.disabled = false;
-        if (slopeBtn) slopeBtn.disabled = false;
     } catch (err) {
+        if (runId !== centerElevationRunId) return;
         showNoData();
+    } finally {
+        // A failed tile load must not leave the buttons stuck disabled. Only the
+        // newest run may re-enable, and never while an analysis holds the canvas.
+        if (runId === centerElevationRunId && !analysisInProgress) {
+            setAnalysisButtonsDisabled(false);
+        }
     }
 }
 
@@ -6022,60 +6019,93 @@ function flattenViewForAnalysis() {
     });
 }
 
+// End-of-analysis cleanup shared by the three analysis entry points: release the
+// canvas lock, re-enable the buttons and (on desktop) refresh the center readout.
+// Mobile keeps the result/status text, so no updateCenterElevation() there.
+function finishAnalysisRun() {
+    analysisInProgress = false;
+    setAnalysisButtonsDisabled(false);
+    if (window.innerWidth > 600) updateCenterElevation();
+}
+
 async function analyzeTerrain() {
     const t = translations[currentLang];
+    if (analysisInProgress) return;
+    analysisInProgress = true;
     clearResults();
-    if (scanBtn) scanBtn.disabled = true;
+    setAnalysisButtonsDisabled(true);
     statusDiv.textContent = t.status_loading;
     try {
         await flattenViewForAnalysis();
         await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
-            findPeaks();
-            if (window.innerWidth > 600) updateCenterElevation();
+            try {
+                findPeaks();
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = t.status_error + err.message;
+            } finally {
+                finishAnalysisRun();
+            }
         });
     } catch (err) {
         console.error(err);
         statusDiv.textContent = t.status_error + err.message;
-        if (window.innerWidth > 600) updateCenterElevation();
+        finishAnalysisRun();
     }
 }
 
 async function findSteepestClimb() {
     const t = translations[currentLang];
+    if (analysisInProgress) return;
+    analysisInProgress = true;
     clearResults();
-    if (climbBtn) climbBtn.disabled = true;
+    setAnalysisButtonsDisabled(true);
     statusDiv.textContent = t.status_loading;
     try {
         await flattenViewForAnalysis();
         await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
-            calculateMaxClimb();
-            if (window.innerWidth > 600) updateCenterElevation();
+            try {
+                calculateMaxClimb();
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = t.status_error + err.message;
+            } finally {
+                finishAnalysisRun();
+            }
         });
     } catch (err) {
         statusDiv.textContent = t.status_error + err.message;
-        if (window.innerWidth > 600) updateCenterElevation();
+        finishAnalysisRun();
     }
 }
 
 window.generateSlopeMap = async function () {
     const t = translations[currentLang];
+    if (analysisInProgress) return;
+    analysisInProgress = true;
     clearResults();
-    if (slopeBtn) slopeBtn.disabled = true;
+    setAnalysisButtonsDisabled(true);
     statusDiv.textContent = t.status_loading;
     try {
         await fetchAnalysisData();
         statusDiv.textContent = t.status_calc;
         requestAnimationFrame(() => {
-            _renderSlopeMap();
-            if (window.innerWidth > 600) updateCenterElevation();
+            try {
+                _renderSlopeMap();
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = t.status_error + err.message;
+            } finally {
+                finishAnalysisRun();
+            }
         });
     } catch (err) {
         statusDiv.textContent = t.status_error + err.message;
-        if (window.innerWidth > 600) updateCenterElevation();
+        finishAnalysisRun();
     }
 };
 
@@ -6088,6 +6118,7 @@ function _renderSlopeMap() {
     const searchCenterLatLng = getSearchCenter();
     const searchRadiusMeters = getRadiusMeters();
     const useRadius = circleCheckbox && circleCheckbox.checked;
+    const radiusLookup = useRadius ? buildRadiusLookup(w, h, searchCenterLatLng, searchRadiusMeters) : null;
 
     // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
     const lat = searchCenterLatLng.lat;
@@ -6128,15 +6159,12 @@ function _renderSlopeMap() {
     function getElevation(x, y) {
         const i = (y * w + x) * 4;
         if (imgData[i + 3] < 255) return null;
-        return (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
+        return terrariumToMeters(imgData[i], imgData[i + 1], imgData[i + 2]);
     }
 
     for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
-            if (useRadius) {
-                const latlng = canvasPointToLatLng(x, y);
-                if (searchCenterLatLng.distanceTo(latlng) > searchRadiusMeters) continue;
-            }
+            if (radiusLookup && !radiusLookup.contains(x, y)) continue;
 
             const eLeft = getElevation(x - 1, y);
             const eRight = getElevation(x + 1, y);
@@ -6189,22 +6217,28 @@ function _renderSlopeMap() {
     statusDiv.textContent = t.status_slope_done;
 }
 
-// Generalized function
+// Generalized tile compositor for the analysis canvases. Elevation (DEM) tiles go
+// through the shared loadElevationTile LRU cache, so re-scanning the same area skips
+// the refetch/decode; other tiles (the water basemap) load uncached because the cache
+// is keyed z/x/y for the DEM URL only. A failed tile stays undrawn: that area keeps
+// alpha 0 on the canvas and the analyses already treat it as no-data.
 function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
-    const promises = tiles.map(t => {
-        return new Promise((resolve) => {
+    const loadTile = (t) => {
+        if (urlTemplate === DATA_TILE_URL) {
+            return loadElevationTile(t.z, t.x, t.y);
+        }
+        return new Promise((resolve, reject) => {
             const img = new Image();
             img.crossOrigin = "Anonymous";
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('tile load failed'));
             img.src = urlTemplate.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
-            img.onload = () => {
-                const tilePos = new L.Point(t.x * 256, t.y * 256);
-                const offset = tilePos.subtract(nwPixelOrigin);
-                targetCtx.drawImage(img, offset.x, offset.y, 256, 256);
-                resolve();
-            };
-            img.onerror = () => resolve();
         });
-    });
+    };
+    const promises = tiles.map((t) => loadTile(t).then((img) => {
+        const offset = createPoint(t.x * 256, t.y * 256).subtract(nwPixelOrigin);
+        targetCtx.drawImage(img, offset.x, offset.y, 256, 256);
+    }).catch(() => { /* missing tile = transparent no-data area */ }));
     return Promise.all(promises);
 }
 
@@ -6212,6 +6246,44 @@ function loadAndDrawTiles(urlTemplate, targetCtx, tiles, nwPixelOrigin) {
 function canvasPointToLatLng(x, y) {
     const pixelPoint = analysisNwOrigin.add(L.point(x, y));
     return map.unproject(pixelPoint, analysisZoom);
+}
+
+// Precomputed "is canvas pixel (x,y) within the search radius of center?" tests.
+// The haversine term a = sin²(Δφ/2) + cosφ₁·cosφ₂·sin²(Δλ/2) splits into a per-row
+// part (latitude depends only on y) and a per-column part (longitude depends only
+// on x), and d ≤ radius ⇔ a ≤ sin²(radius/2R). So the hot loops in findPeaks,
+// calculateMaxClimb and _renderSlopeMap do one multiply-add and a compare per pixel
+// instead of a Mercator unproject plus a full haversine — same result, same math.
+function buildRadiusLookup(w, h, centerLatLng, radiusMeters) {
+    const lat1 = centerLatLng.lat * Math.PI / 180;
+    const cosLat1 = Math.cos(lat1);
+    const rowA = new Float64Array(h); // sin²(Δφ/2) per row
+    const rowF = new Float64Array(h); // cosφ₁·cosφ₂ per row
+    for (let y = 0; y < h; y++) {
+        const lat2 = canvasPointToLatLng(0, y).lat * Math.PI / 180;
+        const sinDLat = Math.sin((lat2 - lat1) / 2);
+        rowA[y] = sinDLat * sinDLat;
+        rowF[y] = cosLat1 * Math.cos(lat2);
+    }
+    const colB = new Float64Array(w); // sin²(Δλ/2) per column
+    for (let x = 0; x < w; x++) {
+        const dLng = (canvasPointToLatLng(x, 0).lng - centerLatLng.lng) * Math.PI / 180;
+        const sinDLng = Math.sin(dLng / 2);
+        colB[x] = sinDLng * sinDLng;
+    }
+    const sinHalf = Math.sin(Math.min(radiusMeters / (2 * EARTH_RADIUS_M), Math.PI / 2));
+    const aMax = sinHalf * sinHalf;
+    return {
+        contains(x, y) {
+            return rowA[y] + rowF[y] * colB[x] <= aMax;
+        },
+        // Same value latLng.distanceTo(center) returns (identical haversine); used
+        // for the distances shown in result popups.
+        distance(x, y) {
+            const a = Math.min(1, rowA[y] + rowF[y] * colB[x]);
+            return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+    };
 }
 
 function findPeaks() {
@@ -6224,7 +6296,8 @@ function findPeaks() {
 
     const searchCenterLatLng = getSearchCenter();
     const maxRadiusMeters = getRadiusMeters();
-    let candidates = [];
+    const radiusLookup = buildRadiusLookup(w, h, searchCenterLatLng, maxRadiusMeters);
+    const validPeaks = [];
     for (let y = 0; y < h; y += 2) {
         for (let x = 0; x < w; x += 2) {
             const i = (y * w + x) * 4;
@@ -6235,17 +6308,10 @@ function findPeaks() {
                 continue; // Skip if it is water
             }
 
-            const height = (imgData[i] * 256 + imgData[i + 1] + imgData[i + 2] / 256) - 32768;
-            if (height > -50) candidates.push({ x, y, h: height });
-        }
-    }
-    const validPeaks = [];
-    for (let p of candidates) {
-        const latlng = canvasPointToLatLng(p.x, p.y);
-        const dist = searchCenterLatLng.distanceTo(latlng);
-        if (dist <= maxRadiusMeters) {
-            p.dist = dist; p.lat = latlng.lat; p.lng = latlng.lng;
-            validPeaks.push(p);
+            if (!radiusLookup.contains(x, y)) continue;
+
+            const height = terrariumToMeters(imgData[i], imgData[i + 1], imgData[i + 2]);
+            if (height > -50) validPeaks.push({ x, y, h: height });
         }
     }
     validPeaks.sort((a, b) => b.h - a.h);
@@ -6266,16 +6332,19 @@ function findPeaks() {
     finalPoints.forEach((p, idx) => {
         const isHighest = (idx === 0);
         const markerOptions = (idx < 3) ? { icon: rankIcons[idx], zIndexOffset: 1000 - idx } : {};
+        // Coordinates and center distance only matter for the handful of winners.
+        const latlng = canvasPointToLatLng(p.x, p.y);
+        const dist = radiusLookup.distance(p.x, p.y);
 
         const popupContent = `
             <span class="popup-header" style="${isHighest ? 'color:#b8860b' : ''}">${t.res_rank} #${idx + 1}</span>
             <span class="popup-height">${formatElevation(p.h)}</span>
-            <span class="popup-meta">${t.res_dist}: ${formatDistance(p.dist)}</span>
+            <span class="popup-meta">${t.res_dist}: ${formatDistance(dist)}</span>
             <div class="coord-box">
-                <span>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
-                <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}, this)">📋</button>
+                <span>${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</span>
+                <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}, this)">📋</button>
             </div>`;
-        const marker = L.marker([p.lat, p.lng], markerOptions).addTo(map).bindPopup(popupContent);
+        const marker = L.marker([latlng.lat, latlng.lng], markerOptions).addTo(map).bindPopup(popupContent);
         if (isHighest) marker.openPopup();
         markers.push(marker);
     });
@@ -6318,6 +6387,13 @@ function calculateMaxClimb() {
         });
     }
 
+    // Path sampling resolution (user setting, default 10 m). Loop-invariant, so read
+    // it once here — getClimbStepMeters() hits the DOM, far too slow per pixel/angle.
+    const res = getClimbStepMeters();
+    const numSteps = Math.max(1, Math.floor(climbDistMeters / res));
+
+    const radiusLookup = buildRadiusLookup(w, h, searchCenterLatLng, searchRadiusMeters);
+
     const step = 4;
     for (let y = step; y < h - step; y += step) {
         for (let x = step; x < w - step; x += step) {
@@ -6326,11 +6402,10 @@ function calculateMaxClimb() {
             const i1 = (y * w + x) * 4;
             if (waterData && isWaterPixel(waterData[i1], waterData[i1 + 1], waterData[i1 + 2])) continue;
 
-            const startLatLng = canvasPointToLatLng(x, y);
-            if (searchCenterLatLng.distanceTo(startLatLng) > searchRadiusMeters) continue;
+            if (!radiusLookup.contains(x, y)) continue;
 
             if (imgData[i1 + 3] < 255) continue;
-            const h1 = (imgData[i1] * 256 + imgData[i1 + 1] + imgData[i1 + 2] / 256) - 32768;
+            const h1 = terrariumToMeters(imgData[i1], imgData[i1 + 1], imgData[i1 + 2]);
 
             for (let a = 0; a < angles; a++) {
                 const x2 = Math.round(x + angleOffsets[a].dx);
@@ -6343,12 +6418,9 @@ function calculateMaxClimb() {
                     if (waterData && isWaterPixel(waterData[i2], waterData[i2 + 1], waterData[i2 + 2])) continue;
 
                     if (imgData[i2 + 3] < 255) continue;
-                    const h2 = (imgData[i2] * 256 + imgData[i2 + 1] + imgData[i2 + 2] / 256) - 32768;
+                    const h2 = terrariumToMeters(imgData[i2], imgData[i2 + 1], imgData[i2 + 2]);
 
                     // Calculate cumulative ascent along the path
-                    // We take steps based on user defined resolution (default 10m), in meters
-                    const res = getClimbStepMeters();
-                    const numSteps = Math.max(1, Math.floor(climbDistMeters / res));
                     let cumulativeAscent = 0;
 
                     let validPath = true;
@@ -6366,7 +6438,7 @@ function calculateMaxClimb() {
                             break;
                         }
 
-                        const sh = (imgData[si] * 256 + imgData[si + 1] + imgData[si + 2] / 256) - 32768;
+                        const sh = terrariumToMeters(imgData[si], imgData[si + 1], imgData[si + 2]);
                         elevations.push(sh);
                     }
 
@@ -6392,13 +6464,12 @@ function calculateMaxClimb() {
                     }
 
                     if (cumulativeAscent > 1) {
-                        const endLatLng = canvasPointToLatLng(x2, y2);
-                        if (searchCenterLatLng.distanceTo(endLatLng) > searchRadiusMeters) continue;
+                        if (!radiusLookup.contains(x2, y2)) continue;
 
                         candidates.push({
                             diff: cumulativeAscent,
-                            start: { x: x, y: y, h: h1, latlng: startLatLng },
-                            end: { x: x2, y: y2, h: h2, latlng: endLatLng }
+                            start: { x: x, y: y, h: h1 },
+                            end: { x: x2, y: y2, h: h2 }
                         });
                     }
                 }
@@ -6433,8 +6504,12 @@ function calculateMaxClimb() {
         finalResults.forEach((res, index) => {
             const rank = index + 1;
             const isWinner = (rank === 1);
+            // Coordinates only matter for the few ranked winners, so compute them here
+            // instead of for every scanned candidate.
+            const startLatLng = canvasPointToLatLng(res.start.x, res.start.y);
+            const endLatLng = canvasPointToLatLng(res.end.x, res.end.y);
 
-            const polyline = L.polyline([res.start.latlng, res.end.latlng], {
+            const polyline = L.polyline([startLatLng, endLatLng], {
                 color: isWinner ? 'red' : '#ff7f50',
                 weight: isWinner ? 5 : 3,
                 opacity: 0.8
@@ -6442,29 +6517,28 @@ function calculateMaxClimb() {
             polylines.push(polyline);
 
             // Compute shared climb stats
-            const searchCenter = getSearchCenter();
-            const distStartEnd = res.start.latlng.distanceTo(res.end.latlng);
+            const distStartEnd = startLatLng.distanceTo(endLatLng);
             const distStartEndStr = formatDistance(distStartEnd);
             const verticalDrop = Math.round(res.end.h - res.start.h);
             const slopePercent = distStartEnd > 0 ? ((verticalDrop / distStartEnd) * 100).toFixed(1) : 0;
 
             // START POPUP
-            const distStart = searchCenter.distanceTo(res.start.latlng);
+            const distStart = radiusLookup.distance(res.start.x, res.start.y);
             const startPopup = `
                 <span class="popup-header">${t.res_rank} #${rank} (${t.res_start})</span>
                 <span class="popup-height">${t.res_elev}: ${formatElevation(res.start.h)}</span>
                 <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distStart)}</span>
                 <div class="coord-box">
-                    <span>${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${res.start.latlng.lat.toFixed(5)}, ${res.start.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <span>${startLatLng.lat.toFixed(5)}, ${startLatLng.lng.toFixed(5)}</span>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${startLatLng.lat.toFixed(5)}, ${startLatLng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
-            const startMarker = L.marker(res.start.latlng, { icon: greenIcon }).addTo(map)
+            const startMarker = L.marker(startLatLng, { icon: greenIcon }).addTo(map)
                 .bindPopup(startPopup);
             markers.push(startMarker);
 
             // PEAK POPUP
-            const distEnd = searchCenter.distanceTo(res.end.latlng);
+            const distEnd = radiusLookup.distance(res.end.x, res.end.y);
             const endPopup = `
                 <span class="popup-header" style="${isWinner ? 'color:#b8860b' : ''}">${t.res_rank} #${rank} (${t.res_peak})</span>
                 <span class="popup-height">${t.res_climb}: +${formatElevation(res.diff)}</span>
@@ -6474,11 +6548,11 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_slope}: ${slopePercent}%</span>
                 <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distEnd)}</span>
                 <div class="coord-box">
-                    <span>${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${res.end.latlng.lat.toFixed(5)}, ${res.end.latlng.lng.toFixed(5)}, this)">📋</button>
+                    <span>${endLatLng.lat.toFixed(5)}, ${endLatLng.lng.toFixed(5)}</span>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${endLatLng.lat.toFixed(5)}, ${endLatLng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
-            const endMarker = L.marker(res.end.latlng, { icon: redIcon }).addTo(map)
+            const endMarker = L.marker(endLatLng, { icon: redIcon }).addTo(map)
                 .bindPopup(endPopup);
             markers.push(endMarker);
 
@@ -7221,7 +7295,7 @@ function _elevationAtLatLng(latlng) {
     if (px < 0 || px >= canvas.width || py < 0 || py >= canvas.height) return null;
     const d = ctx.getImageData(px, py, 1, 1).data;
     if (d[3] < 255) return null;
-    return (d[0] * 256 + d[1] + d[2] / 256) - 32768;
+    return terrariumToMeters(d[0], d[1], d[2]);
 }
 
 function _sampleSegmentElevations(a, b) {
@@ -7241,7 +7315,7 @@ function _sampleSegmentElevations(a, b) {
         if (px < 0 || px >= w || py < 0 || py >= h) return null;
         const i = (py * w + px) * 4;
         if (all[i + 3] < 255) return null;
-        elevs.push((all[i] * 256 + all[i + 1] + all[i + 2] / 256) - 32768);
+        elevs.push(terrariumToMeters(all[i], all[i + 1], all[i + 2]));
     }
     return elevs;
 }
