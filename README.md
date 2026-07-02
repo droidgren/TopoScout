@@ -220,6 +220,10 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" toposcout
 - `manifest.json` - PWA metadata
 - `lang/en.js` - English strings
 - `lang/sv.js` - Swedish strings
+- `vendor/jspdf.umd.min.js` - vendored jsPDF library for Print map PDF export (precached for offline use)
+- `fonts/` - self-hosted, same-origin glyph sets for contour labels (`noto-sans-regular`, `open-sans-regular`)
+- `icon.svg` - app icon source
+- `icon-set.html` - helper page for generating the app icon set
 - `main.py` - optional FastAPI backend for GPX upload/list/delete/share/rename
 - `requirements.txt` - Python dependencies for the optional backend
 - `Dockerfile` - container image for the optional backend
