@@ -182,6 +182,8 @@ const LANG_EN = {
     tutorial_search_text: "Search for any place by name or coordinates. Use the GPS button to jump to your current location.",
     tutorial_share_title: "Share Map View",
     tutorial_share_text: "Use this button to copy a share link for your current language, zoom, center, and map layer.",
+    tutorial_print_title: "Print map (PDF)",
+    tutorial_print_text: "Click the TopoScout logo to open Print map. Frame an area and export it as a print-ready PDF in A4, A3 or A2, portrait or landscape. Pick the coordinate system (WGS 84 or SWEREF 99) and toggle the scale ruler, map source, coordinates, north arrow and border. Your layers, hillshade, GPX and POIs are all included.",
     tutorial_tips_title: "💡 Tips for Best Results",
     tutorial_tips_text: "• Zoom in to level 14–15 for the most accurate results.\n• Use a smaller search radius when zoomed in.\n• Lock the radius before scanning to keep the search area fixed.\n• Rotate the map by holding Ctrl and dragging, or use two-finger rotation on touch devices. Tap the compass icon to reset north.\n• Tap the GPS button in the bottom-right corner of the map to jump to your current location.",
     tutorial_btn_next: "Next",

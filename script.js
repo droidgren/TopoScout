@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.14.0";
-const BUILD_NUMBER = "2998";
+const BUILD_NUMBER = "2999";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6770,8 +6770,10 @@ const tutorialSteps = [
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
     { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
+    { targetSelector: '.app-logo', titleKey: 'tutorial_print_title', textKey: 'tutorial_print_text', desktopOnly: true },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
-];
+// Print map is launched from the app logo and only available on desktop, so drop that step on touch devices.
+].filter((step) => !step.desktopOnly || !isMobileDevice());
 
 function isTutorialVisible() {
     const overlay = document.getElementById('tutorial-overlay');

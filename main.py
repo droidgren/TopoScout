@@ -78,6 +78,7 @@ _poi_index_lock = threading.Lock()
 app = FastAPI(title="TopoScout Backend")
 app.mount("/lang", StaticFiles(directory=APP_DIR / "lang"), name="lang")
 app.mount("/fonts", StaticFiles(directory=APP_DIR / "fonts"), name="fonts")
+app.mount("/vendor", StaticFiles(directory=APP_DIR / "vendor"), name="vendor")
 
 
 # The app shell must always be revalidated so a new release is picked up immediately and
