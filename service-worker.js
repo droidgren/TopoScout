@@ -1,4 +1,4 @@
-const CACHE_NAME = '3003';
+const CACHE_NAME = '3005';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
@@ -10,6 +10,9 @@ const STATIC = [
     './index.html',
     './manifest.json',
     './icon.svg',
+    './vendor/maplibre-gl.js',
+    './vendor/maplibre-gl.css',
+    './vendor/maplibre-contour.min.js',
     './vendor/jspdf.umd.min.js',
     './fonts/noto-sans-regular/0-255.pbf',
     './fonts/open-sans-regular/0-255.pbf'
@@ -106,7 +109,7 @@ self.addEventListener('fetch', (event) => {
                 )
             );
         }
-        // Anything else cross-origin (Google Sign-In, Nominatim, unpkg) hits the network untouched.
+        // Anything else cross-origin (Google Sign-In, Nominatim) hits the network untouched.
         return;
     }
 

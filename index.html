@@ -11,19 +11,19 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="apple-touch-icon" href="icon.svg">
 
-    <!-- Warm up connections to the library CDN and the elevation-tile host so the
-         first MapLibre/tile request skips DNS + TLS setup. -->
-    <link rel="preconnect" href="https://unpkg.com">
-    <link rel="dns-prefetch" href="https://unpkg.com">
+    <!-- Warm up the connection to the elevation-tile host so the first tile
+         request skips DNS + TLS setup. -->
     <link rel="preconnect" href="https://tiles.mapterhorn.com" crossorigin>
     <link rel="dns-prefetch" href="https://tiles.mapterhorn.com">
 
-    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+    <!-- MapLibre is self-hosted (vendor/) and precached by the service worker so the
+         installed PWA boots offline; a CDN copy would be outside the app shell cache. -->
+    <link rel="stylesheet" href="vendor/maplibre-gl.css" />
 
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all four tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3003">
+    <link rel="stylesheet" href="style.css?v=3005">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,7 +71,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.15.0</span> (Build <span id="app-build">3001</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.15.0</span> (Build <span id="app-build">3005</span>)
             </p>
 
             <details
@@ -701,13 +701,13 @@
         </div>
     </div>
 
-    <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-    <script defer src="https://unpkg.com/maplibre-contour@0.1.0/dist/index.min.js"></script>
+    <script defer src="vendor/maplibre-gl.js"></script>
+    <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3003"></script>
-    <script defer src="lang/sv.js?v=3003"></script>
-    <script defer src="script.js?v=3003"></script>
+    <script defer src="lang/en.js?v=3005"></script>
+    <script defer src="lang/sv.js?v=3005"></script>
+    <script defer src="script.js?v=3005"></script>
 </body>
 
 </html>
