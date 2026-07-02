@@ -6,3 +6,11 @@ __pycache__/
 gpx-files/
 CLAUDE.md
 elevation_finder.yaml
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
