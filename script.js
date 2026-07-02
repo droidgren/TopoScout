@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.15.0";
-const BUILD_NUMBER = "3001";
+const BUILD_NUMBER = "3002";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -3188,7 +3188,7 @@ function locateUser() {
 
     // Initial fix recenters the map once; continuous updates only move the marker.
     navigator.geolocation.getCurrentPosition(
-        (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], 13); updateGpsMarker(pos); statusDiv.textContent = t.status_done; },
+        (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], map.getZoom()); updateGpsMarker(pos); statusDiv.textContent = t.status_done; },
         () => { statusDiv.textContent = t.status_gps_error; stopGpsTracking(); },
         { enableHighAccuracy: true }
     );
