@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.14.0";
-const BUILD_NUMBER = "2999";
+const BUILD_NUMBER = "3000";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -8148,6 +8148,15 @@ function buildPrintPdf(cap, layout, meta) {
     }
 
     const crsLabel = meta.coordSystem === 'sweref99' ? 'SWEREF 99 TM' : 'WGS 84';
+    const scaleDenom = niceScaleDenominator(cap.mPerPx / ((mapW / 1000) / cap.printW));
+
+    // Document properties (metadata) shown in a PDF reader's file/info panel.
+    doc.setProperties({
+        title: 'Generated map from TopoScout.org',
+        author: 'TopoScout.org',
+        subject: `${meta.sourceName || 'Map'} · Scale ${formatScale(scaleDenom)}`,
+        creator: 'TopoScout.org'
+    });
 
     // North arrow (top-left inside the map), optional. The SVG is pre-rasterised (rotated
     // to true north) in generatePrintPdf and passed in as a PNG data URL.
@@ -8189,8 +8198,8 @@ function buildPrintPdf(cap, layout, meta) {
     if (meta.showScaleBar) {
         const mmPerM = mapW / (cap.printW * cap.mPerPx); // paper mm per ground metre
         const barW = drawPrintScaleBar(doc, footerCursorX, footerBaseline, { mmPerM });
-        // Scale number + coordinate system, immediately to the right of the ruler.
-        const scaleDenom = niceScaleDenominator(cap.mPerPx / ((mapW / 1000) / cap.printW));
+        // Scale number + coordinate system, immediately to the right of the ruler
+        // (scaleDenom is computed once near the top and reused for the metadata subject).
         doc.setFontSize(8);
         doc.setTextColor(20, 20, 20);
         const scaleTxt = `${formatScale(scaleDenom)}  ·  ${crsLabel}`;
