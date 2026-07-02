@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.15.0";
-const BUILD_NUMBER = "3002";
+const BUILD_NUMBER = "3003";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6092,8 +6092,9 @@ function _renderSlopeMap() {
     // Calculate cellSize (metres per pixel) using Web Mercator resolution formula
     const lat = searchCenterLatLng.lat;
     const metersPerPixelAtZoom = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, analysisZoom);
-    // Mapterhorn tiles are 512px but represent 256 tile units, so pixel size is halved
-    const cellSize = metersPerPixelAtZoom / 2;
+    // The 512px Mapterhorn tiles are downsampled onto the analysis canvas at 256px per
+    // tile (see loadAndDrawTiles), so one canvas pixel spans one full 256-unit tile pixel.
+    const cellSize = metersPerPixelAtZoom;
 
     // Slope classes
     const slopeClasses = [
