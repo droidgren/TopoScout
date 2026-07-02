@@ -182,6 +182,8 @@ const LANG_SV = {
     tutorial_search_text: "Sök efter valfri plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din position.",
     tutorial_share_title: "Dela kartvy",
     tutorial_share_text: "Använd den här knappen för att kopiera en länk med aktuellt språk, zoom, centrum och kartlager.",
+    tutorial_print_title: "Skriv ut karta (PDF)",
+    tutorial_print_text: "Klicka på TopoScout-logotypen för att öppna Skriv ut karta. Rama in ett område och exportera det som en utskriftsklar PDF i A4, A3 eller A2, stående eller liggande. Välj koordinatsystem (WGS 84 eller SWEREF 99) och slå på eller av skallinjal, kartkälla, koordinater, nordpil och ram. Dina lager, terrängskuggning, GPX och POI:er inkluderas.",
     tutorial_tips_title: "💡 Tips för bästa resultat",
     tutorial_tips_text: "• Zooma in till nivå 14–15 för mest exakta resultat.\n• Använd en mindre sökradie vid hög zoomnivå.\n• Lås radien innan du skannar för att behålla sökområdet fixerat.\n• Rotera kartan genom att hålla Ctrl och dra, eller använd tvåfingerrotation på pekskärm. Tryck på kompassikonen för att återställa norr.\n• Tryck på GPS-knappen i kartans nedre högra hörn för att hoppa till din aktuella position.",
     tutorial_btn_next: "Nästa",
