@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.14.0";
-const BUILD_NUMBER = "3000";
+const APP_VERSION = "2.15.0";
+const BUILD_NUMBER = "3001";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -119,9 +119,11 @@ const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
 const SHOW_ZOOM_KEY = 'topo_show_zoom';
 const SHOW_SCALE_KEY = 'topo_show_scale';
 const SHOW_CENTER_GPS_KEY = 'topo_show_center_gps';
+const SHOW_COORDS_KEY = 'topo_show_coords';
 function isZoomShown() { try { return localStorage.getItem(SHOW_ZOOM_KEY) !== 'false'; } catch (e) { return true; } }
 function isScaleShown() { try { return localStorage.getItem(SHOW_SCALE_KEY) === 'true'; } catch (e) { return false; } }
 function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) === 'true'; } catch (e) { return false; } }
+function isCoordsShown() { try { return localStorage.getItem(SHOW_COORDS_KEY) === 'true'; } catch (e) { return false; } }
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
@@ -2116,8 +2118,9 @@ function updateLanguage() {
         if (document.getElementById('lbl-show-zoom')) document.getElementById('lbl-show-zoom').textContent = t.lbl_show_zoom;
         if (document.getElementById('lbl-show-scale')) document.getElementById('lbl-show-scale').textContent = t.lbl_show_scale;
         if (document.getElementById('lbl-show-center-gps')) document.getElementById('lbl-show-center-gps').textContent = t.lbl_show_center_gps;
+        if (document.getElementById('lbl-show-coords')) document.getElementById('lbl-show-coords').textContent = t.lbl_show_coords;
         // Advanced-settings help tooltips: fill each row's tip text + the icon's accessible label.
-        ['crosshair-color', 'enable-exaggeration-slider', 'enable-hillshade-slider', 'enable-contours', 'enable-contour-labels', 'show-zoom', 'show-scale', 'show-center-gps', 'elev-map-sync', 'enable-tilt', 'max-pitch', 'enable-overzoom', 'show-crosshair', 'water-analysis', 'step-size', 'peak-min-pixels', 'scan-angles'].forEach((base) => {
+        ['crosshair-color', 'enable-exaggeration-slider', 'enable-hillshade-slider', 'enable-contours', 'enable-contour-labels', 'show-zoom', 'show-scale', 'show-center-gps', 'show-coords', 'elev-map-sync', 'enable-tilt', 'max-pitch', 'enable-overzoom', 'show-crosshair', 'water-analysis', 'step-size', 'peak-min-pixels', 'scan-angles'].forEach((base) => {
             const tipText = t['tip_' + base.replace(/-/g, '_')];
             if (!tipText) return;
             const tipEl = document.getElementById('tip-' + base);
@@ -5820,6 +5823,18 @@ function updateUI() {
             gpsDist.style.display = 'none';
         }
     }
+
+    const coordsLabel = document.getElementById('coords-level');
+    if (coordsLabel) {
+        if (isCoordsShown()) {
+            const c = map.getCenter();
+            coordsLabel.innerText = (t.coords_label || 'Coords') + ': ' + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5);
+            coordsLabel.title = t.coords_copy_hint || 'Tap to copy';
+            coordsLabel.style.display = '';
+        } else {
+            coordsLabel.style.display = 'none';
+        }
+    }
     const searchCenter = getSearchCenter();
     const markerColor = isLocked ? '#e67e22' : '#007bff';
 
@@ -7378,6 +7393,7 @@ if (contourLabelsToggle) {
     ['showZoom', SHOW_ZOOM_KEY, isZoomShown],
     ['showScale', SHOW_SCALE_KEY, isScaleShown],
     ['showCenterGps', SHOW_CENTER_GPS_KEY, isCenterGpsShown],
+    ['showCoords', SHOW_COORDS_KEY, isCoordsShown],
 ].forEach(([id, key, isShown]) => {
     const cb = document.getElementById(id);
     if (!cb) return;
@@ -7387,6 +7403,20 @@ if (contourLabelsToggle) {
         updateUI();
     });
 });
+
+// Tapping the coordinate readout copies the current map-center coordinates.
+const coordsBadge = document.getElementById('coords-level');
+if (coordsBadge) {
+    coordsBadge.addEventListener('click', () => {
+        const t = translations[currentLang];
+        const c = map.getCenter();
+        copyTextToClipboard(
+            c.lat.toFixed(5) + ', ' + c.lng.toFixed(5),
+            t.status_coords_copied || 'Coordinates copied.',
+            t.status_clipboard_error || 'Could not copy coordinates.'
+        );
+    });
+}
 
 const exaggerationSliderToggle = document.getElementById('enableExaggerationSlider');
 if (exaggerationSliderToggle) {
