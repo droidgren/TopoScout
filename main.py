@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import threading
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,15 @@ except Exception:  # pragma: no cover - optional dependency / offline install
     google_id_token = None
     _google_request = None
 
+try:
+    # Hardened XML parser for untrusted GPX uploads: rejects entity-expansion (billion
+    # laughs), external entities and DTD retrieval. Falls back to the stdlib parser if the
+    # optional dependency is missing (offline install); modern expat already blocks the
+    # classic billion-laughs case, but defusedxml is the belt-and-suspenders choice.
+    import defusedxml.ElementTree as DET
+except Exception:  # pragma: no cover - optional dependency
+    DET = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = Path(os.getenv("GPX_APP_DIR", BASE_DIR))
@@ -33,8 +43,20 @@ UPLOAD_DIR = Path(os.getenv("GPX_UPLOAD_DIR", BASE_DIR / "gpx-files"))
 INDEX_PATH = Path(os.getenv("GPX_INDEX_PATH", UPLOAD_DIR / "gpx-index.json"))
 POI_INDEX_PATH = Path(os.getenv("POI_INDEX_PATH", UPLOAD_DIR / "pois-index.json"))
 MAX_UPLOAD_BYTES = int(os.getenv("GPX_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
+# Per-owner storage ceiling so an anonymous cookie session cannot fill the disk.
+MAX_FILES_PER_OWNER = int(os.getenv("GPX_MAX_FILES_PER_OWNER", "500"))
+MAX_BYTES_PER_OWNER = int(os.getenv("GPX_MAX_BYTES_PER_OWNER", str(200 * 1024 * 1024)))
+# Lightweight per-client rate limits (events per 60s) on the abuse-prone endpoints.
+UPLOAD_RATE_PER_MIN = int(os.getenv("GPX_UPLOAD_RATE_PER_MIN", "30"))
+LOGIN_RATE_PER_MIN = int(os.getenv("GPX_LOGIN_RATE_PER_MIN", "60"))
+# Diagnostic endpoints (e.g. /api/auth/debug) are 404 unless explicitly enabled.
+DEBUG_ENDPOINTS = os.getenv("GPX_DEBUG_ENDPOINTS", "false").strip().lower() in ("1", "true", "yes")
 OWNER_COOKIE_NAME = "elevf_owner"
 OWNER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5
+# The owner cookie is the sole credential for anonymous sessions, so mark it Secure by
+# default (production is HTTPS behind the reverse proxy). Set GPX_COOKIE_SECURE=false only
+# for plain-HTTP local development where the browser would otherwise drop the cookie.
+COOKIE_SECURE = os.getenv("GPX_COOKIE_SECURE", "true").strip().lower() not in ("0", "false", "no")
 GOOGLE_CLIENT_ID = os.getenv(
     "GOOGLE_CLIENT_ID",
     "79515767501-5p4cbnfq111dqnuv8h6fp91t33k6gcbt.apps.googleusercontent.com",
@@ -75,6 +97,38 @@ POI_DESC_MAX = 500
 _index_lock = threading.Lock()
 _poi_index_lock = threading.Lock()
 
+# --- Minimal in-process rate limiter -------------------------------------------------
+# Sliding-window counters keyed by "<scope>:<client-ip>". Sufficient for the single-worker
+# deployment; swap for a shared store (e.g. Redis) if this ever runs multiple workers.
+_rate_lock = threading.Lock()
+_rate_buckets: dict[str, list[float]] = {}
+_RATE_MAX_KEYS = 20000
+
+
+def client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def enforce_rate_limit(scope: str, request: Request, max_events: int, window_seconds: float = 60.0) -> None:
+    if max_events <= 0:
+        return
+    key = f"{scope}:{client_ip(request)}"
+    now = time.monotonic()
+    cutoff = now - window_seconds
+    with _rate_lock:
+        bucket = _rate_buckets.get(key)
+        if bucket is None:
+            bucket = _rate_buckets[key] = []
+        while bucket and bucket[0] < cutoff:
+            bucket.pop(0)
+        if len(bucket) >= max_events:
+            raise HTTPException(status_code=429, detail="Too many requests, please slow down.")
+        bucket.append(now)
+        # Opportunistic cleanup so idle clients don't accumulate unbounded keys.
+        if len(_rate_buckets) > _RATE_MAX_KEYS:
+            for stale_key in [k for k, v in _rate_buckets.items() if not v or v[-1] < cutoff]:
+                _rate_buckets.pop(stale_key, None)
+
 app = FastAPI(title="TopoScout Backend")
 app.mount("/lang", StaticFiles(directory=APP_DIR / "lang"), name="lang")
 app.mount("/fonts", StaticFiles(directory=APP_DIR / "fonts"), name="fonts")
@@ -89,16 +143,55 @@ app.mount("/vendor", StaticFiles(directory=APP_DIR / "vendor"), name="vendor")
 SHELL_NO_CACHE = {"/", "/index.html", "/service-worker.js", "/manifest.json"}
 STATIC_ASSET_SUFFIXES = (".js", ".css", ".pbf", ".svg")
 
+# Third-party hosts the map, geocoder, and Google sign-in legitimately reach. Mirrors the
+# tile allowlist in service-worker.js; keep the two in sync when adding a map source.
+_CSP_REMOTE_HOSTS = (
+    "https://tiles.mapterhorn.com "
+    "https://tile.openstreetmap.org https://*.tile.openstreetmap.org "
+    "https://tile.opentopomap.org https://*.tile.opentopomap.org "
+    "https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
+    "https://cache.kartverket.no https://*.waymarkedtrails.org "
+    "https://tile.tracestrack.com https://tile.thunderforest.com https://tile.jawg.io "
+    "https://lm.clackspark.workers.dev"
+)
+
+# Enforced immediately: no-breakage hardening — blocks click-jacking (frame-ancestors),
+# plugin/object embeds, <base> hijacking and off-site form posts.
+CSP_ENFORCED = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+
+# Report-Only for now: the resource allowlist we intend to enforce, shipped in observe-only
+# mode so violations surface in the console without breaking the app (which still relies on
+# inline event handlers/styles). Promote to Content-Security-Policy once the inline handlers
+# are refactored out and the console is clean.
+CSP_REPORT_ONLY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    f"img-src 'self' data: blob: {_CSP_REMOTE_HOSTS}; "
+    f"connect-src 'self' https://accounts.google.com https://nominatim.openstreetmap.org {_CSP_REMOTE_HOSTS}; "
+    "font-src 'self'; worker-src 'self'; frame-src https://accounts.google.com; "
+    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+)
+
 
 @app.middleware("http")
-async def set_cache_headers(request: Request, call_next):
+async def set_response_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
     if path in SHELL_NO_CACHE:
         response.headers["Cache-Control"] = "no-cache"
     elif path.startswith(("/lang/", "/fonts/")) or path.endswith(STATIC_ASSET_SUFFIXES):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-    # Everything else (the /api/* endpoints) keeps whatever it set itself.
+    # Everything else (the /api/* endpoints) keeps whatever Cache-Control it set itself.
+
+    # Security headers: nosniff/Referrer-Policy on every response; the CSP + framing pair
+    # only makes sense on HTML documents, not tiles or JSON.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers.setdefault("Content-Security-Policy", CSP_ENFORCED)
+        response.headers.setdefault("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY)
     return response
 
 
@@ -222,7 +315,7 @@ def ensure_owner_id(request: Request, response: Response) -> str:
         max_age=OWNER_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=COOKIE_SECURE,
         path="/",
     )
     return owner_id
@@ -289,9 +382,13 @@ def validate_gpx_payload(payload: bytes) -> None:
     if not payload:
         raise HTTPException(status_code=400, detail="Empty GPX file")
 
+    parser = DET if DET is not None else ET
     try:
-        root = ET.fromstring(payload)
+        root = parser.fromstring(payload)
     except ET.ParseError as exc:
+        raise HTTPException(status_code=400, detail="Invalid GPX XML") from exc
+    except Exception as exc:
+        # defusedxml rejects entity-expansion / external-entity / DTD attacks here.
         raise HTTPException(status_code=400, detail="Invalid GPX XML") from exc
 
     tag_name = root.tag.split("}")[-1].lower()
@@ -432,6 +529,7 @@ def health_check() -> dict[str, str]:
 
 @app.post("/api/auth/login")
 async def auth_login(request: Request) -> dict[str, Any]:
+    enforce_rate_limit("login", request, LOGIN_RATE_PER_MIN)
     google_owner, claims = resolve_google_owner(request)
     if not google_owner:
         # Fallback: accept the credential in the JSON body. This survives reverse
@@ -478,7 +576,12 @@ async def auth_debug(request: Request) -> dict[str, Any]:
     Reveals what actually reached the backend so misconfigured deployments are
     obvious: an old build (this route 404s), a proxy stripping Authorization,
     clock skew, a wrong client id, or missing google-auth.
+
+    Off by default: it discloses configuration and acts as a token-verification oracle, so
+    it 404s unless GPX_DEBUG_ENDPOINTS is explicitly enabled for a debugging session.
     """
+    if not DEBUG_ENDPOINTS:
+        raise HTTPException(status_code=404, detail="Not found")
     auth_header = request.headers.get("Authorization", "")
     header_token = get_bearer_token(request)
     body_token = await _credential_from_body(request)
@@ -546,6 +649,7 @@ async def upload_file(
     response: Response,
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
+    enforce_rate_limit("upload", request, UPLOAD_RATE_PER_MIN)
     filename = sanitize_filename(file.filename or "")
     payload = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(payload) > MAX_UPLOAD_BYTES:
@@ -563,6 +667,18 @@ async def upload_file(
         record_id = existing_id or secrets.token_urlsafe(9)
         existing_record = index_payload["files_by_id"].get(record_id, {})
         stored_filename = existing_record.get("stored_filename") or f"{record_id}.gpx"
+
+        # Per-owner quota. An in-place re-upload replaces its own record, so exclude that
+        # record (record_id) from the current usage before checking the new payload.
+        owner_records = [
+            r for r in index_payload["files_by_id"].values()
+            if r.get("owner_id") == owner_id and r.get("id") != record_id
+        ]
+        if len(owner_records) + 1 > MAX_FILES_PER_OWNER:
+            raise HTTPException(status_code=429, detail="Upload limit reached: too many files for this account.")
+        used_bytes = sum(int(r.get("size") or 0) for r in owner_records)
+        if used_bytes + len(payload) > MAX_BYTES_PER_OWNER:
+            raise HTTPException(status_code=413, detail="Upload limit reached: storage quota exceeded.")
 
         destination = UPLOAD_DIR / stored_filename
         destination.write_bytes(payload)
