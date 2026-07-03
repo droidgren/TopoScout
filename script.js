@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.15.2";
-const BUILD_NUMBER = "3006";
+const APP_VERSION = "2.15.3";
+const BUILD_NUMBER = "3007";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1362,10 +1362,14 @@ function createMapAdapter(containerId, options) {
                 type: 'symbol',
                 source: CONTOUR_SOURCE_ID,
                 'source-layer': 'contours',
-                filter: ['==', ['get', 'level'], 1],
+                // Majors only when zoomed out; from native z14 (20 m / 40 ft minors)
+                // every line is labelled, so density grows with zoom like the
+                // interval thresholds above. Zoom in filters snaps to integers.
+                filter: ['step', ['zoom'], ['==', ['get', 'level'], 1], 14, true],
                 layout: {
                     'symbol-placement': 'line',
-                    'text-size': 10,
+                    'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 500, 15, 250],
+                    'text-size': ['interpolate', ['linear'], ['zoom'], 11, 9, 15, 11],
                     'text-field': ['concat', ['number-format', ['get', 'ele'], {}], imperial ? "'" : ' m'],
                     'text-font': [CONTOUR_FONT]
                 },
