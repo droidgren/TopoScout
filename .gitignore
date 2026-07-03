@@ -9,3 +9,4 @@ elevation_finder.yaml
 node_modules/
 playwright-report/
 test-results/
+worker.js
