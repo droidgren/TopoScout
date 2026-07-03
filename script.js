@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.15.0";
-const BUILD_NUMBER = "3005";
+const APP_VERSION = "2.15.2";
+const BUILD_NUMBER = "3006";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -22,6 +22,10 @@ function isBackendEnabled() {
 // uploads appear on any device/session, independent of the anonymous cookie) ---
 const GOOGLE_CLIENT_ID = '79515767501-5p4cbnfq111dqnuv8h6fp91t33k6gcbt.apps.googleusercontent.com';
 const GOOGLE_AUTH_STORAGE_KEY = 'topo_google_auth';
+// Non-sensitive "signed in on this device before" flag (not a credential). Lets us offer a
+// silent One Tap re-auth to returning users on load without nagging brand-new visitors,
+// now that the token itself is no longer persisted.
+const GOOGLE_SEEN_KEY = 'topo_google_seen';
 let googleAuth = null; // { token, exp, email, name, picture, sub }
 let googleAuthInitialized = false;
 let googleRefreshTimer = null;   // proactive pre-expiry silent re-auth timer
@@ -4265,7 +4269,9 @@ function rebuildGpxMarkers() {
             const label = wp.name || '•';
             const el = document.createElement('div');
             el.className = 'gpx-waypoint-label';
-            el.innerHTML = label;
+            // textContent, not innerHTML: waypoint names come from user-supplied GPX
+            // (including shared ?gpx= links) and must never be parsed as HTML.
+            el.textContent = label;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([wp.lon, wp.lat])
                 .addTo(map._map));
@@ -4281,7 +4287,7 @@ function rebuildGpxMarkers() {
         const label = `▶ ${t.gpx_start || 'Start'} / ${t.gpx_end || 'End'}`;
         const el = document.createElement('div');
         el.className = 'gpx-start-end-label';
-        el.innerHTML = label;
+        el.textContent = label;
         currentMarkers.push(new maplibregl.Marker({ element: el })
             .setLngLat([startPt.lon, startPt.lat])
             .addTo(map._map));
@@ -4289,7 +4295,7 @@ function rebuildGpxMarkers() {
         if (startPt) {
             const el = document.createElement('div');
             el.className = 'gpx-start-end-label';
-            el.innerHTML = `▶ ${t.gpx_start || 'Start'}`;
+            el.textContent = `▶ ${t.gpx_start || 'Start'}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([startPt.lon, startPt.lat])
                 .addTo(map._map));
@@ -4297,7 +4303,7 @@ function rebuildGpxMarkers() {
         if (endPt) {
             const el = document.createElement('div');
             el.className = 'gpx-start-end-label';
-            el.innerHTML = `⏹ ${t.gpx_end || 'End'}`;
+            el.textContent = `⏹ ${t.gpx_end || 'End'}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([endPt.lon, endPt.lat])
                 .addTo(map._map));
@@ -4309,7 +4315,7 @@ function rebuildGpxMarkers() {
         if (maxPt) {
             const el = document.createElement('div');
             el.className = 'gpx-elev-label';
-            el.innerHTML = `▲ ${formatElevation(maxPt.ele)}`;
+            el.textContent = `▲ ${formatElevation(maxPt.ele)}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([maxPt.lon, maxPt.lat])
                 .addTo(map._map));
@@ -4317,7 +4323,7 @@ function rebuildGpxMarkers() {
         if (minPt) {
             const el = document.createElement('div');
             el.className = 'gpx-elev-label min-elev';
-            el.innerHTML = `▼ ${formatElevation(minPt.ele)}`;
+            el.textContent = `▼ ${formatElevation(minPt.ele)}`;
             currentMarkers.push(new maplibregl.Marker({ element: el })
                 .setLngLat([minPt.lon, minPt.lat])
                 .addTo(map._map));
@@ -4680,25 +4686,17 @@ function authHeaders() {
     return isGoogleSignedIn() ? { Authorization: 'Bearer ' + googleAuth.token } : {};
 }
 
+// Auth is kept in memory only (never written to localStorage) so a DOM-XSS cannot read
+// the Google ID token. Returning users are re-authenticated silently via One Tap on load
+// (see initGoogleAuth). We still proactively clear any token a previous build persisted.
 function persistGoogleAuth() {
-    try {
-        if (googleAuth) localStorage.setItem(GOOGLE_AUTH_STORAGE_KEY, JSON.stringify(googleAuth));
-        else localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY);
-    } catch (e) { /* storage unavailable; in-memory auth still works for this session */ }
-}
-
-function loadStoredGoogleAuth() {
-    try {
-        const raw = localStorage.getItem(GOOGLE_AUTH_STORAGE_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-        return null;
-    }
+    try { localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY); } catch (e) { /* storage unavailable */ }
 }
 
 function clearGoogleAuthState() {
     googleAuth = null;
     persistGoogleAuth();
+    try { localStorage.removeItem(GOOGLE_SEEN_KEY); } catch (e) { /* storage unavailable */ }
     clearGoogleAuthRefreshTimer();
     settlePendingAuthRefresh(false);
     try {
@@ -4748,6 +4746,7 @@ function handleGoogleCredential(response) {
         sub: claims.sub
     };
     persistGoogleAuth();
+    try { localStorage.setItem(GOOGLE_SEEN_KEY, '1'); } catch (e) { /* storage unavailable */ }
     settlePendingAuthRefresh(true);   // unblock any silent refresh waiting on this token
     scheduleGoogleAuthRefresh();      // line up the next pre-expiry refresh
     updateGpxModalAuthUI();
@@ -4805,15 +4804,14 @@ function initGoogleAuth() {
     if (googleAuthInitialized) return;
     if (!isBackendEnabled() || !GOOGLE_CLIENT_ID) return;
 
-    // Restore a stored, still-valid session right away (independent of GIS loading).
-    const stored = loadStoredGoogleAuth();
-    if (stored && stored.token && stored.exp && stored.exp * 1000 > Date.now()) {
-        googleAuth = stored;
-        scheduleGoogleAuthRefresh();
-    }
+    // Auth lives in memory only (see persistGoogleAuth): purge any token an older build
+    // left in localStorage, then rely on the silent One Tap re-auth below to restore a
+    // returning user's session without ever exposing the token to storage.
+    try { localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY); } catch (e) { /* ignore */ }
+    let seenBefore = false;
+    try { seenBefore = localStorage.getItem(GOOGLE_SEEN_KEY) === '1'; } catch (e) { /* ignore */ }
     updateGpxModalAuthUI();
     updatePoiModalAuthUI();
-    if (isGoogleSignedIn()) refreshPoiList();
 
     whenGisReady(() => {
         googleAuthInitialized = true;
@@ -4837,8 +4835,10 @@ function initGoogleAuth() {
             if (btnEl) google.accounts.id.renderButton(btnEl, signinButtonOptions);
             const poiBtnEl = document.getElementById('poi-google-signin-btn');
             if (poiBtnEl) google.accounts.id.renderButton(poiBtnEl, signinButtonOptions);
-            // Returning user without a valid stored token: try a silent One Tap re-auth.
-            if (!isGoogleSignedIn() && stored) {
+            // Returning user (signed in before on this device; token no longer persisted):
+            // try a silent One Tap re-auth so they're restored without a click. Brand-new
+            // visitors are not nagged — they use the rendered Sign in button instead.
+            if (!isGoogleSignedIn() && seenBefore) {
                 google.accounts.id.prompt();
             }
         } catch (e) {
