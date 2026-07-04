@@ -156,7 +156,7 @@ const LANG_SV = {
     tutorial_info_title: "Info & Ändringslogg",
     tutorial_info_text: "Tryck på den här knappen för att öppna infopanelen. Här kan du läsa om de senaste ändringarna i ändringsloggen, byta programspråk (engelska / svenska), hitta Avancerade inställningar och starta den här guiden igen när som helst.",
     tutorial_minimize_title: "Kontrollpanelen",
-    tutorial_minimize_text: "Använd den här knappen för att fälla ihop eller expandera kontrollpanelen. Guiden startar hopfälld och öppnar de delar som behövs steg för steg.",
+    tutorial_minimize_text: "Använd den här knappen för att fälla ihop eller expandera kontrollpanelen. På mobilen kan du även fälla ihop panelen genom att trycka på kartan utanför den, och expandera den igen genom att trycka på den hopfällda panelen. Guiden startar hopfälld och öppnar de delar som behövs steg för steg.",
     tutorial_elevation_title: "Höjd i realtid",
     tutorial_elevation_text: "Här visas höjden ovan havet i kartans mittpunkt. Flytta kartan för att se den uppdateras.",
     tutorial_layers_title: "Kartlager & Ledlager",

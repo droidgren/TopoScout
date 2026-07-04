@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.15.3";
-const BUILD_NUMBER = "3008";
+const APP_VERSION = "2.16.0";
+const BUILD_NUMBER = "3009";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2514,11 +2514,13 @@ function syncExaggerationSlider() {
 }
 
 // The on-map slider stack occupies the bottom-left corner, so temporarily hide the
-// attribution control it replaces whenever any slider is visible.
+// attribution control (and any slope legend) it replaces whenever a slider is
+// visible. Done via a body class + CSS rather than hiding the whole corner: the
+// GPS + nav groups moved into this corner while the route legend is shown on
+// mobile must stay visible.
 function updateMapSliderChrome() {
     const anyVisible = !!document.querySelector('#map-slider-stack .map-slider.visible');
-    const attribCorner = document.querySelector('.maplibregl-ctrl-bottom-left');
-    if (attribCorner) attribCorner.style.display = anyVisible ? 'none' : '';
+    document.body.classList.toggle('map-sliders-on', anyVisible);
     adjustMapControlsForElevation();
 }
 
@@ -2917,12 +2919,36 @@ function markRouteLegendStale() {
     }
 }
 
-// Hide the GPS + navigation controls while the route-names legend is shown
-// (overlay on + route names enabled) so the legend has the bottom-right corner
-// to itself. The hiding itself is done in CSS via the body.route-legend-on class.
+// While the route-names legend is shown (overlay on + route names enabled) it gets
+// the bottom-right corner to itself. Desktop: the GPS + navigation groups are hidden
+// via CSS (body.route-legend-on). Mobile (<= 600px): the groups are moved to the
+// bottom-left corner instead — GPS on top, nav below, 10px inset (MapLibre's corner
+// CSS mirrors the right-side layout) — while CSS hides the attribution banner there.
 function updateZoomControlVisibility() {
     const legendActive = routeNamesOn && isOverlayOn();
     document.body.classList.toggle('route-legend-on', legendActive);
+
+    const right = document.querySelector('.maplibregl-ctrl-bottom-right');
+    const left = document.querySelector('.maplibregl-ctrl-bottom-left');
+    if (!right || !left) return;
+    const gps = right.querySelector('.gps-control') || left.querySelector('.gps-control');
+    const nav = right.querySelector('.maplibregl-ctrl-group:not(.gps-control)')
+             || left.querySelector('.maplibregl-ctrl-group:not(.gps-control)');
+    if (!gps || !nav) return;
+
+    const moveLeft = legendActive && window.innerWidth <= 600;
+    if (moveLeft && gps.parentElement !== left) {
+        // Appended after the (CSS-hidden) attribution; GPS on top, nav below.
+        left.appendChild(gps);
+        left.appendChild(nav);
+    } else if (!moveLeft && gps.parentElement !== right) {
+        // Restore the placeGpsAboveNav order — GPS first, nav second — ahead of
+        // the route legend if one is currently appended to this corner.
+        right.insertBefore(nav, right.firstChild);
+        right.insertBefore(gps, nav);
+    }
+    // Corner occupancy changed: re-offset the slider stack (and corners).
+    adjustMapControlsForElevation();
 }
 
 function loadLockedLayer(layerKey, key) {
@@ -5088,11 +5114,16 @@ function adjustMapControlsForElevation() {
             : '';
     }
     // Keep the on-map slider stack (which replaces the bottom-left attribution)
-    // above the elevation profile bar as well.
+    // above the elevation profile bar, and above the GPS + nav groups when those
+    // are relocated into the bottom-left corner (mobile + route legend). The
+    // corner is measured live so the offset tracks its real contents (e.g. the
+    // compass hides while north-up); display:none children contribute nothing.
     const mapSliderStack = document.getElementById('map-slider-stack');
     if (mapSliderStack) {
-        mapSliderStack.style.bottom = h > 0
-            ? `calc(${Math.ceil(h)}px + 10px + env(safe-area-inset-bottom, 0px))`
+        const relocated = maplibreBottomLeft && maplibreBottomLeft.querySelector('.gps-control');
+        const controlsH = relocated ? Math.ceil(maplibreBottomLeft.getBoundingClientRect().height) : 0;
+        mapSliderStack.style.bottom = (h > 0 || controlsH > 0)
+            ? `calc(${(h > 0 ? Math.ceil(h) + 10 : 10) + controlsH}px + env(safe-area-inset-bottom, 0px))`
             : '';
     }
 }
@@ -5548,6 +5579,9 @@ function removeElevationMarker() {
         if (elevationProfileData && !elevationProfileMinimized) {
             drawElevationProfile();
         }
+        // Crossing the 600px breakpoint (or rotating the device) moves the
+        // GPS/nav groups between corners while the route legend is on.
+        updateZoomControlVisibility();
         adjustMapControlsForElevation();
     });
 
@@ -7671,6 +7705,22 @@ map.on('click', (e) => {
         toggleControls();
     }
 });
+
+// Rotating toggles the auto-hidden compass (body.north-up), which changes the nav
+// group's height; while the controls sit in the bottom-left corner (mobile + route
+// legend) the slider-stack offset depends on that height, so re-measure.
+map.on('rotateend', adjustMapControlsForElevation);
+
+// Mobile: tapping the minimized panel re-expands it (the inverse of the map-click
+// minimize above). Its own controls keep their function — buttons (Share / About /
+// minimize toggle) and the tap-to-copy coordinates badge are excluded.
+if (controls) {
+    controls.addEventListener('click', (e) => {
+        if (window.innerWidth > 600 || !isControlsMinimized) return;
+        if (e.target.closest('button, #coords-level')) return;
+        toggleControls();
+    });
+}
 
 // Esc cancels an in-progress POI placement.
 document.addEventListener('keydown', (e) => {
