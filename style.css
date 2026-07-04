@@ -784,9 +784,34 @@ button {
 }
 
 /* While the route-names legend is shown, hide the zoom controls so the legend
-   occupies the bottom-right corner on its own. The legend stays below the
-   right-docked controls panel (#controls, z-index 2000), which is always on top. */
+   occupies the bottom-right corner on its own. On mobile the groups are instead
+   moved to the bottom-left corner by updateZoomControlVisibility(), where this
+   selector no longer matches them. The legend stays below the right-docked
+   controls panel (#controls, z-index 2000), which is always on top. */
 body.route-legend-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+    display: none;
+}
+
+/* Mobile: while the route-names legend is shown, updateZoomControlVisibility()
+   moves the GPS + navigation groups into the bottom-left corner (MapLibre's own
+   corner CSS mirrors the right-side layout: vertical stack, 10px inset). Hide
+   the attribution banner in the meantime. A slope legend sharing the corner
+   clears the floated groups so everything stacks in a single column. */
+@media (max-width: 600px) {
+    body.route-legend-on .maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib {
+        display: none;
+    }
+    body.route-legend-on .maplibregl-ctrl-bottom-left .slope-legend {
+        clear: both;
+    }
+}
+
+/* While any on-map slider is visible it replaces the bottom-left attribution and
+   slope legend (updateMapSliderChrome toggles body.map-sliders-on). Hidden
+   per-element rather than hiding the whole corner so the GPS + nav groups
+   relocated there by the route legend (rules above) stay visible. */
+body.map-sliders-on .maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib,
+body.map-sliders-on .maplibregl-ctrl-bottom-left .slope-legend {
     display: none;
 }
 

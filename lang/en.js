@@ -156,7 +156,7 @@ const LANG_EN = {
     tutorial_info_title: "Info & Changelog",
     tutorial_info_text: "Tap this button to open the info panel. Here you can read about the latest changes in the changelog, change the application language (English / Swedish), find the Advanced settings, and start this tutorial again at any time.",
     tutorial_minimize_title: "Control Panel",
-    tutorial_minimize_text: "Use this button to collapse or expand the control panel. The tutorial starts collapsed and opens the sections it needs as you move along.",
+    tutorial_minimize_text: "Use this button to collapse or expand the control panel. On mobile you can also minimize the panel by tapping the map outside it, and maximize it again by tapping the minimized panel. The tutorial starts collapsed and opens the sections it needs as you move along.",
     tutorial_elevation_title: "Live Elevation",
     tutorial_elevation_text: "This display shows the real-time elevation at the map center. Move the map to see it update.",
     tutorial_layers_title: "Map Layers & Route Overlay",
