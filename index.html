@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3011">
+    <link rel="stylesheet" href="style.css?v=3012">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,7 +71,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.17.0</span> (Build <span id="app-build">3010</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.18.0</span> (Build <span id="app-build">3012</span>)
             </p>
 
             <details
@@ -79,11 +79,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.18.0:</strong> New <strong>OSM Path layer</strong> route overlay — OpenStreetMap paths and trails from a Mapbox raster style, served through the same Cloudflare proxy as the Lantmäteriet map so no API key is exposed.</li>
                     <li><strong>v2.17.1:</strong> The <strong>GPX track now always draws on top</strong> — enabling Waymarkedtrails or the Strava heatmap (or a slope map, climb line or isolated trail) no longer hides the loaded track behind it.</li>
                     <li><strong>v2.17.0:</strong> Upgraded the map engine to <strong>MapLibre GL JS 6.2.0</strong> — still self-hosted and precached, so the installed app keeps working offline. The Print map export now captures the map reliably. Requires a WebGL2-capable browser.</li>
                     <li><strong>v2.16.0:</strong> Mobile: while the route legend is shown, the map controls (GPS + zoom) now <strong>move to the bottom-left corner</strong> instead of hiding — the attribution banner is tucked away meanwhile — and tapping the minimized control panel now <strong>expands it</strong>.</li>
                     <li><strong>v2.15.3:</strong> Contour labels now scale with zoom — sparse major-line labels when zoomed out, denser labels (including minor lines) when zoomed in, like classic topo maps.</li>
-                    <li><strong>v2.15.2:</strong> Security fixes — waypoint names from shared GPX files are no longer treated as HTML (cross-site scripting fix), plus browser security headers, a Secure session cookie, and backend hardening.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -429,6 +429,7 @@
                             <option value="waymarked_cycling">Waymarkedtrails (Cycling)</option>
                             <option value="waymarked_mtb">Waymarkedtrails (MTB)</option>
                             <option value="waymarked_skating">Waymarkedtrails (Skating)</option>
+                            <option value="osm_paths">OSM Path layer</option>
                             <option value="strava_heatmap" hidden>Strava Heatmap</option>
                         </select>
                     </div>
@@ -703,13 +704,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3011"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3012"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3011"></script>
-    <script defer src="lang/sv.js?v=3011"></script>
-    <script defer src="script.js?v=3011"></script>
+    <script defer src="lang/en.js?v=3012"></script>
+    <script defer src="lang/sv.js?v=3012"></script>
+    <script defer src="script.js?v=3012"></script>
 </body>
 
 </html>
