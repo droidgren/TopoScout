@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.17.0";
-const BUILD_NUMBER = "3010";
+const APP_VERSION = "2.17.1";
+const BUILD_NUMBER = "3011";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -117,6 +117,16 @@ const CONTOUR_LABEL_LAYER_ID = 'contour-labels';
 const CONTOURS_ENABLED_KEY = 'topo_contours';        // 'true' when the contour overlay is on
 const CONTOUR_LABELS_KEY = 'topo_contour_labels';    // 'true' when elevation labels are shown
 const DEFAULT_TERRAIN_EXAGGERATION = 1.5;
+
+// The GPX track line. It must stay above every other map layer, so every layer added while a
+// track is loaded is inserted *below* it via this beforeId (MapLibre throws on an unknown
+// beforeId, hence the getLayer guard; undefined means "append to the top" as before).
+const GPX_LINE_LAYER_ID = 'gpx-line-0';
+function getGpxTopBeforeId(nativeMap) {
+    return nativeMap && nativeMap.getLayer && nativeMap.getLayer(GPX_LINE_LAYER_ID)
+        ? GPX_LINE_LAYER_ID
+        : undefined;
+}
 
 // Footer readout visibility. Zoom defaults to shown (only an explicit 'false' hides it);
 // scale and center GPS default to hidden (only an explicit 'true' shows them).
@@ -885,6 +895,10 @@ function createMapAdapter(containerId, options) {
                 layer._id = `overlay-${++mapOverlayId}`;
             }
             layer._ids = getOverlayIds(layer._id, layer.type);
+            // Keep every overlay below the GPX track. This is also the re-render path
+            // (ensureRemoved + addLayer), so e.g. dragging the slope opacity slider no
+            // longer lifts the slope image back over the track.
+            const gpxBeforeId = getGpxTopBeforeId(nativeMap);
 
             if (layer.type === 'circle') {
                 const source = nativeMap.getSource(layer._ids.sourceId);
@@ -906,7 +920,7 @@ function createMapAdapter(containerId, options) {
                             'fill-color': layer._options.fillColor || layer._options.color || '#007bff',
                             'fill-opacity': layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity
                         }
-                    });
+                    }, gpxBeforeId);
                 }
                 if (!nativeMap.getLayer(layer._ids.lineLayerId)) {
                     nativeMap.addLayer({
@@ -918,7 +932,7 @@ function createMapAdapter(containerId, options) {
                             'line-width': layer._options.weight || 1,
                             'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                         }
-                    });
+                    }, gpxBeforeId);
                 }
                 nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-color', layer._options.fillColor || layer._options.color || '#007bff');
                 nativeMap.setPaintProperty(layer._ids.fillLayerId, 'fill-opacity', layer._options.fillOpacity == null ? 0.1 : layer._options.fillOpacity);
@@ -957,7 +971,7 @@ function createMapAdapter(containerId, options) {
                             'circle-stroke-width': layer._options.weight || 2,
                             'circle-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                         }
-                    });
+                    }, gpxBeforeId);
                 }
                 nativeMap.setPaintProperty(layer._ids.layerId, 'circle-radius', layer._options.radius || 5);
                 nativeMap.setPaintProperty(layer._ids.layerId, 'circle-color', layer._options.fillColor || layer._options.color || '#fff');
@@ -999,7 +1013,7 @@ function createMapAdapter(containerId, options) {
                         'line-width': layer._options.weight || 3,
                         'line-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                     }
-                });
+                }, gpxBeforeId);
                 return;
             }
 
@@ -1022,7 +1036,7 @@ function createMapAdapter(containerId, options) {
                     paint: {
                         'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                     }
-                });
+                }, gpxBeforeId);
                 return;
             }
 
@@ -1041,7 +1055,7 @@ function createMapAdapter(containerId, options) {
                     paint: {
                         'raster-opacity': layer._options.opacity == null ? 1 : layer._options.opacity
                     }
-                });
+                }, gpxBeforeId);
                 return;
             }
         },
@@ -2813,13 +2827,15 @@ function removeIsolatedTrailLayers() {
 
 // Lift the drawn trail above the current overlay. A newly applied overlay raster (e.g. the
 // heatmap) is added on top of the stack, so re-raise the kept trail over it — casing first,
-// colored line last, preserving their order.
+// colored line last, preserving their order. The GPX track stays above the trail: moving each
+// layer to directly below it keeps both their relative order and the track on top.
 function liftIsolatedTrailToTop() {
     const nativeMap = map && map._map;
     if (!nativeMap || !nativeMap.moveLayer) return;
+    const gpxBeforeId = getGpxTopBeforeId(nativeMap);
     isolatedTrailLayers.forEach((l) => {
         if (l && l._ids && nativeMap.getLayer(l._ids.layerId)) {
-            try { nativeMap.moveLayer(l._ids.layerId); } catch (e) { /* ignore */ }
+            try { nativeMap.moveLayer(l._ids.layerId, gpxBeforeId); } catch (e) { /* ignore */ }
         }
     });
 }
@@ -4209,8 +4225,8 @@ function createSlopeLegendControl(legendItems) {
 
 function clearGpxTrackSourceAndLayers() {
     const nativeMap = map._map;
-    if (nativeMap.getLayer('gpx-line-0')) {
-        nativeMap.removeLayer('gpx-line-0');
+    if (nativeMap.getLayer(GPX_LINE_LAYER_ID)) {
+        nativeMap.removeLayer(GPX_LINE_LAYER_ID);
     }
     if (nativeMap.getSource('gpx-track')) {
         nativeMap.removeSource('gpx-track');
@@ -4266,15 +4282,18 @@ function updateGpxTrackLine() {
         });
     }
 
-    if (nativeMap.getLayer('gpx-line-0')) {
-        nativeMap.setPaintProperty('gpx-line-0', 'line-color', ['get', 'color']);
-        nativeMap.setPaintProperty('gpx-line-0', 'line-width', weight);
-        nativeMap.setPaintProperty('gpx-line-0', 'line-opacity', 0.85);
+    if (nativeMap.getLayer(GPX_LINE_LAYER_ID)) {
+        nativeMap.setPaintProperty(GPX_LINE_LAYER_ID, 'line-color', ['get', 'color']);
+        nativeMap.setPaintProperty(GPX_LINE_LAYER_ID, 'line-width', weight);
+        nativeMap.setPaintProperty(GPX_LINE_LAYER_ID, 'line-opacity', 0.85);
+        // Safety net: re-raise to the very top in case anything slipped above it.
+        try { nativeMap.moveLayer(GPX_LINE_LAYER_ID); } catch (e) { /* ignore */ }
         return;
     }
 
+    // No beforeId: a freshly added track belongs on top of whatever is already drawn.
     nativeMap.addLayer({
-        id: 'gpx-line-0',
+        id: GPX_LINE_LAYER_ID,
         type: 'line',
         source: 'gpx-track',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
