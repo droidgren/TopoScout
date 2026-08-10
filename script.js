@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.17.1";
-const BUILD_NUMBER = "3011";
+const APP_VERSION = "2.18.0";
+const BUILD_NUMBER = "3012";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -159,6 +159,9 @@ const OVERLAY_SOURCES = {
     "waymarked_cycling": { url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
     "waymarked_mtb": { url: 'https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
     "waymarked_skating": { url: 'https://tile.waymarkedtrails.org/skating/{z}/{x}/{y}.png', attribution: WAYMARKED_ATTRIBUTION, maxZoom: 18 },
+    // Mapbox raster style, proxied through the same Cloudflare worker as lm_map so the
+    // access token stays server-side (the worker adds it, plus @2x, behind /osmpaths).
+    "osm_paths": { url: `${WORKER_URL}/osmpaths/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; OpenStreetMap contributors', maxZoom: 19 },
     "strava_heatmap": { url: `${API_BASE}/heatmap/all/bluered/{z}/{x}/{y}.png`, attribution: '&copy; <a href="https://www.strava.com/">Strava</a>', maxZoom: 15 }
 };
 const EXTRA_OVERLAY_STORAGE_KEY = 'topo_extra_overlay'; // selected overlay key, or '' when off
