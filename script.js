@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.16.0";
-const BUILD_NUMBER = "3009";
+const APP_VERSION = "2.17.0";
+const BUILD_NUMBER = "3010";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -8188,7 +8188,9 @@ async function capturePrintComposite(rect, layout) {
         interactive: false,
         attributionControl: false,
         fadeDuration: 0,
-        preserveDrawingBuffer: true
+        // Must be nested: MapLibre groups the WebGL context attributes here, so a top-level
+        // preserveDrawingBuffer is silently ignored and getCanvas() below reads an empty buffer.
+        canvasContextAttributes: { preserveDrawingBuffer: true }
     });
     if (typeof pmap.setPixelRatio === 'function') { try { pmap.setPixelRatio(1); } catch (e) { /* older build */ } }
 
