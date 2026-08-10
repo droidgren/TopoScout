@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.18.0";
-const BUILD_NUMBER = "3012";
+const APP_VERSION = "2.18.1";
+const BUILD_NUMBER = "3013";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1362,6 +1362,13 @@ function createMapAdapter(containerId, options) {
                 type: 'line',
                 source: CONTOUR_SOURCE_ID,
                 'source-layer': 'contours',
+                // Native zoom, matching the line-opacity stops below. A layer merely
+                // painted at opacity 0 still counts as "using" its source, so without
+                // this MapLibre keeps asking maplibre-contour to build tiles at every
+                // zoom just to render them invisibly. (No DEM downloads are saved -
+                // mlcontour skips the fetch when no threshold covers the zoom, and the
+                // thresholds above only cover z11-15 - but the tile plumbing goes away.)
+                minzoom: 10,
                 paint: {
                     'line-color': 'rgba(120, 72, 48, 0.6)',
                     'line-width': ['match', ['get', 'level'], 1, 1.4, 0.6],
@@ -1379,6 +1386,9 @@ function createMapAdapter(containerId, options) {
                 type: 'symbol',
                 source: CONTOUR_SOURCE_ID,
                 'source-layer': 'contours',
+                // Labels only become legible once the lines are fully faded in; keeping
+                // the layer off below that also keeps it from pulling contour tiles.
+                minzoom: 11,
                 // Majors only when zoomed out; from native z14 (20 m / 40 ft minors)
                 // every line is labelled, so density grows with zoom like the
                 // interval thresholds above. Zoom in filters snaps to integers.
