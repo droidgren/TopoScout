@@ -10,3 +10,13 @@ node_modules/
 playwright-report/
 test-results/
 worker.js
+
+# Playwright
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+tests/example.spec.ts
+.github/workflows/playwright.yml
+playwright.config.ts
+package-lock.json
