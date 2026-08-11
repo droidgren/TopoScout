@@ -11,6 +11,29 @@ body {
     width: 100%;
 }
 
+/* Shown when MapLibre never loaded — most often index.html opened straight from disk, where
+   the browser blocks the ES-module fetch. Sits above #controls (z-index 2000): nothing
+   underneath is usable without a map, so the dead UI should not show through. */
+.map-boot-error {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #f5f5f5;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.map-boot-error p {
+    max-width: 560px;
+    margin: 0;
+}
+
 /* --- CONTROL PANEL --- */
 #controls {
     position: absolute;
