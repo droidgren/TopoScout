@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.19.0";
-const BUILD_NUMBER = "3013";
+const APP_VERSION = "2.19.1";
+const BUILD_NUMBER = "3014";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1845,6 +1845,31 @@ if (!layers[savedLayer]) {
 }
 
 const initialMapLayer = layers.opentopo;
+
+// MapLibre v6 is ESM-only, so maplibre-boot.mjs loads as a module script — and browsers block
+// module fetches from file:// URLs (null origin). Opening index.html straight from disk
+// therefore leaves `maplibregl` undefined and every call below throws "maplibregl is not
+// defined" into the console while the page just sits there blank. Say what happened instead.
+function showMapEngineError() {
+    const t = translations[currentLang] || translations.en || {};
+    const message = location.protocol === 'file:'
+        ? (t.err_map_engine_file || "TopoScout can't run from a file:// URL: the map engine loads as an ES module, which browsers refuse to fetch from the local filesystem. Serve the folder over http instead — for example `uvicorn main:app --port 8000`, then open http://localhost:8000/. Installing the app still gives you full offline use.")
+        : (t.err_map_engine || 'The map engine failed to load. Check your connection and reload the page.');
+    const overlay = document.createElement('div');
+    overlay.className = 'map-boot-error';
+    const paragraph = document.createElement('p');
+    paragraph.textContent = message; // never innerHTML — same rule as the rest of the app
+    overlay.appendChild(paragraph);
+    (document.getElementById('map') || document.body).appendChild(overlay);
+}
+
+if (typeof maplibregl === 'undefined') {
+    showMapEngineError();
+    // Deliberately aborts the rest of script.js: nothing below works without a map, and the
+    // overlay covers the control panel that would otherwise sit there looking operational.
+    throw new Error('MapLibre GL JS did not load'
+        + (location.protocol === 'file:' ? ' (file:// is unsupported — serve the app over http)' : ''));
+}
 
 // Create the map
 const map = L.map('map', {
