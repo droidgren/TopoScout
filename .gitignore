@@ -17,6 +17,8 @@ worker.js
 /playwright/.cache/
 /playwright/.auth/
 tests/example.spec.ts
+tests/coords.spec.ts
+tests/static-server.mjs
 .github/workflows/playwright.yml
 playwright.config.ts
 package-lock.json
