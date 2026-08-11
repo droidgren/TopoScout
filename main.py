@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import math
 import mimetypes
@@ -58,6 +61,20 @@ OWNER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5
 # default (production is HTTPS behind the reverse proxy). Set GPX_COOKIE_SECURE=false only
 # for plain-HTTP local development where the browser would otherwise drop the cookie.
 COOKIE_SECURE = os.getenv("GPX_COOKIE_SECURE", "true").strip().lower() not in ("0", "false", "no")
+# --- Long-lived sign-in session ------------------------------------------------------
+# A Google ID token lives ~1h and the frontend never persists it, so sign-in used to
+# survive a reload only if a silent One Tap re-auth happened to succeed (frequently
+# suppressed under FedCM / third-party-cookie rules). On a verified sign-in we now issue
+# our own HMAC-signed, HttpOnly session cookie so the account sticks across reloads,
+# restarts and a blocked Google script — without ever exposing a credential to JS.
+SESSION_COOKIE_NAME = "elevf_session"
+SESSION_MAX_AGE = int(os.getenv("GPX_SESSION_MAX_AGE_DAYS", "90")) * 86400
+# Sliding expiry: re-issue the cookie once a session is past halfway to its expiry, so a
+# regularly used browser is never signed out while an abandoned one still ages out.
+SESSION_REFRESH_AFTER = SESSION_MAX_AGE // 2
+# The signing key must survive container restarts or every restart signs everyone out, and
+# it must live in the writable upload volume — the app directory is mounted read-only.
+SESSION_SECRET_PATH = Path(os.getenv("GPX_SESSION_SECRET_PATH", UPLOAD_DIR / ".session-secret"))
 GOOGLE_CLIENT_ID = os.getenv(
     "GOOGLE_CLIENT_ID",
     "79515767501-5p4cbnfq111dqnuv8h6fp91t33k6gcbt.apps.googleusercontent.com",
@@ -304,10 +321,140 @@ def resolve_google_owner(request: Request) -> tuple[str | None, dict[str, Any] |
     return f"{GOOGLE_OWNER_PREFIX}{claims['sub']}", claims
 
 
+# ==========================================================================
+# Signed session cookie: keeps a verified Google identity valid for
+# SESSION_MAX_AGE without the frontend holding on to the ID token.
+# ==========================================================================
+def _load_session_secret() -> bytes:
+    """Return the HMAC key for session cookies, generating and persisting one if needed.
+
+    Order: GPX_SESSION_SECRET env -> SESSION_SECRET_PATH file -> ephemeral fallback.
+    The ephemeral case still works, but every restart invalidates existing sessions,
+    so a writable upload volume (or the env var) is strongly preferred.
+    """
+    env_secret = os.getenv("GPX_SESSION_SECRET", "").strip()
+    if env_secret:
+        return env_secret.encode("utf-8")
+    try:
+        if SESSION_SECRET_PATH.exists():
+            existing = SESSION_SECRET_PATH.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing.encode("utf-8")
+        SESSION_SECRET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        generated = secrets.token_urlsafe(32)
+        # O_EXCL so two workers racing on first boot don't clobber each other; the loser
+        # falls through to the re-read below and both end up with the same key.
+        try:
+            fd = os.open(SESSION_SECRET_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return SESSION_SECRET_PATH.read_text(encoding="utf-8").strip().encode("utf-8")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(generated)
+        return generated.encode("utf-8")
+    except OSError:
+        return secrets.token_bytes(32)
+
+
+_SESSION_SECRET = _load_session_secret()
+
+
+def _b64u_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64u_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def sign_session(claims: dict[str, Any]) -> tuple[str, int]:
+    """Return (cookie_value, exp) for a session describing the given Google claims."""
+    now = int(time.time())
+    exp = now + SESSION_MAX_AGE
+    payload = {
+        "sub": claims.get("sub"),
+        "email": claims.get("email") or "",
+        "name": claims.get("name") or "",
+        "picture": claims.get("picture") or "",
+        "iat": now,
+        "exp": exp,
+    }
+    body = _b64u_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    signature = _b64u_encode(hmac.new(_SESSION_SECRET, body.encode("ascii"), hashlib.sha256).digest())
+    return f"v1.{body}.{signature}", exp
+
+
+def verify_session(value: str) -> dict[str, Any] | None:
+    """Return the session payload for a valid, unexpired cookie, else None."""
+    if not value:
+        return None
+    parts = value.split(".")
+    if len(parts) != 3 or parts[0] != "v1":
+        return None
+    _version, body, signature = parts
+    expected = _b64u_encode(hmac.new(_SESSION_SECRET, body.encode("ascii"), hashlib.sha256).digest())
+    if not hmac.compare_digest(expected, signature):
+        return None
+    try:
+        payload = json.loads(_b64u_decode(body))
+    except Exception:
+        return None
+    if not isinstance(payload, dict) or not payload.get("sub"):
+        return None
+    try:
+        if int(payload.get("exp", 0)) <= int(time.time()):
+            return None
+    except (TypeError, ValueError):
+        return None
+    return payload
+
+
+def set_session_cookie(response: Response, claims: dict[str, Any]) -> int:
+    """Issue a fresh session cookie for the given claims; returns its expiry (epoch s)."""
+    value, exp = sign_session(claims)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=value,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+    return exp
+
+
+def clear_session_cookie(response: Response) -> None:
+    # Leaves the anonymous owner cookie alone, so uploads made before sign-in
+    # remain reachable after signing out.
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+
+
+def resolve_session_owner(request: Request) -> tuple[str | None, dict[str, Any] | None]:
+    """Return (owner_id, payload) for a valid session cookie, else (None, None)."""
+    payload = verify_session(request.cookies.get(SESSION_COOKIE_NAME, "").strip())
+    if not payload:
+        return None, None
+    return f"{GOOGLE_OWNER_PREFIX}{payload['sub']}", payload
+
+
+def resolve_account_owner(request: Request) -> tuple[str | None, dict[str, Any] | None]:
+    """Resolve a signed-in account: fresh Google bearer token first, session cookie second."""
+    google_owner, claims = resolve_google_owner(request)
+    if google_owner:
+        return google_owner, claims
+    return resolve_session_owner(request)
+
+
 def ensure_owner_id(request: Request, response: Response) -> str:
     # A verified Google identity always wins, so uploads follow the account
     # across devices/sessions regardless of the anonymous cookie.
-    google_owner, _claims = resolve_google_owner(request)
+    google_owner, _claims = resolve_account_owner(request)
     if google_owner:
         return google_owner
 
@@ -333,7 +480,7 @@ def build_owner_filename_key(owner_id: str, filename: str) -> str:
 
 
 def require_owner_id(request: Request) -> str:
-    google_owner, _claims = resolve_google_owner(request)
+    google_owner, _claims = resolve_account_owner(request)
     if google_owner:
         return google_owner
 
@@ -455,7 +602,7 @@ def save_poi_index(index_payload: dict[str, Any]) -> None:
 
 def require_google_owner_id(request: Request) -> str:
     """POIs are account-scoped: require a verified Google identity (no anon cookie)."""
-    google_owner, _claims = resolve_google_owner(request)
+    google_owner, _claims = resolve_account_owner(request)
     if not google_owner:
         raise HTTPException(status_code=401, detail="Google sign-in required")
     return google_owner
@@ -535,7 +682,7 @@ def health_check() -> dict[str, str]:
 
 
 @app.post("/api/auth/login")
-async def auth_login(request: Request) -> dict[str, Any]:
+async def auth_login(request: Request, response: Response) -> dict[str, Any]:
     enforce_rate_limit("login", request, LOGIN_RATE_PER_MIN)
     google_owner, claims = resolve_google_owner(request)
     if not google_owner:
@@ -555,13 +702,50 @@ async def auth_login(request: Request) -> dict[str, Any]:
     if anon_owner and not anon_owner.startswith(GOOGLE_OWNER_PREFIX):
         claim_anonymous_files(anon_owner, google_owner)
 
+    # Hand back a long-lived session so the browser stays signed in once the
+    # short-lived Google ID token expires or the page is reloaded.
+    session_exp = set_session_cookie(response, claims)
+
     return {
         "owner_id": google_owner,
         "email": claims.get("email"),
         "name": claims.get("name"),
         "picture": claims.get("picture"),
         "sub": claims.get("sub"),
+        "session_exp": session_exp,
     }
+
+
+@app.get("/api/auth/session")
+def auth_session(request: Request, response: Response) -> dict[str, Any]:
+    """Report (and slide) the current sign-in session. Never 401s — absence is a valid answer."""
+    enforce_rate_limit("login", request, LOGIN_RATE_PER_MIN)
+    payload = verify_session(request.cookies.get(SESSION_COOKIE_NAME, "").strip())
+    if not payload:
+        # Drop an expired/tampered cookie so it stops being sent.
+        if request.cookies.get(SESSION_COOKIE_NAME):
+            clear_session_cookie(response)
+        return {"signed_in": False}
+
+    session_exp = int(payload["exp"])
+    if int(time.time()) - int(payload.get("iat", 0)) >= SESSION_REFRESH_AFTER:
+        session_exp = set_session_cookie(response, payload)
+
+    return {
+        "signed_in": True,
+        "owner_id": f"{GOOGLE_OWNER_PREFIX}{payload['sub']}",
+        "email": payload.get("email"),
+        "name": payload.get("name"),
+        "picture": payload.get("picture"),
+        "sub": payload.get("sub"),
+        "session_exp": session_exp,
+    }
+
+
+@app.post("/api/auth/logout")
+def auth_logout(response: Response) -> dict[str, Any]:
+    clear_session_cookie(response)
+    return {"signed_in": False}
 
 
 async def _credential_from_body(request: Request) -> str | None:

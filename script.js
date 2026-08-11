@@ -1,15 +1,17 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.18.0";
-const BUILD_NUMBER = "3012";
+const APP_VERSION = "2.19.0";
+const BUILD_NUMBER = "3013";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
 
 // --- Optional GPX upload/sharing backend (auto-detected; absent on static hosting) ---
 const API_BASE = '/api';
-const BACKEND_DETECTION_TIMEOUT_MS = 1500;
+// Generous enough that a cold/slow first load still detects the backend: losing this race
+// hides the whole sign-in UI (initGoogleAuth never runs), which looks like being signed out.
+const BACKEND_DETECTION_TIMEOUT_MS = 4000;
 
 let backendAvailable = false;
 let backendDetectionPromise = null;
@@ -26,7 +28,10 @@ const GOOGLE_AUTH_STORAGE_KEY = 'topo_google_auth';
 // silent One Tap re-auth to returning users on load without nagging brand-new visitors,
 // now that the token itself is no longer persisted.
 const GOOGLE_SEEN_KEY = 'topo_google_seen';
-let googleAuth = null; // { token, exp, email, name, picture, sub }
+// { token, exp, email, name, picture, sub, source }. source 'token' means a fresh Google ID
+// token is in hand (sent as a Bearer header); 'session' means the identity is carried by the
+// backend's HttpOnly session cookie and `token` is null.
+let googleAuth = null;
 let googleAuthInitialized = false;
 let googleRefreshTimer = null;   // proactive pre-expiry silent re-auth timer
 let pendingAuthRefresh = null;   // { promise, resolve, timeout } while a silent refresh is in flight
@@ -35,17 +40,13 @@ const GOOGLE_AUTH_REFRESH_LEAD_MS = 5 * 60 * 1000;
 // Cap on how long we wait for a silent One Tap re-auth before treating it as failed.
 const GOOGLE_AUTH_REFRESH_TIMEOUT_MS = 8 * 1000;
 
-async function detectBackendAvailability() {
-    if (backendDetectionPromise) {
-        return backendDetectionPromise;
-    }
-
+function probeBackendHealth() {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller
         ? window.setTimeout(() => controller.abort(), BACKEND_DETECTION_TIMEOUT_MS)
         : null;
 
-    backendDetectionPromise = fetch(API_BASE + '/health', {
+    return fetch(API_BASE + '/health', {
         cache: 'no-store',
         credentials: 'same-origin',
         signal: controller ? controller.signal : undefined
@@ -63,6 +64,17 @@ async function detectBackendAvailability() {
                 window.clearTimeout(timeoutId);
             }
         });
+}
+
+async function detectBackendAvailability() {
+    if (backendDetectionPromise) {
+        return backendDetectionPromise;
+    }
+
+    // One retry: a single slow/aborted probe on a cold network would otherwise leave the
+    // app in its backend-less mode (no uploads, no POIs, no sign-in) for the whole session.
+    backendDetectionPromise = probeBackendHealth()
+        .then(available => (available ? true : probeBackendHealth()));
 
     backendAvailable = await backendDetectionPromise;
     backendDetectionPromise = null;
@@ -4659,7 +4671,15 @@ function decodeJwtPayload(token) {
 }
 
 function isGoogleSignedIn() {
-    return !!(googleAuth && googleAuth.token && googleAuth.exp && googleAuth.exp * 1000 > Date.now());
+    if (!googleAuth || !googleAuth.exp || googleAuth.exp * 1000 <= Date.now()) return false;
+    // Session-backed identities carry no token: the HttpOnly cookie is the credential.
+    return googleAuth.source === 'session' || !!googleAuth.token;
+}
+
+// True while the identity rests on a short-lived Google ID token, which is the only case
+// where a silent One Tap re-auth can rescue an expired credential.
+function isTokenBackedAuth() {
+    return !!(googleAuth && googleAuth.source !== 'session' && googleAuth.token);
 }
 
 // Resolve any in-flight silent refresh with the given result (idempotent).
@@ -4680,6 +4700,8 @@ function clearGoogleAuthRefreshTimer() {
 // silent re-auth isn't possible (GIS unavailable, prompt suppressed, or timeout).
 function refreshGoogleAuth() {
     if (!isBackendEnabled() || !GOOGLE_CLIENT_ID) return Promise.resolve(false);
+    // Only meaningful without a server session; a live cookie needs no One Tap.
+    if (googleAuth && googleAuth.source === 'session') return Promise.resolve(false);
     if (pendingAuthRefresh) return pendingAuthRefresh.promise;
     if (!(window.google && google.accounts && google.accounts.id)) return Promise.resolve(false);
 
@@ -4717,54 +4739,72 @@ function scheduleGoogleAuthRefresh() {
     googleRefreshTimer = setTimeout(() => { refreshGoogleAuth(); }, Math.max(0, msUntilRefresh));
 }
 
-// Run an authenticated request; if the Google token just expired (401), refresh
-// it silently and retry once before falling back to the anonymous session.
-// makeRequest must build a fresh fetch each call so it picks up the new token.
+// Run an authenticated request; on a 401, try once to recover before falling back to the
+// anonymous session. makeRequest must build a fresh fetch each call so it picks up any
+// new credential. A session-backed 401 means the server session is gone (nothing to
+// refresh), so we just drop to anonymous and retry once.
 async function fetchWithAuthRetry(makeRequest) {
     let response = await makeRequest();
     if (response.status === 401 && isGoogleSignedIn()) {
-        if (await refreshGoogleAuth()) {
+        if (isTokenBackedAuth() && await refreshGoogleAuth()) {
             response = await makeRequest();
         }
         if (response.status === 401 && isGoogleSignedIn()) {
             clearGoogleAuthState();
+            response = await makeRequest();
         }
     }
     return response;
 }
 
-// Bearer header sent with the file endpoints; empty object falls back to the anon cookie.
+// Bearer header sent with the file endpoints; empty object means the request is carried by
+// the session cookie (signed in) or the anonymous owner cookie (signed out).
 function authHeaders() {
-    return isGoogleSignedIn() ? { Authorization: 'Bearer ' + googleAuth.token } : {};
+    return (isGoogleSignedIn() && googleAuth.token) ? { Authorization: 'Bearer ' + googleAuth.token } : {};
 }
 
 // Auth is kept in memory only (never written to localStorage) so a DOM-XSS cannot read
-// the Google ID token. Returning users are re-authenticated silently via One Tap on load
-// (see initGoogleAuth). We still proactively clear any token a previous build persisted.
+// the Google ID token or a session credential. Persistence across reloads is the backend's
+// HttpOnly session cookie instead (see restoreGoogleSession).
 function persistGoogleAuth() {
     try { localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY); } catch (e) { /* storage unavailable */ }
 }
 
-function clearGoogleAuthState() {
+// Drop the in-memory identity. By default this is a *soft* clear used by the 401 paths:
+// it must not disable Google's auto-select or forget that this device has signed in
+// before, or one transient backend hiccup would permanently kill silent re-auth here.
+// Pass { forget: true } for an explicit sign-out, which also ends the server session.
+function clearGoogleAuthState(options) {
+    const forget = !!(options && options.forget);
     googleAuth = null;
     persistGoogleAuth();
-    try { localStorage.removeItem(GOOGLE_SEEN_KEY); } catch (e) { /* storage unavailable */ }
     clearGoogleAuthRefreshTimer();
     settlePendingAuthRefresh(false);
-    try {
-        if (window.google && google.accounts && google.accounts.id) {
-            google.accounts.id.disableAutoSelect();
+    if (forget) {
+        try { localStorage.removeItem(GOOGLE_SEEN_KEY); } catch (e) { /* storage unavailable */ }
+        try {
+            if (window.google && google.accounts && google.accounts.id) {
+                google.accounts.id.disableAutoSelect();
+            }
+        } catch (e) { /* ignore */ }
+        if (isBackendEnabled()) {
+            fetch(API_BASE + '/auth/logout', {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store'
+            }).catch(() => { /* best effort; the cookie also expires on its own */ });
         }
-    } catch (e) { /* ignore */ }
+    }
     updateGpxModalAuthUI();
     updatePoiModalAuthUI();
     // Keep the user's pins visible after logout by falling back to the local cache.
     refreshPoiList();
 }
 
-// Tell the backend who we are so it can merge any anonymous uploads into the account.
+// Tell the backend who we are so it can merge any anonymous uploads into the account and
+// hand back a long-lived session cookie.
 async function postAuthLogin() {
-    if (!isGoogleSignedIn() || !isBackendEnabled()) return null;
+    if (!isGoogleSignedIn() || !googleAuth.token || !isBackendEnabled()) return null;
     try {
         const response = await fetch(API_BASE + '/auth/login', {
             method: 'POST',
@@ -4778,6 +4818,44 @@ async function postAuthLogin() {
     } catch (e) {
         return null;
     }
+}
+
+// Restore a previous sign-in from the backend's HttpOnly session cookie. This is what makes
+// sign-in survive reloads, PWA relaunches and service-worker updates without depending on
+// Google's One Tap (which is routinely suppressed under FedCM / third-party-cookie rules).
+async function restoreGoogleSession() {
+    if (!isBackendEnabled()) return false;
+    try {
+        const response = await fetch(API_BASE + '/auth/session', {
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        if (!response.ok) return false;
+        const payload = await response.json();
+        if (!payload || !payload.signed_in || !payload.sub) return false;
+        adoptGoogleSession(payload);
+        return true;
+    } catch (e) {
+        return false;   // offline or backend down: fall back to the anonymous flow
+    }
+}
+
+// Switch the in-memory identity over to the server session described by `payload`
+// ({ email, name, picture, sub, session_exp }); the ID token is no longer needed.
+function adoptGoogleSession(payload) {
+    googleAuth = {
+        token: null,
+        exp: payload.session_exp || 0,
+        email: payload.email || '',
+        name: payload.name || '',
+        picture: payload.picture || '',
+        sub: payload.sub,
+        source: 'session'
+    };
+    clearGoogleAuthRefreshTimer();   // a 90-day cookie needs no pre-expiry One Tap
+    try { localStorage.setItem(GOOGLE_SEEN_KEY, '1'); } catch (e) { /* storage unavailable */ }
+    updateGpxModalAuthUI();
+    updatePoiModalAuthUI();
 }
 
 // GIS callback: receives a signed ID token (JWT) on successful sign-in.
@@ -4795,25 +4873,33 @@ function handleGoogleCredential(response) {
         email: claims.email || '',
         name: claims.name || '',
         picture: claims.picture || '',
-        sub: claims.sub
+        sub: claims.sub,
+        source: 'token'
     };
     persistGoogleAuth();
     try { localStorage.setItem(GOOGLE_SEEN_KEY, '1'); } catch (e) { /* storage unavailable */ }
     settlePendingAuthRefresh(true);   // unblock any silent refresh waiting on this token
-    scheduleGoogleAuthRefresh();      // line up the next pre-expiry refresh
+    scheduleGoogleAuthRefresh();      // fallback until the server session takes over below
     updateGpxModalAuthUI();
     updatePoiModalAuthUI();
     if (statusDiv) {
         statusDiv.textContent = (t.status_signed_in || 'Signed in as {email}.')
             .replace('{email}', googleAuth.email || googleAuth.name || '');
     }
-    // Merge anonymous uploads into the account, then show the account's files + POIs.
-    postAuthLogin().finally(() => { refreshUploadedFiles(); refreshPoiList(); });
+    // Merge anonymous uploads into the account, then show the account's files + POIs. The
+    // login response carries a session cookie, so hand the identity over to it and stop
+    // caring about the ID token's ~1h life (an older backend omits session_exp: keep the
+    // token and its pre-expiry One Tap refresh).
+    postAuthLogin()
+        .then(payload => {
+            if (payload && payload.session_exp) adoptGoogleSession(payload);
+        })
+        .finally(() => { refreshUploadedFiles(); refreshPoiList(); });
 }
 
 window.signOutGoogle = function () {
     const t = translations[currentLang];
-    clearGoogleAuthState();
+    clearGoogleAuthState({ forget: true });
     if (statusDiv) statusDiv.textContent = t.status_signed_out || 'Signed out.';
     refreshUploadedFiles();
 };
@@ -4852,21 +4938,29 @@ function whenGisReady(callback, attempts) {
     window.setTimeout(() => whenGisReady(callback, attempts - 1), 100);
 }
 
-function initGoogleAuth() {
+async function initGoogleAuth() {
     if (googleAuthInitialized) return;
     if (!isBackendEnabled() || !GOOGLE_CLIENT_ID) return;
+    googleAuthInitialized = true;   // set before the awaits below so init can't re-enter
 
     // Auth lives in memory only (see persistGoogleAuth): purge any token an older build
-    // left in localStorage, then rely on the silent One Tap re-auth below to restore a
-    // returning user's session without ever exposing the token to storage.
+    // left in localStorage. Persistence comes from the backend's HttpOnly session cookie.
     try { localStorage.removeItem(GOOGLE_AUTH_STORAGE_KEY); } catch (e) { /* ignore */ }
     let seenBefore = false;
     try { seenBefore = localStorage.getItem(GOOGLE_SEEN_KEY) === '1'; } catch (e) { /* ignore */ }
     updateGpxModalAuthUI();
     updatePoiModalAuthUI();
 
+    // Restore the server session first: it does not depend on the Google script loading, so
+    // a returning user is signed in immediately even if accounts.google.com is slow/blocked.
+    const restored = await restoreGoogleSession();
+    if (restored) {
+        refreshUploadedFiles();
+        // Pins need the map style; whenGpxMapReady mirrors initializeBackendFeatures.
+        whenGpxMapReady(() => refreshPoiList());
+    }
+
     whenGisReady(() => {
-        googleAuthInitialized = true;
         try {
             google.accounts.id.initialize({
                 client_id: GOOGLE_CLIENT_ID,
@@ -4887,9 +4981,9 @@ function initGoogleAuth() {
             if (btnEl) google.accounts.id.renderButton(btnEl, signinButtonOptions);
             const poiBtnEl = document.getElementById('poi-google-signin-btn');
             if (poiBtnEl) google.accounts.id.renderButton(poiBtnEl, signinButtonOptions);
-            // Returning user (signed in before on this device; token no longer persisted):
-            // try a silent One Tap re-auth so they're restored without a click. Brand-new
-            // visitors are not nagged — they use the rendered Sign in button instead.
+            // No server session but this device has signed in before: try a silent One Tap
+            // re-auth so they're restored without a click. Brand-new visitors are not
+            // nagged — they use the rendered Sign in button instead.
             if (!isGoogleSignedIn() && seenBefore) {
                 google.accounts.id.prompt();
             }
@@ -4918,9 +5012,10 @@ async function refreshUploadedFiles(authRetried) {
             headers: authHeaders()
         });
         if (response.status === 401 && isGoogleSignedIn()) {
-            // Token expired/rejected: try one silent refresh, then reload with the
-            // fresh token; otherwise drop it and reload as the anonymous session.
-            if (!authRetried && await refreshGoogleAuth()) {
+            // Credential expired/rejected: for a token-backed identity try one silent
+            // refresh and reload with the fresh token; otherwise drop the identity (soft:
+            // silent re-auth stays available) and reload as the anonymous session.
+            if (!authRetried && isTokenBackedAuth() && await refreshGoogleAuth()) {
                 return refreshUploadedFiles(true);
             }
             clearGoogleAuthState();
@@ -7834,7 +7929,8 @@ function whenGpxMapReady(callback) {
 // no backend — no error, no message).
 (async function initializeBackendFeatures() {
     await detectBackendAvailability();
-    if (isBackendEnabled()) initGoogleAuth();
+    // Awaited so the POI fallback below sees a restored session and doesn't double-fetch.
+    if (isBackendEnabled()) await initGoogleAuth();
     // Render cached POIs on a logged-out / backend-less load too (when signed in,
     // initGoogleAuth already fetches the fresh list).
     whenGpxMapReady(() => { if (!isGoogleSignedIn()) refreshPoiList(); });
