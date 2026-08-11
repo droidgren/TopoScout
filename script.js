@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.19.2";
-const BUILD_NUMBER = "3015";
+const APP_VERSION = "2.20.0";
+const BUILD_NUMBER = "3016";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2204,6 +2204,7 @@ function updateLanguage() {
         document.querySelector('#clear-btn .btn-label').textContent = t.btn_clear;
 
         document.getElementById('searchInput').placeholder = t.input_search_ph;
+        document.getElementById('searchInput').title = t.input_search_title || '';
         document.getElementById('status').textContent = t.status_ready;
 
         document.getElementById('info-title').textContent = t.info_title;
@@ -3172,24 +3173,467 @@ window.toggleSection = function (sectionId) {
     }
 };
 
+// ==========================================
+// SEARCH-BOX COORDINATE PARSING (DD / DDM / DMS / Plus Code)
+// ==========================================
+// Everything below serves searchLocation() only; the share-link parser
+// (parseSharedMapHash) and the coordinate readout are deliberately untouched. Every parser
+// returns null for anything it does not fully understand, so an unrecognised query falls
+// through to the geocoder exactly as it did before these formats existed.
+
+// Sexagesimal marks. The Unicode variants matter in practice: mobile keyboards and word
+// processors autocorrect to curly quotes (’ ”), copy-paste from Wikipedia carries true
+// primes (′ ″), and some handheld GPS units print the masculine ordinal º for degrees.
+const GEO_DEG_MARKS = '°º˚';                  // ° º ˚
+const GEO_MIN_MARKS = "'′’ʼ´‘";     // ' ′ ’ ʼ ´ ‘
+const GEO_SEC_MARKS = '"″”“';                 // " ″ ” “
+// N/S plus the east/west letters of every language this app ships or borders: E (english),
+// O/Ö (svenska öst), Ø (norsk/dansk øst), W (west), V (väst/vest). O means *west* in
+// Spanish/French/Portuguese, but this app ships only sv/en and English never uses O as a
+// hemisphere, so O is read as East; the failure mode is a jump the user sees immediately.
+const GEO_HEMI_LETTERS = 'NnSsEeWwOoVvÖöØø';
+
+const GEO_DEG_CLASS = '[' + GEO_DEG_MARKS + ']';
+const GEO_MIN_CLASS = '[' + GEO_MIN_MARKS + ']';
+// Seconds end in a double-quote variant or in two minute marks ('' ’’ ′′), which is how
+// plain-ASCII typists write them. Unambiguous: a number always separates the two marks.
+const GEO_SEC_CLASS = '(?:[' + GEO_SEC_MARKS + ']|' + GEO_MIN_CLASS + '{2})';
+// Degrees and minutes must be parted by a degree mark and/or whitespace. Without this the
+// engine backtracks "57.8112660" into 5° 7.8112660' (a plausible-looking 5.13°) instead of
+// falling through to the decimal-degrees alternative below.
+const GEO_DM_SEP = '(?:\\s*' + GEO_DEG_CLASS + '\\s*|\\s+)';
+
+const GEO_COMPONENT_SRC =
+    '(?:([' + GEO_HEMI_LETTERS + '])\\s*)?' +                         // 1 leading hemisphere
+    '(?:' +
+        '([-+]?\\d{1,3})' + GEO_DM_SEP +                              // 2 integer degrees
+        '(\\d{1,2}(?:[.,]\\d+)?)\\s*' + GEO_MIN_CLASS + '?' +         // 3 minutes
+        '(?:\\s*(\\d{1,2}(?:[.,]\\d+)?)\\s*' + GEO_SEC_CLASS + ')?' + // 4 seconds
+    '|' +
+        '([-+]?\\d{1,3}(?:[.,]\\d+)?)\\s*' + GEO_DEG_CLASS + '?' +    // 5 decimal degrees
+    ')' +
+    // A trailing hemisphere letter must not be the *leading* letter of the next component:
+    // in "N 57.81 E 12.09" the E belongs to the longitude, not to the latitude.
+    '(?:\\s*([' + GEO_HEMI_LETTERS + '])(?!\\s*[-+]?\\d))?';
+
+// Gate: the query may contain only coordinate characters, and must carry at least one
+// sexagesimal mark or hemisphere letter. This is what keeps place names ("Malmö", "Oslo")
+// and the plain-decimal forms out of this parser entirely.
+const GEO_SEXAGESIMAL_CHARS_RE = new RegExp(
+    '^[0-9+\\-.,;/\\s' + GEO_DEG_MARKS + GEO_MIN_MARKS + GEO_SEC_MARKS + GEO_HEMI_LETTERS + ']+$');
+const GEO_HAS_MARK_RE = new RegExp(
+    '[' + GEO_DEG_MARKS + GEO_MIN_MARKS + GEO_SEC_MARKS + GEO_HEMI_LETTERS + ']');
+// What may sit between and around the two components once both have been matched.
+const GEO_FILLER_RE = /^[\s,;/]*$/;
+
+const PLUSCODE_ALPHABET = '23456789CFGHJMPQRVWX';
+const PLUSCODE_PC = '[' + PLUSCODE_ALPHABET + ']';
+// A full code is 8 digits + '+' + 2..7 more. A padded code pads the tail of the pair
+// section with '0'. A short code drops 2, 4 or 6 leading digits, so its separator index is
+// always even and below 8 — which (?:PC{2}){1,3} encodes directly.
+const PLUSCODE_FULL_RE = new RegExp('^' + PLUSCODE_PC + '{8}\\+(?:' + PLUSCODE_PC + '{2,7})?$', 'i');
+const PLUSCODE_PADDED_RE = new RegExp('^(?:' + PLUSCODE_PC + '{2}){1,3}0{2,6}\\+$', 'i');
+const PLUSCODE_SHORT_RE = new RegExp('^(?:' + PLUSCODE_PC + '{2}){1,3}\\+' + PLUSCODE_PC + '{2,7}$', 'i');
+// <code>[ , | whitespace ] <locality>. The separator before a locality is required, else
+// "R36R+GP4Göteborg" would swallow the G into the code.
+const PLUSCODE_QUERY_RE = new RegExp(
+    '^([' + PLUSCODE_ALPHABET + '0]{2,8}\\+[' + PLUSCODE_ALPHABET + ']{0,7})' +
+    '(?:(?:\\s*,\\s*|\\s+)(.+))?$', 'i');
+
+// Zoom for a resolved coordinate. 15 equals ELEVATION_TILE_MAX_ZOOM and sits below every
+// layer's maxZoom, so it is never clamped; at 12 (~38 m/px here) a 2.5 m Plus Code cell is
+// invisible. Coarse input (integer degrees, a padded Plus Code) stays at the old 12, and
+// so does every place-name search.
+function zoomForCoordinate(precise) {
+    return precise ? 15 : 12;
+}
+
+// Fold the hemisphere letters of every accepted language down to NSEW. See the note on O
+// above. Returns null for absent or unknown letters.
+function normalizeHemisphere(letter) {
+    if (!letter) return null;
+    const c = letter.toUpperCase();
+    if (c === 'N' || c === 'S' || c === 'E' || c === 'W') return c;
+    if (c === 'O' || c === 'Ö' || c === 'Ø') return 'E';   // öst / øst / ost
+    if (c === 'V') return 'W';                                       // väst / vest
+    return null;
+}
+
+// parseFloat that accepts a decimal comma. Returns null for absent groups so callers can
+// tell "no seconds field" from "seconds were zero".
+function parseGeoNumber(text) {
+    if (text === undefined || text === null || text === '') return null;
+    const value = parseFloat(String(text).replace(',', '.'));
+    return Number.isFinite(value) ? value : null;
+}
+
+// One matched component -> { value, leading, trailing, precise } or null. `value` carries
+// only an explicit leading sign; the caller applies the hemisphere.
+function buildGeoComponent(match) {
+    const degMinDeg = match[2];
+    let value;
+    let precise;
+
+    if (degMinDeg !== undefined) {
+        const degrees = parseGeoNumber(degMinDeg);
+        const minutes = parseGeoNumber(match[3]);
+        const seconds = parseGeoNumber(match[4]);
+        if (degrees === null || minutes === null) return null;
+        if (minutes < 0 || minutes >= 60) return null;
+        if (seconds !== null && (seconds < 0 || seconds >= 60)) return null;
+        // "57° 44.5' 30\"" is self-contradictory: fractional minutes already carry the
+        // seconds, so a seconds field on top of them means the input was mistyped.
+        if (seconds !== null && !Number.isInteger(minutes)) return null;
+        const sign = degrees < 0 ? -1 : 1;
+        value = sign * (Math.abs(degrees) + minutes / 60 + (seconds || 0) / 3600);
+        precise = true;
+    } else {
+        const decimal = parseGeoNumber(match[5]);
+        if (decimal === null) return null;
+        value = decimal;
+        // Four decimals is ~11 m at this latitude — precise enough to be worth zooming to.
+        const fraction = /[.,](\d+)$/.exec(String(match[5]));
+        precise = Boolean(fraction && fraction[1].length >= 4);
+    }
+
+    if (!Number.isFinite(value)) return null;
+    return {
+        value,
+        leading: normalizeHemisphere(match[1]),
+        trailing: normalizeHemisphere(match[6]),
+        precise
+    };
+}
+
+// DMS / DDM / decimal degrees carrying a sexagesimal mark or a hemisphere letter, in
+// either axis order. Returns { lat, lng, precise } or null.
+function parseSexagesimalPair(text) {
+    const input = String(text || '').trim();
+    if (!input) return null;
+    if (!GEO_SEXAGESIMAL_CHARS_RE.test(input)) return null;
+    if (!GEO_HAS_MARK_RE.test(input)) return null;
+
+    const re = new RegExp(GEO_COMPONENT_SRC, 'g');
+    const matches = [];
+    let m;
+    while ((m = re.exec(input)) !== null) {
+        if (m[0] === '') { re.lastIndex++; continue; }     // never let a zero-width match spin
+        matches.push(m);
+        if (matches.length > 2) return null;
+    }
+    if (matches.length !== 2) return null;
+
+    // Coverage check, in place of ^...$ anchoring: whatever the two components did not
+    // consume may only be separator punctuation. This is what makes a partial match
+    // ("E6", a lone "57°44'24\"N") fail instead of silently parsing.
+    const first = matches[0];
+    const second = matches[1];
+    const leftover = input.slice(0, first.index) +
+        input.slice(first.index + first[0].length, second.index) +
+        input.slice(second.index + second[0].length);
+    if (!GEO_FILLER_RE.test(leftover)) return null;
+
+    const a = buildGeoComponent(first);
+    const b = buildGeoComponent(second);
+    if (!a || !b) return null;
+
+    // "57.8112660N 12.0918247E" scans as [57.8112660] [N 12.0918247 E] because the N is
+    // not followed by a digit but the E is. Move a stranded leading letter back one
+    // component; sound because a component can hold at most one hemisphere.
+    if (!a.leading && !a.trailing && b.leading && b.trailing) {
+        a.trailing = b.leading;
+        b.leading = null;
+    }
+    if (a.leading && a.trailing) return null;
+    if (b.leading && b.trailing) return null;
+
+    const h1 = a.leading || a.trailing;
+    const h2 = b.leading || b.trailing;
+    const axis = (h) => (h === 'N' || h === 'S' ? 'ns' : h ? 'ew' : null);
+
+    let swap = false;
+    if (h1 && h2) {
+        if (axis(h1) === axis(h2)) return null;            // "…N, …N" is not a pair
+        swap = axis(h1) === 'ew';
+    } else if (h1) {
+        swap = axis(h1) === 'ew';
+    } else if (h2) {
+        swap = axis(h2) === 'ns';
+    }
+
+    const latPart = swap ? b : a;
+    const lngPart = swap ? a : b;
+    const latHemi = latPart.leading || latPart.trailing;
+    const lngHemi = lngPart.leading || lngPart.trailing;
+
+    // A hemisphere letter wins over an explicit sign: "-57° S" is a typo, and a search box
+    // should be forgiving rather than push it to a geocoder that cannot help.
+    const lat = latHemi ? Math.abs(latPart.value) * (latHemi === 'S' ? -1 : 1) : latPart.value;
+    const lng = lngHemi ? Math.abs(lngPart.value) * (lngHemi === 'W' ? -1 : 1) : lngPart.value;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng, precise: latPart.precise || lngPart.precise };
+}
+
+// Plain decimal degrees: the legacy "57.81, 12.09" / "57 81" forms plus the Swedish
+// decimal comma ("57,8112660, 12,0918247"). Returns { lat, lng, precise } or null.
+function parseDecimalPair(text) {
+    const input = String(text || '').trim();
+    if (!/^[-+0-9.,\s]+$/.test(input)) return null;
+
+    let lat = null;
+    let lng = null;
+
+    if (input.indexOf('.') !== -1) {
+        // A dot in the string settles it: dot is the decimal point, so every comma can
+        // only be a pair separator. A mixed "57.81, 12,09" yields 3 tokens and fails.
+        if ((input.match(/,/g) || []).length > 1) return null;
+        const tokens = input.split(/[,\s]+/).filter(Boolean);
+        if (tokens.length !== 2) return null;
+        if (!tokens.every((tok) => /^[-+]?\d+(?:\.\d+)?$/.test(tok))) return null;
+        lat = parseFloat(tokens[0]);
+        lng = parseFloat(tokens[1]);
+    } else {
+        // No dot: a comma is either the decimal point or the pair separator. Split
+        // capturing the separators so we know which of them contain whitespace.
+        const parts = input.split(/([,\s]+)/);
+        const groups = parts.filter((_, i) => i % 2 === 0);
+        const seps = parts.filter((_, i) => i % 2 === 1);
+        if (!groups.every((g) => /^[-+]?\d+$/.test(g))) return null;
+        const spaced = seps.map((s, i) => (/\s/.test(s) ? i : -1)).filter((i) => i !== -1);
+        const unsigned = (g) => /^\d+$/.test(g);
+
+        if (groups.length === 2) {
+            // Legacy, non-negotiable: two groups are ALWAYS the historical lat/lon pair.
+            // "57,81" has meant lat 57 lon 81 since the first release and must keep to it;
+            // nothing is lost, because a lone "57,8112660" is not a coordinate pair anyway.
+            lat = parseFloat(groups[0]);
+            lng = parseFloat(groups[1]);
+        } else if (groups.length === 3) {
+            // "57,8112660, 12" — whitespace is the only signal for which comma splits the
+            // pair. Without exactly one whitespace separator the input is truly ambiguous.
+            if (spaced.length !== 1) return null;
+            if (spaced[0] === 0) {
+                if (!unsigned(groups[2])) return null;
+                lat = parseFloat(groups[0]);
+                lng = parseFloat(groups[1] + '.' + groups[2]);
+            } else {
+                if (!unsigned(groups[1])) return null;
+                lat = parseFloat(groups[0] + '.' + groups[1]);
+                lng = parseFloat(groups[2]);
+            }
+        } else if (groups.length === 4) {
+            // Four integer groups can only be a 2+2 decimal-comma pair, so the middle
+            // separator splits it — which collapses "a,b, c,d", "a,b c,d" and "a,b,c,d"
+            // to one rule. Whitespace anywhere else means the input was mistyped.
+            if (spaced.some((i) => i !== 1)) return null;
+            if (!unsigned(groups[1]) || !unsigned(groups[3])) return null;
+            lat = parseFloat(groups[0] + '.' + groups[1]);
+            lng = parseFloat(groups[2] + '.' + groups[3]);
+        } else {
+            return null;
+        }
+    }
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    const decimals = (v) => { const f = /\.(\d+)$/.exec(String(v)); return f ? f[1].length : 0; };
+    return { lat, lng, precise: decimals(lat) >= 4 || decimals(lng) >= 4 };
+}
+
+// Entry point for the search box. Returns { lat, lng, zoom } or null; null means "not a
+// coordinate", so the caller falls through to the geocoder exactly as it does today.
+function parseCoordinateQuery(text) {
+    const parsed = parseSexagesimalPair(text) || parseDecimalPair(text);
+    if (!parsed) return null;
+    return { lat: parsed.lat, lng: parsed.lng, zoom: zoomForCoordinate(parsed.precise) };
+}
+
+// Recognise a Plus Code query without touching the network. Returns
+// { code, kind, locality } where kind is 'full' | 'padded' | 'short', or null.
+function matchPlusCodeQuery(text) {
+    const input = String(text || '').trim();
+    const m = PLUSCODE_QUERY_RE.exec(input);
+    if (!m) return null;
+    const code = m[1].toUpperCase();
+    const locality = (m[2] || '').trim();
+    let kind = null;
+    if (PLUSCODE_FULL_RE.test(code)) kind = 'full';
+    else if (PLUSCODE_PADDED_RE.test(code)) kind = 'padded';
+    else if (PLUSCODE_SHORT_RE.test(code)) kind = 'short';
+    if (!kind) return null;
+    return { code, kind, locality };
+}
+
+// Decode a full or padded code to the CENTRE of its cell, plus the cell size on each axis.
+// Pair section: 5 pairs at 20°, 1°, 0.05°, 0.0025°, 0.000125°, even digits latitude and odd
+// longitude, offset from the south-west corner (-90, -180). Grid section: each further
+// digit splits the current cell into 4 columns x 5 rows.
+function decodePlusCode(code) {
+    const digits = String(code || '').toUpperCase().replace(/\+/g, '').replace(/0+$/, '');
+    if (!digits) return null;
+    if (Math.min(digits.length, 10) % 2 !== 0) return null;    // the pair section is even
+    for (let i = 0; i < digits.length; i++) {
+        if (PLUSCODE_ALPHABET.indexOf(digits[i]) === -1) return null;
+    }
+
+    let lat = -90;
+    let lng = -180;
+    let latRes = 20;
+    let lngRes = 20;
+
+    const pairEnd = Math.min(digits.length, 10);
+    for (let i = 0; i + 1 < pairEnd; i += 2) {
+        lat += PLUSCODE_ALPHABET.indexOf(digits[i]) * latRes;
+        lng += PLUSCODE_ALPHABET.indexOf(digits[i + 1]) * lngRes;
+        if (i + 2 < pairEnd) { latRes /= 20; lngRes /= 20; }
+    }
+    for (let i = 10; i < Math.min(digits.length, 15); i++) {
+        const d = PLUSCODE_ALPHABET.indexOf(digits[i]);
+        latRes /= 5;
+        lngRes /= 4;
+        lat += Math.floor(d / 4) * latRes;    // row 0 is the southernmost
+        lng += (d % 4) * lngRes;              // col 0 is the westernmost
+    }
+
+    return { lat: lat + latRes / 2, lng: lng + lngRes / 2, latRes, lngRes };
+}
+
+// The first `len` (even, <= 10) digits of the full code covering a point — a partial
+// encoder, which is all short-code recovery needs.
+function plusCodePrefix(lat, lng, len) {
+    let la = Math.min(Math.max(lat, -90), 90) + 90;
+    let lo = ((lng % 360) + 540) % 360;                // -> [0, 360)
+    if (la >= 180) la = 180 - 1e-10;                   // exactly +90 belongs to the last cell
+    let out = '';
+    let latRes = 20;
+    let lngRes = 20;
+    for (let i = 0; i < len; i += 2) {
+        const a = Math.min(Math.floor(la / latRes), 19);
+        const b = Math.min(Math.floor(lo / lngRes), 19);
+        out += PLUSCODE_ALPHABET[a] + PLUSCODE_ALPHABET[b];
+        la -= a * latRes;
+        lo -= b * lngRes;
+        latRes /= 20;
+        lngRes /= 20;
+    }
+    return out;
+}
+
+// Expand a short code ("R36R+GP4") against a reference point: rebuild the missing leading
+// digits from the reference, then step one cell if the naive result landed on the far side
+// of the reference. Returns the same shape as decodePlusCode, or null.
+function recoverNearestPlusCode(shortCode, refLat, refLng) {
+    const code = String(shortCode || '').toUpperCase();
+    const sep = code.indexOf('+');
+    if (sep < 0 || sep >= 8 || sep % 2 !== 0) return null;
+    if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) return null;
+
+    const paddingLength = 8 - sep;
+    const resolution = Math.pow(20, 2 - paddingLength / 2);
+    const half = resolution / 2;
+    const lat = Math.min(Math.max(refLat, -90), 90);
+    const lng = ((refLng % 360) + 540) % 360 - 180;
+
+    const area = decodePlusCode(plusCodePrefix(lat, lng, paddingLength) + code);
+    if (!area) return null;
+
+    if (lat + half < area.lat && area.lat - resolution >= -90) area.lat -= resolution;
+    else if (lat - half > area.lat && area.lat + resolution <= 90) area.lat += resolution;
+    // No clamp on longitude: wrapping across +-180 is legitimate.
+    if (lng + half < area.lng) area.lng -= resolution;
+    else if (lng - half > area.lng) area.lng += resolution;
+
+    return area;
+}
+
+// Turn a matched Plus Code into a map position. A short code only pins down a point within
+// a cell of its own resolution (±0.5° for the common 4-padding form, ~55 km), so it needs
+// a reference: the locality that follows it, geocoded, or the current view.
+async function resolvePlusCode(match) {
+    if (match.kind === 'full' || match.kind === 'padded') {
+        const area = decodePlusCode(match.code);
+        // A padded code covers a whole degree or more, so it is not a precise position.
+        return area ? { lat: area.lat, lng: area.lng, zoom: zoomForCoordinate(match.kind === 'full') } : null;
+    }
+
+    let ref;
+    if (match.locality) {
+        const place = await geocodeNominatim(match.locality);
+        // The user named a place. If it cannot be found, say so rather than silently
+        // falling back to the map centre, which would drop them at a plausible-looking but
+        // wrong location up to ~55 km away with no signal that anything went wrong.
+        if (!place) return null;
+        ref = place;
+    } else {
+        // map.getCenter(), not getSearchCenter(): the latter returns the locked analysis
+        // centre, which can be far from what the user is actually looking at.
+        ref = map.getCenter();
+    }
+
+    const area = recoverNearestPlusCode(match.code, ref.lat, ref.lng);
+    return area ? { lat: area.lat, lng: area.lng, zoom: zoomForCoordinate(true) } : null;
+}
+
+// Forward-geocode a free-text place name. Returns { lat, lng, name } or null; throws only
+// on a network/parse failure, which the callers surface in the status bar.
+async function geocodeNominatim(query) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    if (!data || !data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng, name: String(data[0].display_name || '').split(',')[0] };
+}
+
 async function searchLocation() {
     const t = translations[currentLang];
     const query = searchInput.value.trim();
     if (!query) return;
     statusDiv.textContent = t.status_searching;
-    const coordMatch = query.match(/^([-+]?\d{1,2}[.]?\d*)[,\s]+([-+]?\d{1,3}[.]?\d*)$/);
-    if (coordMatch) {
-        map.setView([parseFloat(coordMatch[1]), parseFloat(coordMatch[2])], 12);
-        statusDiv.textContent = t.status_done; return;
+
+    // Plus Codes are tried first: they are the only format allowed to carry trailing free
+    // text ("R36R+GP4 Göteborg") and the only one that may need a network round trip.
+    const plusCode = matchPlusCodeQuery(query);
+    if (plusCode) {
+        try {
+            const point = await resolvePlusCode(plusCode);
+            if (point) {
+                map.setView([point.lat, point.lng], point.zoom);
+                statusDiv.textContent = t.status_done;
+            } else {
+                statusDiv.textContent = t.status_no_match;
+            }
+        } catch (error) {
+            console.error(error);
+            statusDiv.textContent = (t.status_error || 'Error: ') + error.message;
+        }
+        return;
     }
+
+    // DMS / DDM / decimal degrees, including the Swedish decimal comma. Returns null on
+    // anything it does not fully understand, so a near-miss still reaches the geocoder.
+    const coords = parseCoordinateQuery(query);
+    if (coords) {
+        map.setView([coords.lat, coords.lng], coords.zoom);
+        statusDiv.textContent = t.status_done;
+        return;
+    }
+
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        if (data && data.length > 0) {
-            map.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 12);
-            statusDiv.textContent = `${data[0].display_name.split(',')[0]}`;
+        const place = await geocodeNominatim(query);
+        if (place) {
+            map.setView([place.lat, place.lng], 12);
+            statusDiv.textContent = place.name;
         } else { statusDiv.textContent = t.status_no_match; }
-    } catch (error) { console.error(error); }
+    } catch (error) {
+        console.error(error);
+        // Without this the status bar is stuck on "Searching..." forever whenever the
+        // network fails — offline, Nominatim down, or rate-limited.
+        statusDiv.textContent = (t.status_error || 'Error: ') + error.message;
+    }
 }
 
 function stopGpsTracking() {
