@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.20.0";
-const BUILD_NUMBER = "3016";
+const APP_VERSION = "2.21.0";
+const BUILD_NUMBER = "3018";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -15,6 +15,9 @@ const BACKEND_DETECTION_TIMEOUT_MS = 4000;
 
 let backendAvailable = false;
 let backendDetectionPromise = null;
+// Reported by /api/health: true when the backend has an openrouteservice configured. Gates
+// the track editor's snap-to-route, which degrades to freehand lines without it.
+let routingAvailable = false;
 
 function isBackendEnabled() {
     return backendAvailable;
@@ -56,7 +59,9 @@ function probeBackendHealth() {
                 return false;
             }
             const payload = await response.json().catch(() => null);
-            return !!(payload && payload.status === 'ok');
+            const ok = !!(payload && payload.status === 'ok');
+            if (ok) routingAvailable = !!payload.routing;
+            return ok;
         })
         .catch(() => false)
         .finally(() => {
@@ -139,6 +144,22 @@ function getGpxTopBeforeId(nativeMap) {
         ? GPX_LINE_LAYER_ID
         : undefined;
 }
+
+// --- GPX track editing ---
+// Dashed rubber-band shown while a handle is being dragged. Created fresh per drag so it
+// always lands above the track (updateGpxTrackLine re-raises the track on every update).
+const GPX_EDIT_PREVIEW_SOURCE_ID = 'gpx-edit-preview';
+const GPX_EDIT_PREVIEW_LAYER_ID = 'gpx-edit-preview-line';
+const GPX_EDIT_MIN_HANDLES = 3;
+const GPX_EDIT_UNDO_MAX = 20;
+const GPX_EDIT_UNDO_MAX_POINTS = 400000;   // total points across all stacked snapshots
+const GPX_EDIT_CLICK_TOLERANCE_PX = 18;    // click-to-add-handle hit radius
+const GPX_EDIT_ORS_RADIUS_M = 50;          // snap radius sent to the routing service
+const GPX_EDIT_FREEHAND_SPACING_M = 50;    // densification spacing when snapping is off
+const GPX_EDIT_FREEHAND_MAX_POINTS = 200;  // cap per sub-segment
+// Must match ORS_PROFILES in main.py and the enabled profiles in ors/ors-config.yml.
+const GPX_EDIT_PROFILES = ['foot-walking', 'foot-hiking', 'cycling-mountain', 'driving-car'];
+const GPX_EDIT_DEFAULT_PROFILE = 'foot-walking';
 
 // Footer readout visibility. Zoom defaults to shown (only an explicit 'false' hides it);
 // scale and center GPS default to hidden (only an explicit 'true' shows them).
@@ -1722,6 +1743,12 @@ let currentGpxRawText = null;     // raw GPX text of the active route (for downl
 let currentGpxRawFilename = null; // original filename of the active route (download default name)
 let uploadedGpxFiles = [];
 let uploadedGpxListState = 'idle';
+// Track editing. gpxEditState holds the working copy + handles while gpxEditMode is on;
+// gpxTextIsGenerated marks currentGpxRawText as re-serialized (no longer the user's bytes).
+let gpxEditMode = false;
+let gpxEditState = null;
+let _gpxEditRenderDebounce = null;
+let gpxTextIsGenerated = false;
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -2235,6 +2262,8 @@ function updateLanguage() {
         if (document.getElementById('gpx-btn')) document.querySelector('#gpx-btn .btn-label').textContent = t.btn_gpx;
         if (document.getElementById('gpx-clear-btn')) document.querySelector('#gpx-clear-btn .btn-label').textContent = t.btn_gpx_clear;
         if (document.getElementById('gpx-download-btn')) document.querySelector('#gpx-download-btn .btn-label').textContent = t.btn_gpx_download;
+        // Covers the Edit button label, the panel labels/options and the button states.
+        _updateGpxEditUI();
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
         if (mcToggle) {
             mcToggle.querySelector('.btn-label').textContent = t.btn_manual_climb;
@@ -4031,6 +4060,14 @@ window.clearPoiState = clearPoiState;
 // ---- Tap-to-place / move flow ----
 function enterPoiPlacementMode(moveId, statusKey, fallbackStatus) {
     const t = translations[currentLang];
+    // Refuse rather than exit track editing for them — the edits are unsaved.
+    if (gpxEditMode) {
+        if (statusDiv) {
+            statusDiv.textContent = t.status_gpx_edit_busy ||
+                'Finish or cancel track editing first.';
+        }
+        return;
+    }
     closePoiModal();
     poiPlacementMode = true;
     poiPlacementMoveId = moveId || null;
@@ -4179,6 +4216,8 @@ window.savePoiForm = async function () {
 };
 
 window.clearGpxRoute = function () {
+    // No prompt: the user is explicitly destroying the track the edits belong to.
+    _gpxEditForceExit();
     clearGpxTrackSourceAndLayers();
     clearMarkerCollection(currentMarkers);
     currentMarkers = [];
@@ -4191,6 +4230,7 @@ window.clearGpxRoute = function () {
     currentGpxShareUrl = null;
     currentGpxRawText = null;
     currentGpxRawFilename = null;
+    gpxTextIsGenerated = false;
     const params = new URLSearchParams(location.search);
     params.delete('gpx');
     const queryString = params.toString();
@@ -4206,6 +4246,79 @@ window.clearGpxRoute = function () {
 // ==========================================
 // GPX DOWNLOAD + RENAME (client-side export of the loaded route)
 // ==========================================
+// Serializes the in-memory geometry back to GPX 1.1. Needed because the track editor
+// changes `gpxTrackData.segments` while `currentGpxRawText` still holds the file the user
+// loaded — after an edit those two disagree and the export has to come from the geometry.
+//
+// Lossy by construction: parseGpxText() keeps only lat/lon/ele per point and lat/lon/name
+// per waypoint, so per-point <time>, sensor extensions, <desc>, waypoint <sym>/<type> and
+// the <rte>-vs-<trk> distinction are gone before we get here. saveGpxEdits() warns first.
+const GPX_XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+
+function escapeXml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, c => GPX_XML_ESCAPES[c]);
+}
+
+// 7 decimals is ~1 cm of longitude at the equator — well past GPS precision, and it keeps
+// the file compact next to JS's default 15-odd digits.
+function formatGpxCoord(v) { return Number(v).toFixed(7); }
+function formatGpxEle(v) { return Number(v).toFixed(1); }
+
+function buildGpxXml(segments, waypoints, metadata = {}) {
+    const name = escapeXml(metadata.name || 'route');
+    const time = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    // Array + join, not string +=: a 50k-point track is 50k lines.
+    const out = [];
+    out.push('<?xml version="1.0" encoding="UTF-8"?>');
+    out.push('<gpx version="1.1" creator="TopoScout ' + escapeXml(APP_VERSION) + '"');
+    out.push('     xmlns="http://www.topografix.com/GPX/1/1"');
+    out.push('     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"');
+    out.push('     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 ' +
+        'http://www.topografix.com/GPX/1/1/gpx.xsd">');
+    // GPX 1.1 fixes child order inside <metadata> (name before time) and at document
+    // level (metadata, wpt*, rte*, trk*) — emit in exactly that order or validators fail.
+    out.push('  <metadata>');
+    out.push('    <name>' + name + '</name>');
+    out.push('    <time>' + time + '</time>');
+    out.push('  </metadata>');
+    for (const wp of (waypoints || [])) {
+        const open = '  <wpt lat="' + formatGpxCoord(wp.lat) + '" lon="' + formatGpxCoord(wp.lon) + '"';
+        if (wp.name) {
+            out.push(open + '>');
+            out.push('    <name>' + escapeXml(wp.name) + '</name>');
+            out.push('  </wpt>');
+        } else {
+            out.push(open + '/>');
+        }
+    }
+    out.push('  <trk>');
+    out.push('    <name>' + name + '</name>');
+    for (const seg of (segments || [])) {
+        if (!seg || seg.length === 0) continue;
+        out.push('    <trkseg>');
+        for (const p of seg) {
+            const open = '      <trkpt lat="' + formatGpxCoord(p.lat) + '" lon="' + formatGpxCoord(p.lon) + '"';
+            // <ele> is optional; omit it rather than inventing a 0 for unknown elevation.
+            out.push(p.ele === null || p.ele === undefined
+                ? open + '/>'
+                : open + '><ele>' + formatGpxEle(p.ele) + '</ele></trkpt>');
+        }
+        out.push('    </trkseg>');
+    }
+    out.push('  </trk>');
+    out.push('</gpx>');
+    return out.join('\n') + '\n';
+}
+window.buildGpxXml = buildGpxXml;
+
+// Re-points the download at the edited geometry. Called only from saveGpxEdits().
+function regenerateCurrentGpxText() {
+    if (!gpxTrackData) return;
+    const baseName = sanitizeGpxFilename(currentGpxFilename || currentGpxRawFilename || 'route');
+    currentGpxRawText = buildGpxXml(gpxTrackData.segments, gpxTrackData.waypoints, { name: baseName });
+    gpxTextIsGenerated = true;
+}
+
 function sanitizeGpxFilename(name) {
     let base = String(name == null ? '' : name).trim();
     base = base.replace(/\.gpx$/i, '');        // drop an existing .gpx extension
@@ -4962,6 +5075,7 @@ function parseGpxText(gpxText) {
         stats: computeTrackStats(allSegments)
     };
 }
+window.parseGpxText = parseGpxText;
 
 function fitGpxBounds(allSegments, waypoints) {
     const allCoords = [];
@@ -4988,7 +5102,11 @@ function setActiveGpxSource(source) {
 }
 
 function applyParsedGpxData(parsedGpx, options = {}) {
-    const t = translations[currentLang];    gpxTrackData = {
+    const t = translations[currentLang];
+    // Leave edit mode before gpxTrackData is replaced: gpxEditState.segIndex would
+    // otherwise dangle into a different track and corrupt the next splice.
+    _gpxEditForceExit();
+    gpxTrackData = {
         segments: parsedGpx.segments,
         waypoints: parsedGpx.waypoints,
         ...parsedGpx.stats
@@ -4997,6 +5115,7 @@ function applyParsedGpxData(parsedGpx, options = {}) {
     currentGpxRawText = options.rawText || null;
     currentGpxRawFilename = options.rawFilename ||
         (options.source && options.source.filename) || null;
+    gpxTextIsGenerated = false;
 
     rebuildGpxLayer();
     updateGpxTrackInfo();
@@ -7763,6 +7882,12 @@ window.toggleManualClimbMode = function () {
 };
 
 function enterManualClimbMode() {
+    // Refuse rather than exit track editing for it — the edits are unsaved.
+    if (gpxEditMode) {
+        statusDiv.textContent = translations[currentLang].status_gpx_edit_busy ||
+            'Finish or cancel track editing first.';
+        return;
+    }
     manualClimbMode = true;
     manualClimbPoints = [];
     manualClimbMarkers = [];
@@ -7983,6 +8108,861 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         </div>`);
     markers.push(endM);
     endM.openPopup();
+}
+
+// ==========================================
+// 5d. GPX TRACK EDITING
+// ==========================================
+//
+// Reshapes an already-loaded track by dragging handles along it. Each drag re-routes the
+// two sub-segments either side of the moved handle, via openrouteservice when snapping is
+// on (and reachable) or as a densified straight line otherwise.
+//
+// The design rests on two ideas:
+//   1. `st.points` IS `gpxTrackData.segments[segIndex]` — the working copy is installed
+//      into the render pipeline, so edits show up through the existing draw path with no
+//      new render code. Cancel swaps `st.original` back in.
+//   2. Every handle's `idx` addresses a REAL element of `st.points`; no virtual or
+//      fractional indices exist. _gpxEditSpliceBetween() is the only function that
+//      changes point counts, and it is also the only one that shifts handle indices.
+//
+// Handle invariants, checked by _gpxEditAssertInvariants() after every mutation:
+//   handles ascending by idx · handles[0].idx === 0 · last idx === points.length - 1 ·
+//   at least GPX_EDIT_MIN_HANDLES handles · every idx addressable.
+
+window.toggleGpxEditMode = function () {
+    gpxEditMode ? cancelGpxEditMode() : enterGpxEditMode();
+};
+
+// Most GPX files hold one segment. With several, edit the longest and leave the rest
+// untouched — they still render and still export verbatim.
+function _gpxEditPickSegment() {
+    const segments = (gpxTrackData && gpxTrackData.segments) || [];
+    let best = -1;
+    for (let i = 0; i < segments.length; i++) {
+        if (segments[i].length < 2) continue;
+        if (best === -1 || segments[i].length > segments[best].length) best = i;
+    }
+    return best;
+}
+
+function enterGpxEditMode() {
+    const t = translations[currentLang];
+    if (!gpxTrackData) {
+        statusDiv.textContent = t.status_gpx_edit_no_track || 'Load a GPX track before editing.';
+        return;
+    }
+    const segIndex = _gpxEditPickSegment();
+    if (segIndex === -1) {
+        statusDiv.textContent = t.status_gpx_edit_no_track || 'Load a GPX track before editing.';
+        return;
+    }
+
+    // Editing owns the map click and the track geometry; the other placement modes cannot
+    // run alongside it.
+    if (poiPlacementMode) cancelPoiPlacement();
+    if (manualClimbMode) cancelManualClimbMode();
+
+    const seg = gpxTrackData.segments[segIndex];
+    gpxEditMode = true;
+    gpxEditState = {
+        segIndex,
+        original: seg.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
+        points: seg.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
+        handles: [],
+        nextHandleId: 1,
+        snap: routingAvailable,
+        profile: GPX_EDIT_DEFAULT_PROFILE,
+        undo: [],
+        redo: [],
+        undoPointCount: 0,
+        dragging: null,
+        busy: false,
+        prevColorBySlope: getGpxColorBySlope()
+    };
+    // The working copy becomes the rendered geometry.
+    gpxTrackData.segments[segIndex] = gpxEditState.points;
+
+    // Slope colouring emits one GeoJSON feature per vertex pair; regenerating that on
+    // every drag stalls visibly on a large track. Pause it and restore on exit.
+    if (gpxEditState.prevColorBySlope) {
+        const slopeBox = document.getElementById('gpxColorBySlope');
+        if (slopeBox) slopeBox.checked = false;
+        rebuildGpxLayer();
+    }
+
+    _gpxEditSeedHandles();
+
+    const btn = document.getElementById('gpx-edit-btn');
+    if (btn) btn.classList.add('active');
+    const panel = document.getElementById('gpx-edit-panel');
+    if (panel) panel.style.display = 'block';
+    const snapBox = document.getElementById('gpxEditSnap');
+    if (snapBox) snapBox.checked = gpxEditState.snap;
+    const profileSel = document.getElementById('gpxEditProfile');
+    if (profileSel) profileSel.value = gpxEditState.profile;
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.add('gpx-edit-active');
+
+    _updateGpxEditUI();
+
+    if (!routingAvailable) {
+        statusDiv.textContent = t.status_gpx_edit_route_unavailable ||
+            'Snap to route needs the online backend; freehand editing is used.';
+    } else if (gpxTrackData.segments.length > 1) {
+        statusDiv.textContent = (t.status_gpx_edit_multi_segment ||
+            'Track has {n} segments — editing the longest one.')
+            .replace('{n}', gpxTrackData.segments.length);
+    } else if (gpxEditState.prevColorBySlope) {
+        statusDiv.textContent = t.status_gpx_edit_slope_off ||
+            'Slope colouring is paused while editing.';
+    } else {
+        statusDiv.textContent = t.status_gpx_edit_active ||
+            'Edit mode — drag handles, click the track to add one.';
+    }
+}
+
+// Start / midpoint / end, so the user can drag immediately.
+function _gpxEditSeedHandles() {
+    const st = gpxEditState;
+    // A 2-point track is legal GPX; densify so three distinct indices exist.
+    if (st.points.length < 3) {
+        const a = st.points[0], b = st.points[st.points.length - 1];
+        st.points.splice(1, 0, {
+            lat: (a.lat + b.lat) / 2,
+            lon: (a.lon + b.lon) / 2,
+            ele: (a.ele === null || b.ele === null) ? null : Math.round((a.ele + b.ele) / 2)
+        });
+    }
+    const n = st.points.length;
+    _gpxEditAddHandleAtIndex(0);
+    _gpxEditAddHandleAtIndex(Math.floor((n - 1) / 2));
+    _gpxEditAddHandleAtIndex(n - 1);
+    _gpxEditAssertInvariants();
+}
+
+function _gpxEditAddHandleAtIndex(idx) {
+    const st = gpxEditState;
+    if (idx < 0 || idx >= st.points.length) return null;
+    if (st.handles.some(h => h.idx === idx)) return null;
+
+    const handle = { id: st.nextHandleId++, idx, marker: null, el: null };
+    let insertAt = st.handles.length;
+    for (let i = 0; i < st.handles.length; i++) {
+        if (st.handles[i].idx > idx) { insertAt = i; break; }
+    }
+    st.handles.splice(insertAt, 0, handle);
+    _gpxEditCreateHandleMarker(handle);
+    return handle;
+}
+
+function _gpxEditIsEndpointHandle(k) {
+    return k === 0 || k === gpxEditState.handles.length - 1;
+}
+
+function _gpxEditCreateHandleMarker(handle) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    const el = document.createElement('div');
+    el.className = 'gpx-edit-handle';
+    el.title = t.gpx_edit_handle_title || 'Drag to move · right-click to remove';
+
+    const pt = st.points[handle.idx];
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true })
+        .setLngLat([pt.lon, pt.lat])
+        .addTo(map._map);
+
+    marker.on('dragstart', () => _gpxEditOnDragStart(handle.id));
+    marker.on('drag', () => _gpxEditOnDrag(handle.id));
+    marker.on('dragend', () => _gpxEditOnDragEnd(handle.id));
+    el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        _gpxEditDeleteHandle(_gpxEditIndexOfId(handle.id));
+    });
+    // Touch equivalent of right-click. Cancelled by any move so it can't fire mid-drag.
+    let pressTimer = null;
+    const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    el.addEventListener('touchstart', () => {
+        clearPress();
+        pressTimer = setTimeout(() => {
+            pressTimer = null;
+            _gpxEditDeleteHandle(_gpxEditIndexOfId(handle.id));
+        }, 600);
+    }, { passive: true });
+    el.addEventListener('touchmove', clearPress, { passive: true });
+    el.addEventListener('touchend', clearPress);
+    el.addEventListener('touchcancel', clearPress);
+
+    handle.marker = marker;
+    handle.el = el;
+    _gpxEditRestyleHandles();
+    return marker;
+}
+
+function _gpxEditRestyleHandles() {
+    const handles = gpxEditState.handles;
+    handles.forEach((h, k) => {
+        if (!h.el) return;
+        h.el.classList.toggle('endpoint', _gpxEditIsEndpointHandle(k));
+    });
+}
+
+function _gpxEditIndexOfId(id) {
+    return gpxEditState.handles.findIndex(h => h.id === id);
+}
+
+// --- Geometry helpers ---------------------------------------------------------------
+
+// Ground distance spanned by one CSS pixel at the map center. Same unproject trick as
+// computeScaleDenominator(), used here to turn a pixel tolerance into meters.
+function metersPerPixel() {
+    const nm = map._map;
+    const cont = nm.getContainer();
+    const cx = cont.clientWidth / 2, cy = cont.clientHeight / 2;
+    const a = nm.unproject([cx, cy]), b = nm.unproject([cx + 100, cy]);
+    return haversineDistance(a.lat, a.lng, b.lat, b.lng) / 100;
+}
+
+// Nearest point on the edited polyline to (lat, lon) -> { i, t, distM }, where the hit
+// lies at fraction t along the segment from points[i] to points[i+1].
+//
+// Local equirectangular projection at the click latitude: accurate well past the ~18 px
+// tolerance this feeds, and much cheaper than a haversine per candidate segment.
+function _gpxEditNearestOnTrack(lat, lon) {
+    const pts = gpxEditState ? gpxEditState.points : null;
+    if (!pts || pts.length < 2) return null;
+
+    const kLat = 111320;
+    const kLon = 111320 * Math.cos(lat * Math.PI / 180);
+    let best = null;
+
+    for (let i = 0; i < pts.length - 1; i++) {
+        const ax = (pts[i].lon - lon) * kLon, ay = (pts[i].lat - lat) * kLat;
+        const bx = (pts[i + 1].lon - lon) * kLon, by = (pts[i + 1].lat - lat) * kLat;
+        const dx = bx - ax, dy = by - ay;
+        const l2 = dx * dx + dy * dy;
+        let tt = l2 === 0 ? 0 : -(ax * dx + ay * dy) / l2;
+        tt = tt < 0 ? 0 : (tt > 1 ? 1 : tt);
+        const px = ax + tt * dx, py = ay + tt * dy;
+        const d2 = px * px + py * py;
+        if (best === null || d2 < best.d2) best = { i, t: tt, d2 };
+    }
+    if (!best) return null;
+    return { i: best.i, t: best.t, distM: Math.sqrt(best.d2) };
+}
+window._gpxEditNearestOnTrack = _gpxEditNearestOnTrack;
+
+// Turns a hit into a real handle. When the hit falls between two vertices a new vertex is
+// inserted so the handle addresses an actual array element (invariant 5), and every handle
+// at or above the insertion point shifts by one.
+function _gpxEditAddHandleAtHit(hit) {
+    const st = gpxEditState;
+    const pts = st.points;
+    const a = pts[hit.i], b = pts[hit.i + 1];
+    const segLenM = haversineDistance(a.lat, a.lon, b.lat, b.lon);
+    let idx;
+
+    if (hit.t * segLenM < 1) {
+        idx = hit.i;                       // within a meter of the start vertex
+    } else if ((1 - hit.t) * segLenM < 1) {
+        idx = hit.i + 1;                   // within a meter of the end vertex
+    } else {
+        idx = hit.i + 1;
+        pts.splice(idx, 0, {
+            lat: a.lat + hit.t * (b.lat - a.lat),
+            lon: a.lon + hit.t * (b.lon - a.lon),
+            ele: (a.ele === null || b.ele === null) ? null
+                : Math.round(a.ele + hit.t * (b.ele - a.ele))
+        });
+        for (const h of st.handles) if (h.idx >= idx) h.idx += 1;
+    }
+    return _gpxEditAddHandleAtIndex(idx);
+}
+
+function handleGpxEditMapClick(lat, lon) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy) return;
+
+    const hit = _gpxEditNearestOnTrack(lat, lon);
+    if (!hit || hit.distM > GPX_EDIT_CLICK_TOLERANCE_PX * metersPerPixel()) {
+        statusDiv.textContent = t.status_gpx_edit_handle_too_far ||
+            'Click closer to the track to add a handle.';
+        return;
+    }
+
+    _gpxEditPushUndo();
+    const handle = _gpxEditAddHandleAtHit(hit);
+    if (!handle) {
+        // A handle already sits here; drop the snapshot we just took.
+        _gpxEditPopUndoNoop();
+        return;
+    }
+    _gpxEditAssertInvariants();
+    _gpxEditRefreshRender();
+    _updateGpxEditUI();
+    statusDiv.textContent = (t.status_gpx_edit_handle_added || 'Handle added ({n} total).')
+        .replace('{n}', st.handles.length);
+}
+
+async function _gpxEditDeleteHandle(k) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy || k < 0) return;
+    if (st.handles.length <= GPX_EDIT_MIN_HANDLES || _gpxEditIsEndpointHandle(k)) {
+        statusDiv.textContent = t.status_gpx_edit_min_handles || 'At least 3 handles are required.';
+        return;
+    }
+
+    _gpxEditPushUndo();
+    st.handles[k].marker.remove();
+    st.handles.splice(k, 1);
+    _gpxEditRestyleHandles();
+
+    st.busy = true;
+    _updateGpxEditUI();
+    try {
+        // Merge the two sub-segments the deleted handle used to divide.
+        await _gpxEditSpliceBetween(k - 1);
+    } finally {
+        st.busy = false;
+    }
+    _gpxEditAssertInvariants();
+    _gpxEditRefreshRender();
+    _updateGpxEditUI();
+    statusDiv.textContent = (t.status_gpx_edit_handle_removed || 'Handle removed ({n} left).')
+        .replace('{n}', st.handles.length);
+}
+
+// --- Routing ------------------------------------------------------------------------
+
+async function requestOrsRoute(a, b, profile) {
+    const t = translations[currentLang];
+    try {
+        const resp = await fetch(API_BASE + '/route/' + encodeURIComponent(profile), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                coordinates: [[a.lon, a.lat], [b.lon, b.lat]],
+                radius: GPX_EDIT_ORS_RADIUS_M
+            })
+        });
+        if (!resp.ok) throw new Error('route ' + resp.status);
+        const gj = await resp.json();
+        const coords = gj && gj.features && gj.features[0] &&
+            gj.features[0].geometry && gj.features[0].geometry.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) throw new Error('empty route');
+        return coords.map(c => ({
+            lat: c[1],
+            lon: c[0],
+            ele: c.length > 2 && isFinite(c[2]) ? Math.round(c[2]) : null
+        }));
+    } catch (e) {
+        statusDiv.textContent = t.status_gpx_edit_route_failed ||
+            'Routing failed — a straight line was used.';
+        return null;   // caller falls back to freehand
+    }
+}
+
+// Straight line between two handles, densified so the elevation profile, gain/loss and
+// slope colouring keep working across hand-drawn stretches instead of flatlining.
+async function _gpxEditFreehandInterior(a, b) {
+    const distM = haversineDistance(a.lat, a.lon, b.lat, b.lon);
+    const n = Math.min(GPX_EDIT_FREEHAND_MAX_POINTS,
+        Math.max(0, Math.floor(distM / GPX_EDIT_FREEHAND_SPACING_M) - 1));
+    if (n <= 0) return [];
+
+    const mid = [];
+    for (let i = 1; i <= n; i++) {
+        const f = i / (n + 1);
+        mid.push({
+            lat: a.lat + f * (b.lat - a.lat),
+            lon: a.lon + f * (b.lon - a.lon),
+            ele: null
+        });
+    }
+    // The samples cluster in a handful of DEM tiles, which the existing LRU caches.
+    const eles = await Promise.all(mid.map(p => _gpxEditElevationAt(p.lat, p.lon)));
+    mid.forEach((p, i) => { p.ele = eles[i]; });
+    return mid;
+}
+
+async function _gpxEditElevationAt(lat, lon) {
+    try {
+        const ele = await getElevationAtLatLng(lat, lon);
+        return (ele === null || ele === undefined || !isFinite(ele)) ? null : Math.round(ele);
+    } catch (e) {
+        return null;
+    }
+}
+
+// --- The splice primitive -----------------------------------------------------------
+
+// Replaces the interior of the sub-segment between handles ai and ai+1, then shifts every
+// later handle by the change in interior length. This is the only place point counts and
+// handle indices change, which is what keeps the two in step everywhere else.
+async function _gpxEditSpliceBetween(ai) {
+    const st = gpxEditState;
+    const A = st.handles[ai], B = st.handles[ai + 1];
+    if (!A || !B) return { snappedA: null, snappedB: null };
+
+    const startPt = st.points[A.idx], endPt = st.points[B.idx];
+    let mid = null, snappedA = null, snappedB = null;
+
+    if (st.snap && routingAvailable) {
+        const routed = await requestOrsRoute(startPt, endPt, st.profile);
+        if (routed && routed.length >= 2) {
+            mid = routed.slice(1, -1);   // ORS echoes both endpoints; keep the interior
+            snappedA = routed[0];
+            snappedB = routed[routed.length - 1];
+        }
+    }
+    if (mid === null) mid = await _gpxEditFreehandInterior(startPt, endPt);
+
+    const removed = B.idx - A.idx - 1;
+    st.points.splice(A.idx + 1, removed, ...mid);
+
+    // A sits at or below the splice start and is unaffected; B and everything after it
+    // move by exactly the change in interior length.
+    const delta = mid.length - removed;
+    for (let j = ai + 1; j < st.handles.length; j++) st.handles[j].idx += delta;
+
+    return { snappedA, snappedB };
+}
+
+// Re-routes both sides of handle k. Right side first: it only touches indices above the
+// handle, leaving the left range valid until its own splice accounts for the shift.
+//
+// Only the dragged handle adopts the routed endpoint — moving a handle the user did not
+// touch is far more surprising than the <= 50 m connector this can leave at a neighbour
+// that is itself off-network.
+async function _gpxEditRebuildAround(k) {
+    const st = gpxEditState;
+    const h = st.handles[k];
+    let snapped = null;
+
+    if (k < st.handles.length - 1) {
+        const r = await _gpxEditSpliceBetween(k);
+        if (r.snappedA) snapped = r.snappedA;
+    }
+    if (k > 0) {
+        const r = await _gpxEditSpliceBetween(k - 1);
+        if (r.snappedB && !snapped) snapped = r.snappedB;
+    }
+    if (snapped) {
+        st.points[h.idx].lat = snapped.lat;
+        st.points[h.idx].lon = snapped.lon;
+        st.points[h.idx].ele = snapped.ele;
+        if (h.marker) h.marker.setLngLat([snapped.lon, snapped.lat]);
+    }
+}
+
+// --- Dragging -----------------------------------------------------------------------
+
+function _gpxEditSetHandlesDraggable(draggable) {
+    for (const h of gpxEditState.handles) {
+        if (h.marker) h.marker.setDraggable(draggable);
+    }
+}
+
+function _gpxEditShowPreview() {
+    const nativeMap = map._map;
+    _gpxEditHidePreview();
+    nativeMap.addSource(GPX_EDIT_PREVIEW_SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+    });
+    // No beforeId: appended on top, above the track that updateGpxTrackLine() re-raises.
+    nativeMap.addLayer({
+        id: GPX_EDIT_PREVIEW_LAYER_ID,
+        type: 'line',
+        source: GPX_EDIT_PREVIEW_SOURCE_ID,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+            'line-color': '#7e57c2',
+            'line-width': 3,
+            'line-dasharray': [2, 2],
+            'line-opacity': 0.9
+        }
+    });
+}
+
+function _gpxEditHidePreview() {
+    const nativeMap = map._map;
+    if (nativeMap.getLayer(GPX_EDIT_PREVIEW_LAYER_ID)) {
+        nativeMap.removeLayer(GPX_EDIT_PREVIEW_LAYER_ID);
+    }
+    if (nativeMap.getSource(GPX_EDIT_PREVIEW_SOURCE_ID)) {
+        nativeMap.removeSource(GPX_EDIT_PREVIEW_SOURCE_ID);
+    }
+}
+
+function _gpxEditUpdatePreview(k) {
+    const st = gpxEditState;
+    const nativeMap = map._map;
+    const source = nativeMap.getSource(GPX_EDIT_PREVIEW_SOURCE_ID);
+    if (!source) return;
+
+    const h = st.handles[k];
+    const at = h.marker.getLngLat();
+    const features = [];
+    const line = (a, b) => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [a, b] },
+        properties: {}
+    });
+    if (k > 0) {
+        const prev = st.points[st.handles[k - 1].idx];
+        features.push(line([prev.lon, prev.lat], [at.lng, at.lat]));
+    }
+    if (k < st.handles.length - 1) {
+        const next = st.points[st.handles[k + 1].idx];
+        features.push(line([at.lng, at.lat], [next.lon, next.lat]));
+    }
+    source.setData({ type: 'FeatureCollection', features });
+}
+
+function _gpxEditOnDragStart(id) {
+    const st = gpxEditState;
+    if (!st) return;
+    const k = _gpxEditIndexOfId(id);
+    if (k < 0) return;
+
+    st.dragging = { handleId: id, rafId: null };
+    if (st.handles[k].el) st.handles[k].el.classList.add('dragging');
+    _gpxEditShowPreview();
+    _gpxEditUpdatePreview(k);
+}
+
+function _gpxEditOnDrag(id) {
+    const st = gpxEditState;
+    if (!st || !st.dragging || st.dragging.handleId !== id) return;
+    // Coalesce to one preview update per frame; MapLibre fires drag far more often.
+    if (st.dragging.rafId !== null) return;
+    st.dragging.rafId = requestAnimationFrame(() => {
+        if (!st.dragging) return;
+        st.dragging.rafId = null;
+        const k = _gpxEditIndexOfId(id);
+        if (k >= 0) _gpxEditUpdatePreview(k);
+    });
+}
+
+async function _gpxEditOnDragEnd(id) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st) return;
+    const k = _gpxEditIndexOfId(id);
+    if (k < 0) return;
+
+    if (st.dragging && st.dragging.rafId !== null) cancelAnimationFrame(st.dragging.rafId);
+    st.dragging = null;
+    if (st.handles[k].el) st.handles[k].el.classList.remove('dragging');
+    _gpxEditHidePreview();
+
+    _gpxEditPushUndo();
+
+    const h = st.handles[k];
+    const at = h.marker.getLngLat();
+    st.points[h.idx].lat = at.lat;
+    st.points[h.idx].lon = at.lng;
+    st.points[h.idx].ele = null;
+
+    st.busy = true;
+    _gpxEditSetHandlesDraggable(false);
+    _updateGpxEditUI();
+    statusDiv.textContent = t.status_gpx_edit_routing || 'Calculating route…';
+
+    try {
+        await _gpxEditRebuildAround(k);
+        if (st.points[h.idx].ele === null) {
+            st.points[h.idx].ele = await _gpxEditElevationAt(st.points[h.idx].lat, st.points[h.idx].lon);
+        }
+    } finally {
+        // Without the finally an error here would leave every handle frozen and Save
+        // permanently disabled.
+        st.busy = false;
+        _gpxEditSetHandlesDraggable(true);
+    }
+
+    _gpxEditAssertInvariants();
+    _gpxEditRefreshRender();
+    _updateGpxEditUI();
+    if (statusDiv.textContent === (t.status_gpx_edit_routing || 'Calculating route…')) {
+        statusDiv.textContent = t.status_gpx_edit_active ||
+            'Edit mode — drag handles, click the track to add one.';
+    }
+}
+
+// --- Undo / redo --------------------------------------------------------------------
+
+// Full snapshots rather than inverse commands: a re-route swaps one variable-length slice
+// for another, so an inverse would have to store the removed slice verbatim anyway — the
+// same bytes with far more invariant surface to get wrong. Markers are never snapshotted;
+// they are rebuilt from the indices, which rules out stale-marker bugs entirely.
+function _gpxEditSnapshot() {
+    const st = gpxEditState;
+    return {
+        points: st.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
+        handleIdx: st.handles.map(h => h.idx)
+    };
+}
+
+function _gpxEditPushUndo() {
+    const st = gpxEditState;
+    const snap = _gpxEditSnapshot();
+    st.undo.push(snap);
+    st.undoPointCount += snap.points.length;
+    st.redo = [];
+    while (st.undo.length > GPX_EDIT_UNDO_MAX ||
+        (st.undo.length > 1 && st.undoPointCount > GPX_EDIT_UNDO_MAX_POINTS)) {
+        st.undoPointCount -= st.undo.shift().points.length;
+    }
+}
+
+// Drops the snapshot taken for a mutation that turned out to be a no-op.
+function _gpxEditPopUndoNoop() {
+    const st = gpxEditState;
+    const snap = st.undo.pop();
+    if (snap) st.undoPointCount -= snap.points.length;
+}
+
+function _gpxEditApplySnapshot(snap) {
+    const st = gpxEditState;
+    st.points = snap.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele }));
+    gpxTrackData.segments[st.segIndex] = st.points;
+
+    for (const h of st.handles) if (h.marker) h.marker.remove();
+    st.handles = [];
+    for (const idx of snap.handleIdx) _gpxEditAddHandleAtIndex(idx);
+
+    _gpxEditAssertInvariants();
+    _gpxEditRefreshRender();
+    _updateGpxEditUI();
+}
+
+window.gpxEditUndo = function () {
+    const st = gpxEditState;
+    if (!st || st.busy || !st.undo.length) return;
+    const current = _gpxEditSnapshot();
+    st.redo.push(current);
+    const snap = st.undo.pop();
+    st.undoPointCount -= snap.points.length;
+    _gpxEditApplySnapshot(snap);
+};
+
+window.gpxEditRedo = function () {
+    const st = gpxEditState;
+    if (!st || st.busy || !st.redo.length) return;
+    const current = _gpxEditSnapshot();
+    st.undo.push(current);
+    st.undoPointCount += current.points.length;
+    _gpxEditApplySnapshot(st.redo.pop());
+};
+
+// --- Panel controls -----------------------------------------------------------------
+
+window.setGpxEditSnap = function (enabled) {
+    if (!gpxEditState) return;
+    // Affects the next drag only; existing geometry is left as the user shaped it.
+    gpxEditState.snap = !!enabled && routingAvailable;
+    const box = document.getElementById('gpxEditSnap');
+    if (box) box.checked = gpxEditState.snap;
+};
+
+window.setGpxEditProfile = function (profile) {
+    if (!gpxEditState) return;
+    if (GPX_EDIT_PROFILES.indexOf(profile) === -1) return;
+    gpxEditState.profile = profile;
+};
+
+// --- Save / cancel ------------------------------------------------------------------
+
+window.saveGpxEdits = function () {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy) return;
+
+    // The export stops being the user's original bytes from here on.
+    if (!gpxTextIsGenerated) {
+        const warning = t.gpx_edit_confirm_lossy ||
+            'Saving rewrites the GPX from the edited geometry. Timestamps, sensor data and ' +
+            'other extras from the original file will not be kept. Continue?';
+        if (!window.confirm(warning)) return;
+    }
+
+    gpxTrackData.segments[st.segIndex] = st.points;
+    Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
+    regenerateCurrentGpxText();
+    // The stored copy behind ?gpx= is still the unedited original, so drop the share link
+    // rather than handing out one that no longer matches what is on screen.
+    setActiveGpxSource({ filename: currentGpxFilename || currentGpxRawFilename });
+
+    _gpxEditTeardown();
+    rebuildGpxLayer();
+    updateGpxTrackInfo();
+    showElevationProfile();
+    statusDiv.textContent = t.status_gpx_edit_saved ||
+        'Track edits saved. Download GPX now exports the edited track.';
+};
+
+window.cancelGpxEditMode = function () {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy) return;
+    if (st.undo.length > 0) {
+        const msg = t.gpx_edit_confirm_discard || 'Discard unsaved track edits?';
+        if (!window.confirm(msg)) return;
+    }
+
+    gpxTrackData.segments[st.segIndex] = st.original;
+    Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
+
+    _gpxEditTeardown();
+    rebuildGpxLayer();
+    updateGpxTrackInfo();
+    showElevationProfile();
+    statusDiv.textContent = t.status_gpx_edit_cancelled ||
+        'Editing cancelled — the track was restored.';
+};
+
+// Leaves edit mode without prompting or restoring — for paths that are about to replace
+// or destroy gpxTrackData anyway (clear, load another track).
+function _gpxEditForceExit() {
+    if (!gpxEditMode) return;
+    _gpxEditTeardown();
+}
+
+function _gpxEditTeardown() {
+    const st = gpxEditState;
+    if (st) {
+        if (st.dragging && st.dragging.rafId !== null) cancelAnimationFrame(st.dragging.rafId);
+        for (const h of st.handles) if (h.marker) h.marker.remove();
+        if (st.prevColorBySlope) {
+            const slopeBox = document.getElementById('gpxColorBySlope');
+            if (slopeBox) slopeBox.checked = true;
+        }
+    }
+    _gpxEditHidePreview();
+    if (_gpxEditRenderDebounce) {
+        clearTimeout(_gpxEditRenderDebounce);
+        _gpxEditRenderDebounce = null;
+    }
+
+    gpxEditMode = false;
+    gpxEditState = null;
+
+    const btn = document.getElementById('gpx-edit-btn');
+    if (btn) btn.classList.remove('active');
+    const panel = document.getElementById('gpx-edit-panel');
+    if (panel) panel.style.display = 'none';
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.remove('gpx-edit-active');
+    _updateGpxEditUI();
+}
+
+// --- Rendering & UI -----------------------------------------------------------------
+
+// Redraws the line immediately (one cheap setData) and debounces the expensive stats,
+// info panel and elevation profile. Deliberately not rebuildGpxLayer(), which would tear
+// down and recreate every waypoint/km/min-max marker on each drag; that runs only on
+// save/cancel. Km labels are therefore stale until then.
+function _gpxEditRefreshRender() {
+    updateGpxTrackLine();
+    if (_gpxEditRenderDebounce) clearTimeout(_gpxEditRenderDebounce);
+    _gpxEditRenderDebounce = setTimeout(() => {
+        _gpxEditRenderDebounce = null;
+        if (!gpxTrackData) return;
+        Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
+        updateGpxTrackInfo();
+        if (getGpxShowElevProfile()) showElevationProfile();
+    }, 300);
+}
+
+// Runs on every language switch too, long before any track exists — every lookup is
+// defensive and a null gpxEditState is a normal state, not an error.
+function _updateGpxEditUI() {
+    const t = translations[currentLang];
+    const st = gpxEditState;
+
+    const editLabel = document.querySelector('#gpx-edit-btn .btn-label');
+    if (editLabel) editLabel.textContent = t.btn_gpx_edit || 'Edit track';
+    const hint = document.getElementById('gpx-edit-hint');
+    if (hint) hint.textContent = t.gpx_edit_hint || '';
+    const profileLabel = document.getElementById('lbl-gpx-edit-profile');
+    if (profileLabel) profileLabel.textContent = t.lbl_gpx_edit_profile || 'Routing profile:';
+    const snapLabel = document.getElementById('lbl-gpx-edit-snap');
+    if (snapLabel) snapLabel.textContent = t.lbl_gpx_edit_snap || 'Snap to route';
+
+    const profileSel = document.getElementById('gpxEditProfile');
+    if (profileSel) {
+        const optionKeys = {
+            'foot-walking': 'gpx_edit_profile_run',
+            'foot-hiking': 'gpx_edit_profile_foot',
+            'cycling-mountain': 'gpx_edit_profile_mtb',
+            'driving-car': 'gpx_edit_profile_car'
+        };
+        for (const value of GPX_EDIT_PROFILES) {
+            const opt = profileSel.querySelector('option[value="' + value + '"]');
+            if (opt && t[optionKeys[value]]) opt.textContent = t[optionKeys[value]];
+        }
+    }
+
+    const save = document.getElementById('gpx-edit-save-btn');
+    if (save) {
+        save.textContent = t.btn_gpx_edit_save || 'Save';
+        save.disabled = !st || st.busy;
+    }
+    [['gpx-edit-undo-btn', 'btn_gpx_edit_undo'],
+    ['gpx-edit-redo-btn', 'btn_gpx_edit_redo'],
+    ['gpx-edit-cancel-btn', 'btn_gpx_edit_cancel']].forEach(([id, key]) => {
+        const el = document.getElementById(id);
+        if (el && t[key]) { el.title = t[key]; el.setAttribute('aria-label', t[key]); }
+    });
+
+    const undoBtn = document.getElementById('gpx-edit-undo-btn');
+    if (undoBtn) undoBtn.disabled = !st || st.busy || !st.undo.length;
+    const redoBtn = document.getElementById('gpx-edit-redo-btn');
+    if (redoBtn) redoBtn.disabled = !st || st.busy || !st.redo.length;
+
+    // Snapping needs the backend proxy; without it the checkbox is off and locked, and
+    // editing silently becomes freehand.
+    const snapBox = document.getElementById('gpxEditSnap');
+    if (snapBox) {
+        snapBox.disabled = !routingAvailable;
+        if (!routingAvailable) snapBox.checked = false;
+    }
+
+    const count = document.getElementById('gpx-edit-count');
+    if (count) {
+        count.textContent = st
+            ? (t.gpx_edit_count || '{n} handles').replace('{n}', st.handles.length)
+            : '';
+    }
+}
+
+// Logs rather than throws: a broken invariant should surface in the console during
+// development without taking the app down for a user mid-edit.
+function _gpxEditAssertInvariants() {
+    try {
+        const st = gpxEditState;
+        if (!st) return;
+        const n = st.points.length;
+        const problems = [];
+        if (st.handles.length < GPX_EDIT_MIN_HANDLES) problems.push('too few handles');
+        if (st.handles[0] && st.handles[0].idx !== 0) problems.push('first handle not at 0');
+        if (st.handles.length && st.handles[st.handles.length - 1].idx !== n - 1) {
+            problems.push('last handle not at end');
+        }
+        for (let i = 0; i < st.handles.length; i++) {
+            const idx = st.handles[i].idx;
+            if (idx < 0 || idx >= n) problems.push('handle ' + i + ' index out of range');
+            if (i > 0 && idx <= st.handles[i - 1].idx) problems.push('handles not ascending at ' + i);
+        }
+        if (problems.length) console.warn('[gpx-edit] invariant broken:', problems.join(', '));
+    } catch (e) {
+        /* never let a diagnostic break editing */
+    }
 }
 
 // ==========================================
@@ -8276,6 +9256,15 @@ map.on('moveend', () => { // Data saved/fetched at end of movement
 
 // Minimize controls on mobile when clicking the map
 map.on('click', (e) => {
+    if (gpxEditMode) {
+        // Skip clicks on a handle — both the real ones and the synthetic click MapLibre
+        // fires at the end of a drag, which would otherwise drop a spurious handle.
+        if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest && e.originalEvent.target.closest('.maplibregl-marker')) {
+            return;
+        }
+        if (e.lngLat) handleGpxEditMapClick(e.lngLat.lat, e.lngLat.lng);
+        return;
+    }
     if (poiPlacementMode) {
         if (e.lngLat) handlePoiPlacementClick(e.lngLat.lat, e.lngLat.lng);
         return;
@@ -8308,9 +9297,14 @@ if (controls) {
     });
 }
 
-// Esc cancels an in-progress POI placement.
+// Esc cancels an in-progress POI placement or track edit.
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && poiPlacementMode) {
+    if (e.key !== 'Escape') return;
+    if (gpxEditMode) {
+        cancelGpxEditMode();   // prompts when there are unsaved edits
+        return;
+    }
+    if (poiPlacementMode) {
         cancelPoiPlacement();
         if (statusDiv) statusDiv.textContent = translations[currentLang].status_ready || 'Ready.';
     }

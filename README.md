@@ -42,7 +42,8 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - View route summary stats including distance, elevation gain/loss, and min/max elevation.
 - Open an **elevation profile bar** for the loaded route: hover or drag to scrub along the track, scroll to zoom the profile, and use the arrow keys to step (hold `Shift` for larger steps).
 - Enable **Sync Map with Profile** to pan the map to a blue marker that follows the profile cursor.
-- **Download** the loaded route back to a `.gpx` file (saved under its current name).
+- **Edit track**: reshape a loaded route by dragging handles along it. Three handles (start, midpoint, end) are placed automatically, and clicking the track adds more; right-click (or long-press) removes one. Each drag re-routes the two sub-segments either side of the moved handle, snapping to real trails and roads via [self-hosted routing](#self-hosted-routing-openrouteservice) — turn **Snap to route** off for freehand editing. The panel has Undo, Redo, Save and Cancel, and the routing profile can be set to running (default), hiking, mountain bike or car, and applies per drag rather than per session.
+- **Download** the loaded route back to a `.gpx` file (saved under its current name). After saving edits the file is regenerated from the edited geometry, so per-point timestamps and sensor extensions from the original are not preserved.
 - Optionally upload, list, share, rename, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
 - To acess your GPX file you log i with your Google account
 
@@ -224,6 +225,91 @@ docker build -t toposcout .
 docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" toposcout
 ```
 
+## Self-Hosted Routing (openrouteservice)
+
+The track editor's **Snap to route** needs a routing engine. It talks to a self-hosted [openrouteservice](https://openrouteservice.org/) instance through the backend's `/api/route/{profile}` proxy — the browser never reaches ORS directly, so no port is published, no CORS is configured, and no host is added to the CSP. Without it (or on static hosting) the checkbox is disabled and editing falls back to freehand lines.
+
+Compose file: `ors/openrouteservice.yaml`. Config: `ors/ors-config.yml`.
+
+Four profiles are built, matching the editor's dropdown:
+
+| Profile | Dropdown | Routes over |
+|---|---|---|
+| `foot-walking` | Running (default) | Footways, paths, tracks and residential/service/living-street roads unpenalised; cycleways and tertiary/secondary/primary allowed but penalised; motorway/trunk and anything `foot=no` excluded. Plain shortest-path weighting, so it takes the direct line over mixed street/trail terrain. |
+| `foot-hiking` | Hiking | Same access rules, but weighted by SAC scale and hiking-route relations — prefers marked trails and tolerates rough terrain. |
+| `cycling-mountain` | Mountain bike | Tracks, paths and roads suitable for an MTB. |
+| `driving-car` | Car | Roads only. |
+
+The profile applies per drag, not per session, so one leg can follow a trail and the next a road without leaving edit mode. The enabled set must stay identical in three places — `ors/ors-config.yml`, `ORS_PROFILES` in `main.py`, and `GPX_EDIT_PROFILES` plus the `<option>` list in the frontend — or the dropdown offers profiles that 502.
+
+**1. Create the data directories and download an OSM extract.** Smaller is dramatically better — build time and RAM scale with extract size, and the editor only needs the area your tracks are in. From [Geofabrik](https://download.geofabrik.de/), prefer a sub-region over a whole country:
+
+```bash
+sudo mkdir -p /share/www/openrouteservice/{config,files,graphs,elevation_cache,logs}
+sudo wget -O /share/www/openrouteservice/files/region-latest.osm.pbf \
+    https://download.geofabrik.de/europe/sweden/vastra-gotaland-latest.osm.pbf
+```
+
+**2. Install the config.** ORS v9 reads it from `/home/ors/config/ors-config.yml`, not the v7-era root location.
+
+```bash
+sudo cp ors/ors-config.yml /share/www/openrouteservice/config/ors-config.yml
+# Point source_file at the file you actually downloaded.
+sudo sed -i 's#region-latest.osm.pbf#vastra-gotaland-latest.osm.pbf#' \
+    /share/www/openrouteservice/config/ors-config.yml
+# The image runs as uid/gid 1000; without this ORS cannot write graphs or the elevation cache.
+sudo chown -R 1000:1000 /share/www/openrouteservice
+```
+
+**3. Size the JVM.** Set `XMX` in `ors/openrouteservice.yaml` from the extract size, and give the host at least `XMX` + 2 GB:
+
+| Extract | `.pbf` size | `XMX` | Graph build (4 profiles) | Disk (graphs) |
+|---|---|---|---|---|
+| Single region (Västra Götaland) | ~120 MB | `6g` | 20–50 min | ~4–7 GB |
+| Small country (Denmark, Switzerland) | ~400 MB | `10g` | 1.5–2.5 h | ~10–16 GB |
+| Sweden / Norway | ~700 MB–1 GB | `14g` | 3–5 h | ~20–33 GB |
+| Germany / France | ~4 GB | `28g`+ | 10–20 h | ~80 GB+ |
+
+The elevation cache adds roughly 1 GB per 10°×10° SRTM tile touched; budget 5–10 GB. Build time and graph disk scale with the number of enabled profiles — dropping the ones you don't use cuts both roughly proportionally.
+
+**4. First build.** Set `REBUILD_GRAPHS: "True"`, then:
+
+```bash
+docker compose -f ors/openrouteservice.yaml up -d
+docker logs -f openrouteservice
+```
+
+Watch for one `Building graph ...` block per profile, then `Started Application in … seconds`. The first start also downloads SRTM tiles into `elevation_cache` — that is normal and one-off.
+
+**5. Turn the rebuild off.** Set `REBUILD_GRAPHS: "False"` and bring it up again. Subsequent restarts then load the prebuilt graphs in seconds. Forgetting this is the most common ORS operational mistake — every restart would otherwise rebuild from scratch.
+
+**6. Verify from inside the network**, the way the backend reaches it:
+
+```bash
+docker exec toposcout python - <<'PY'
+import requests
+print(requests.get("http://ors-app:8082/ors/v2/health", timeout=10).text)
+r = requests.post("http://ors-app:8082/ors/v2/directions/foot-hiking/geojson",
+    json={"coordinates": [[12.0918, 57.8113], [12.1000, 57.8150]],
+          "elevation": True, "instructions": False, "radiuses": [50, 50]}, timeout=30)
+print(r.status_code, r.json()["features"][0]["geometry"]["coordinates"][:3])
+PY
+```
+
+Expect `{"status":"ready"}` and **3-element** `[lon, lat, ele]` coordinates. Two-element coordinates mean the elevation config in step 2 did not take effect — routed points would land in the GPX with no `<ele>` and flatline the elevation profile.
+
+**7. Wire it into the app.** `toposcout.yaml` already sets `ORS_BASE_URL=http://ors-app:8082/ors` on the `gpx-editor` service; bring it up again and confirm:
+
+```bash
+curl -s http://localhost:8003/api/health   # -> {"status":"ok","routing":true}
+```
+
+**8. Refreshing map data.** Replace the `.pbf`, set `REBUILD_GRAPHS: "True"`, restart, wait for the build, then set it back to `"False"`. Routing is unavailable during the rebuild and the editor degrades to freehand, so schedule it off-hours.
+
+Both services join the pre-existing external `immich_default` network. Docker's embedded DNS resolves container aliases within a user-defined network, and the explicit `aliases: [ors-app]` guarantees the name regardless of compose project prefixing, so `http://ors-app:8082/ors` resolves from `gpx-editor` without publishing any port.
+
+Related environment variables on the backend: `ORS_BASE_URL` (empty disables routing), `ORS_TIMEOUT_SECONDS` (default 20), `ORS_RATE_PER_MIN` (default 120), `ORS_MAX_RESPONSE_BYTES` (default 2 MiB).
+
 ## Progressive Web App Notes
 
 - The app can be installed on mobile and desktop.
@@ -247,10 +333,14 @@ docker run -p 8000:8000 -v "$(pwd)/gpx-files:/app/gpx-files" toposcout
 - `main.py` - optional FastAPI backend for GPX upload/list/delete/share/rename
 - `requirements.txt` - Python dependencies for the optional backend
 - `Dockerfile` - container image for the optional backend
+- `ors/openrouteservice.yaml` - compose file for the self-hosted openrouteservice used by track editing
+- `ors/ors-config.yml` - openrouteservice configuration (profiles, elevation, source extract)
 - `gpx-files/` - uploaded GPX storage (created at runtime; git-ignored)
+- `tests/` - self-contained Playwright end-to-end suite: specs, `playwright.config.ts`, its own `package.json`, and `static-server.mjs` (serves the repo root over http, since the app cannot boot from `file://`). Run it with `cd tests && npm ci && npm test`; report and results land in `tests/playwright-report/` and `tests/test-results/`.
 
 ## Changelog
 
+- **v2.21.0:** Added **Edit track** — reshaping an already-loaded GPX route in the browser. Clicking **Edit** (between Clear Route and Download GPX) seeds three draggable handles on the track — start, midpoint and end — and drops an editing panel below the button row with a routing-profile picker, a **Snap to route** toggle, and Undo / Redo / Save / Cancel. Clicking the track adds a handle at that spot (rejected beyond ~18 px of the line, measured in meters from the live map scale); right-clicking or long-pressing one removes it, never below three and never an endpoint. Dragging a handle shows a dashed rubber band and, on release, re-routes the two sub-segments either side of it. With snapping on, each sub-segment is fetched from a **self-hosted openrouteservice** — `foot-walking` for running by default, plus `foot-hiking`, `cycling-mountain` and `driving-car` and the dragged handle adopts the routed position; with it off — or when routing fails — the leg becomes a straight line densified at ~50 m with elevations sampled from the existing DEM tiles, so gain/loss, the elevation profile and slope colouring keep working across hand-drawn stretches. ORS is reached **only** through a new `/api/route/{profile}` proxy in the backend (profile allowlist, two-coordinate validation, clamped snap radius, rate limit, upstream body built server-side), so the browser never talks to it: no published port, no CORS, no CSP change, and `/api/health` now reports `routing` so the frontend disables the snap toggle up front instead of discovering the absence through a failed drag — on static hosting the editor simply becomes freehand. Internally the working geometry is installed straight into `gpxTrackData.segments`, so the existing draw path renders edits live; every handle indexes a real track point, and a single splice primitive is the only thing that changes point counts and handle indices. Undo/redo keeps full geometry snapshots (capped at 20 and 400k points) and rebuilds handle markers from indices. Saving required a **GPX 1.1 serializer** — until now Download GPX re-emitted the bytes of the loaded file, which after an edit no longer matched what was on screen; it warns once per session that the rewrite drops per-point timestamps, sensor extensions and other extras the parser never kept, and it drops the `?gpx=` share link since the stored copy is still the original. Multi-segment tracks are edited on their longest segment with the rest untouched and exported verbatim. Slope colouring is paused during editing (it emits one map feature per vertex pair) and restored on exit; POI placement and Manual mode refuse to start mid-edit rather than silently discarding unsaved work, and Esc cancels with a confirm. See [Self-Hosted Routing](#self-hosted-routing-openrouteservice) for the ORS install.
 - **v2.20.0:** The search box now accepts **four more coordinate formats** on top of plain decimal degrees. **DMS** — `57° 44' 24.0", 12° 06' 36.0"` — and **DDM** — `57° 44.400', 12° 06.600'` — are parsed with the degree mark optional, all the Unicode prime/quote variants accepted (`′ ″ ’ ” ´`, plus `''` for seconds), hemisphere letters allowed before or after the number, and the Swedish/Nordic `Ö`/`Ø`/`O` (öst) and `V` (väst) understood alongside `N/S/E/W`; if the letters say the first value is a longitude, the axes are swapped, so `12°06'36"E, 57°44'24"N` lands in the same place as `57°44'24"N, 12°06'36"E`. Decimal degrees may now be written with a **decimal comma** — `57,8112660, 12,0918247` — with the pair separated by a comma+space, a plain space, or nothing at all; the legacy reading of a two-number `57,81` as *latitude 57, longitude 81* is deliberately preserved, and genuinely ambiguous input like `57,811,12` is rejected rather than guessed at. Finally, **Plus Codes (Open Location Code)** are decoded locally: a full code (`9C3XGV4C+X9`) resolves offline, and a short code resolves against a reference point — the locality that follows it (`R36R+GP4 Göteborg`, geocoded through the same Nominatim endpoint the search box already used) or, with no locality given, the current map view. All of this applies to the search box only; share links, the coordinate readout and the PDF export are untouched. Every parser validates strictly — latitude ±90, longitude ±180, minutes and seconds under 60 — and returns *nothing* rather than a guess, so anything unrecognised still falls through to the place-name search exactly as before (`E6` and `Malmö` remain place lookups). A recognised coordinate now zooms to **level 15** instead of 12, since a 2.5 m Plus Code cell is invisible at ~38 m/px; coarse input and place-name results keep the old zoom 12. Also fixed: a failed search used to leave the status bar stuck on "Searching…" forever when the network was down — it now reports the error.
 - **v2.19.2:** Updated the vendored map engine from **MapLibre GL JS 6.2.0 to 6.3.0** — a drop-in patch of the four self-hosted `vendor/maplibre-gl*` dist files (`.mjs`, `-shared.mjs`, `-worker.mjs`, `.css`), taken verbatim from the npm package as before. No app code changed: the CSS class names are byte-for-byte the same set (the stylesheet grew ~13 kB purely because the inline SVG control icons are now fully percent-encoded), the ESM loading path through `maplibre-boot.mjs` is unchanged, and nothing the app calls was touched. Two upstream fixes land directly on features this app uses: **terrain gestures are now solved against the elevation under the pointer** instead of the frozen center elevation, so panning and zooming in 3D/tilt mode no longer drifts off the point you grabbed; and **`ImageSource` no longer leaks a GPU texture on every image update and on removal** (a resized texture also keeps its wrap and filter settings), which matters for the slope map — the Leaflet-compat shim's `_renderOverlay` removes and re-adds the image layer on every opacity-slider tick, so each drag used to strand a texture. Also fixed upstream: globe scroll/pinch zoom drifting away from the pointer when the globe is small, projective rendering of non-parallelogram image quads, and an "Out of bounds" race in `queryRenderedFeatures()` (unused here). Requirements are unchanged from v2.17.0 — WebGL2, and served over http/https.
 - **v2.19.1:** Opening `index.html` directly from disk (a `file://` URL) has shown a **blank page** since the v2.17.0 MapLibre 6 upgrade. MapLibre 6 is ESM-only, so the library is loaded through the `maplibre-boot.mjs` **module** script — and module scripts are CORS-fetched, which browsers refuse for a `file://` page (null origin: *"Cross origin requests are only supported for protocol schemes: chrome, data, http, https"*). `maplibregl` was therefore never published to the global scope and the first top-level `L.map('map', …)` threw `maplibregl is not defined`, aborting the rest of `script.js` with nothing on screen. The v5 UMD bundle was a classic script (not CORS-fetched) that inlined its worker as a blob, which is why this used to work. Restoring it is not practical — from a `file://` page a browser also blocks *module* workers from blob URLs and *any* worker loaded from a `file://` URL, so v6 would need both a classic main script and a classic blob worker, and `maplibre-gl@6.2.0` publishes no UMD/CJS build. So `file://` stays unsupported, but it now **fails loudly**: a guard in front of the map construction renders a localized explanation over the map container (English and Swedish, inserted with `textContent`) naming the fix — serve the folder over http. The installed-PWA offline mode is unaffected; it runs over http/https with the service worker.

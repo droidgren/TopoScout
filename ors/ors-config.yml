@@ -1,0 +1,52 @@
+# openrouteservice configuration for the TopoScout GPX track editor.
+#
+# Copy to /share/www/openrouteservice/ors-config.yml and point source_file below at the
+# .pbf extract you actually downloaded. Only the three profiles offered by the editor's
+# dropdown are enabled — each extra profile costs build time, RAM and disk.
+#
+# This is the ORS v8/v9 layout (ors.engine.profile_default.build.*, ors.engine.profiles.
+# <name>.enabled). If the pinned image rejects a key, diff against the image's own
+# reference config rather than guessing:
+#   docker run --rm --entrypoint cat openrouteservice/openrouteservice:v9.3.0 \
+#       /home/ors/ors-config.yml
+server:
+  port: 8082
+ors:
+  cors:
+    # Only the gpx-editor container calls this, server-side, so CORS is irrelevant —
+    # leaving it closed prevents any accidental direct browser use.
+    allowed_origins: ""
+  engine:
+    # One profile at a time keeps peak heap at roughly one profile's worth instead of
+    # three. Raise to 2-3 if the host has RAM to spare and build time matters more.
+    init_threads: 1
+    elevation:
+      # Required for `elevation: true` on the directions request. Without it ORS returns
+      # 2D coordinates and every routed point lands in the GPX with no <ele>, which
+      # silently flatlines the elevation profile.
+      preprocessed: false
+      cache_clear: false
+      provider: multi
+      cache_path: /home/ors/elevation_cache
+      data_access: MMAP
+    profile_default:
+      build:
+        source_file: /home/ors/files/region-latest.osm.pbf
+        elevation: true
+        elevation_smoothing: true
+    profiles:
+      # Running (the editor's default). Same access rules as foot-hiking — footways,
+      # paths, tracks, residential/service/living-street roads unpenalised; cycleways and
+      # tertiary/secondary/primary allowed but penalised; motorway/trunk and foot=no
+      # excluded — but with plain shortest-path weighting instead of the SAC-scale and
+      # hiking-relation preference, so it takes the direct line over mixed street/trail
+      # terrain rather than detouring onto marked trails.
+      foot-walking:
+        enabled: true
+      # Trail running / hiking: prefers marked trails and tolerates rough terrain.
+      foot-hiking:
+        enabled: true
+      cycling-mountain:
+        enabled: true
+      driving-car:
+        enabled: true

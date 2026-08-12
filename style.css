@@ -574,13 +574,17 @@ button {
 
 .gpx-action-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     margin-top: 5px;
 }
 
+/* Three labelled buttons don't fit one row on a narrow panel; flex-basis 30% lets them
+   wrap to a second row instead of clipping their labels. */
 .gpx-action-row .gpx-clear-btn,
+.gpx-action-row .gpx-edit-btn,
 .gpx-action-row .gpx-download-btn {
-    flex: 1;
+    flex: 1 1 30%;
     width: auto;
     margin-top: 0;
 }
@@ -1645,6 +1649,105 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     background: #2AAD27;
 }
 
+/* ── GPX track editing ──────────────────────────────────────────────────────── */
+.gpx-edit-btn {
+    background-color: #7e57c2;
+    color: #fff;
+    padding: 8px;
+    font-size: 13px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.gpx-edit-btn:hover {
+    background-color: #673ab7;
+}
+
+.gpx-edit-btn.active {
+    background-color: #673ab7;
+    outline: 2px solid #b39ddb;
+}
+
+.gpx-edit-panel {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f5f3fa;
+    border: 1px solid #d6cdea;
+    border-radius: 8px;
+}
+
+.gpx-edit-hint {
+    font-size: 12px;
+    color: #555;
+    margin: 0 0 6px;
+    line-height: 1.4;
+}
+
+.gpx-edit-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #673ab7;
+    margin: 6px 0 8px;
+}
+
+.gpx-edit-btns {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.gpx-edit-save {
+    flex: 1;
+    margin: 0;
+    padding: 8px;
+    font-size: 13px;
+    background-color: #7e57c2;
+}
+
+.gpx-edit-save:hover {
+    background-color: #673ab7;
+}
+
+.gpx-edit-save:disabled {
+    background-color: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.gpx-edit-cancel-btn {
+    padding: 8px 12px;
+}
+
+/* Crosshair cursor while placing handles */
+#map.gpx-edit-active .maplibregl-canvas {
+    cursor: crosshair !important;
+}
+
+/* Draggable handles on the edited track. touch-action:none is required or mobile
+   Chrome pans the map instead of starting the drag. */
+.gpx-edit-handle {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #7e57c2;
+    box-sizing: border-box;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    cursor: grab;
+    touch-action: none;
+}
+
+.gpx-edit-handle.endpoint {
+    border-color: #2AAD27;
+}
+
+.gpx-edit-handle.dragging {
+    cursor: grabbing;
+    transform: scale(1.25);
+    border-color: #673ab7;
+}
+
 /* Radius controls injected inside an analysis section */
 .section-content > #radius-controls {
     display: flex;
@@ -1897,6 +2000,13 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
         right: 0;
         padding: 4px 10px;
     }
+
+    /* Bigger touch target for dragging track-edit handles with a fingertip. */
+    .gpx-edit-handle {
+        width: 20px;
+        height: 20px;
+        border-width: 4px;
+    }
 }
 
 .elevation-profile-overlay > * {
@@ -2135,8 +2245,10 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     margin-right: 6px;
 }
 
-/* Icon-only buttons that aren't .icon-btn (manual-climb cancel, install-bar dismiss) */
+/* Icon-only buttons that aren't .icon-btn (manual-climb cancel, GPX edit cancel,
+   install-bar dismiss) */
 .manual-climb-cancel-btn,
+.gpx-edit-cancel-btn,
 #mobile-install-dismiss {
     display: inline-flex;
     align-items: center;
@@ -2144,6 +2256,7 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
 }
 
 .manual-climb-cancel-btn svg,
+.gpx-edit-cancel-btn svg,
 #mobile-install-dismiss svg {
     width: 16px;
     height: 16px;

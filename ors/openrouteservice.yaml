@@ -1,0 +1,58 @@
+# On-prem openrouteservice for the GPX track editor's snap-to-route.
+#
+# Not exposed to the internet and not reachable from the browser: only the gpx-editor
+# container talks to it, over the shared external immich_default network, through the
+# /api/route/{profile} proxy in main.py.
+#
+#   docker compose -f ors/openrouteservice.yaml up -d
+#
+# See README.md ("Self-Hosted Routing") for the full install, sizing and graph-build steps.
+services:
+  ors-app:
+    # Pin the tag. The config schema has changed across majors, so :latest will eventually
+    # reject ors-config.yml on an unattended pull.
+    image: openrouteservice/openrouteservice:v9.3.0
+    container_name: openrouteservice
+    restart: unless-stopped
+    # The image runs as uid/gid 1000; the bind-mounted dirs must be chown'd to match or
+    # ORS cannot write graphs or the elevation cache.
+    user: "1000:1000"
+    # Publish only while verifying the install, then comment out again — nothing outside
+    # the Docker network needs to reach ORS.
+    ports:
+       - "8082:8082"
+    environment:
+      # "True" for the FIRST start (and after replacing the .pbf extract), then back to
+      # "False" — otherwise every restart rebuilds the graphs from scratch (hours).
+      REBUILD_GRAPHS: "False"
+      CONTAINER_LOG_LEVEL: "INFO"
+      # JVM heap. Graph building is the memory-hungry phase; size XMX from the extract
+      # (see the sizing table in README.md) and give the host at least XMX + 2 GB.
+      XMS: "2g"
+      XMX: "12g"
+      ADDITIONAL_JAVA_OPTS: "-XX:+UseG1GC"
+    volumes:
+      # Everything ORS needs lives outside the image so upgrades keep the built graphs.
+#      - /share/www/openrouteservice/ors-config.yml:/home/ors/ors-config.yml:ro
+      - /share/www/openrouteservice/config/ors-config.yml:/home/ors/config/ors-config.yml:ro
+      - /share/www/openrouteservice/files:/home/ors/files
+      - /share/www/openrouteservice/graphs:/home/ors/graphs
+      - /share/www/openrouteservice/elevation_cache:/home/ors/elevation_cache
+      - /share/www/openrouteservice/logs:/home/ors/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/ors/v2/health | grep -q ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      # Generous on purpose: a cold graph build for a country-sized extract takes hours,
+      # and the container must not be restarted while it works.
+      start_period: 4h
+    networks:
+      immich_default:
+        # Explicit alias so gpx-editor resolves http://ors-app:8082 regardless of the
+        # compose project name this file is brought up under.
+        aliases:
+          - ors-app
+networks:
+  immich_default:
+    external: true
