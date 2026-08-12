@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -89,6 +89,17 @@ STRAVA_HEATMAP_PROXY_URL = os.getenv("STRAVA_HEATMAP_PROXY_URL", "http://strava-
 # Allowlists guard the values forwarded to the internal proxy (avoid SSRF / path abuse).
 HEATMAP_ACTIVITIES = {"all", "ride", "run", "winter", "water"}
 HEATMAP_COLORS = {"bluered", "hot", "blue", "purple", "gray", "mobileblue"}
+
+# --- On-prem openrouteservice (GPX track editor's snap-to-route) ----------------------
+# Empty (the default) disables routing entirely; /api/health then reports routing:false
+# and the frontend degrades to freehand editing instead of failing per drag.
+ORS_BASE_URL = os.getenv("ORS_BASE_URL", "").strip()
+ORS_TIMEOUT_SECONDS = float(os.getenv("ORS_TIMEOUT_SECONDS", "20"))
+ORS_RATE_PER_MIN = int(os.getenv("ORS_RATE_PER_MIN", "120"))
+ORS_MAX_RESPONSE_BYTES = int(os.getenv("ORS_MAX_RESPONSE_BYTES", str(2 * 1024 * 1024)))
+# Mirrors the profile dropdown in the edit panel; anything else 404s before we call out.
+# Must also match ors/ors-config.yml — a profile enabled here but not built there 502s.
+ORS_PROFILES = {"foot-walking", "foot-hiking", "cycling-mountain", "driving-car"}
 
 PUBLIC_ROOT_FILES = {
     "index.html",
@@ -677,8 +688,10 @@ def on_startup() -> None:
 
 
 @app.get("/api/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+def health_check() -> dict[str, Any]:
+    # "routing" lets the track editor disable snap-to-route up front instead of
+    # discovering it through a failed drag.
+    return {"status": "ok", "routing": bool(ORS_BASE_URL)}
 
 
 @app.post("/api/auth/login")
@@ -1085,6 +1098,76 @@ def get_heatmap_tile(activity: str, color: str, z: int, x: int, y: int) -> Respo
         content=upstream_response.content,
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.post("/api/route/{profile}", include_in_schema=False)
+def post_route(profile: str, request: Request, payload: dict[str, Any] = Body(...)) -> Response:
+    """Proxy a two-point directions request to the internal openrouteservice.
+
+    ORS is never exposed to the browser: only this endpoint can reach it, only for the
+    allowlisted profiles, and only with a request body we build ourselves. A plain def so
+    the blocking request runs in FastAPI's threadpool.
+    """
+    enforce_rate_limit("route", request, ORS_RATE_PER_MIN)
+
+    if profile not in ORS_PROFILES:
+        raise HTTPException(status_code=404, detail="Unknown routing profile")
+    if not ORS_BASE_URL:
+        raise HTTPException(status_code=503, detail="Routing is not configured")
+
+    raw = payload.get("coordinates")
+    if not isinstance(raw, list) or len(raw) != 2:
+        raise HTTPException(status_code=400, detail="coordinates must be exactly two points")
+    coordinates: list[list[float]] = []
+    for pair in raw:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            raise HTTPException(status_code=400, detail="each coordinate must be [lon, lat]")
+        try:
+            lon, lat = float(pair[0]), float(pair[1])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="coordinates must be numbers")
+        if not (-180.0 <= lon <= 180.0) or not (-90.0 <= lat <= 90.0):
+            raise HTTPException(status_code=400, detail="coordinate out of range")
+        coordinates.append([lon, lat])
+
+    try:
+        radius = float(payload.get("radius", 50))
+    except (TypeError, ValueError):
+        radius = 50.0
+    radius = max(10.0, min(500.0, radius))
+
+    # Built here, never forwarded from the client: the browser cannot smuggle extra ORS
+    # options (alternative_routes, avoid_polygons, huge radiuses) through this endpoint.
+    upstream_body = {
+        "coordinates": coordinates,
+        "elevation": True,
+        "instructions": False,
+        "geometry_simplify": False,
+        "radiuses": [radius, radius],
+    }
+    upstream = f"{ORS_BASE_URL.rstrip('/')}/v2/directions/{profile}/geojson"
+    try:
+        upstream_response = requests.post(
+            upstream,
+            json=upstream_body,
+            headers={"Accept": "application/geo+json", "Content-Type": "application/json"},
+            timeout=ORS_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Routing service unreachable") from exc
+
+    if upstream_response.status_code != 200:
+        # ORS answers 404/code 2010 when a point has no routable way within `radiuses`.
+        # Surface one shape of error; the editor falls back to a straight line either way.
+        raise HTTPException(status_code=502, detail="Could not route between those points")
+    if len(upstream_response.content) > ORS_MAX_RESPONSE_BYTES:
+        raise HTTPException(status_code=502, detail="Routing response too large")
+
+    return Response(
+        content=upstream_response.content,
+        media_type="application/geo+json",
+        headers={"Cache-Control": "no-store"},
     )
 
 
