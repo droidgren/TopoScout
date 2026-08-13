@@ -1,8 +1,8 @@
 # openrouteservice configuration for the TopoScout GPX track editor.
 #
-# Copy to /share/www/openrouteservice/ors-config.yml and point source_file below at the
-# .pbf extract you actually downloaded. Only the three profiles offered by the editor's
-# dropdown are enabled — each extra profile costs build time, RAM and disk.
+# Copy to /share/www/openrouteservice/config/ors-config.yml and point source_file below at
+# the .pbf you actually downloaded. Only the two profiles offered by the editor's dropdown
+# are enabled — each extra profile costs build time, RAM and disk in direct proportion.
 #
 # This is the ORS v8/v9 layout (ors.engine.profile_default.build.*, ors.engine.profiles.
 # <name>.enabled). If the pinned image rejects a key, diff against the image's own
@@ -13,13 +13,18 @@ server:
   port: 8082
 ors:
   cors:
-    # Only the gpx-editor container calls this, server-side, so CORS is irrelevant —
+    # Only the toposcout container calls this, server-side, so CORS is irrelevant —
     # leaving it closed prevents any accidental direct browser use.
     allowed_origins: ""
   engine:
     # One profile at a time keeps peak heap at roughly one profile's worth instead of
-    # three. Raise to 2-3 if the host has RAM to spare and build time matters more.
+    # both — the difference between fitting in 10g and not. Leave at 1 on a 16 GB host.
     init_threads: 1
+    # Pages graphs off disk instead of holding them in heap, which is what makes a
+    # country-sized graph comfortable on a 16 GB host. Verify the key against the image's
+    # reference config (command above) before relying on it — an unknown key is silently
+    # ignored by Spring's binder, so a typo shows up as memory pressure, not an error.
+    graphs_data_access: MMAP
     elevation:
       # Required for `elevation: true` on the directions request. Without it ORS returns
       # 2D coordinates and every routed point lands in the GPX with no <ele>, which
@@ -31,22 +36,20 @@ ors:
       data_access: MMAP
     profile_default:
       build:
-        source_file: /home/ors/files/region-latest.osm.pbf
+        # Regional extract. Anything outside it is served by the public openrouteservice
+        # fallback in main.py, so this only needs to cover where you run most often.
+        source_file: /home/ors/files/sweden-latest.osm.pbf
         elevation: true
         elevation_smoothing: true
     profiles:
-      # Running (the editor's default). Same access rules as foot-hiking — footways,
-      # paths, tracks, residential/service/living-street roads unpenalised; cycleways and
-      # tertiary/secondary/primary allowed but penalised; motorway/trunk and foot=no
-      # excluded — but with plain shortest-path weighting instead of the SAC-scale and
-      # hiking-relation preference, so it takes the direct line over mixed street/trail
-      # terrain rather than detouring onto marked trails.
-      foot-walking:
-        enabled: true
-      # Trail running / hiking: prefers marked trails and tolerates rough terrain.
+      # Running — the editor's default and the only foot profile built. foot-hiking
+      # rather than foot-walking: at 45.846N 7.034E (Aosta) foot-walking could not route
+      # at any snap radius while cycling-mountain could, so the path is mapped and the
+      # walking profile was the blocker. foot-hiking weights by SAC scale and hiking-route
+      # relations, which costs some directness on mixed street/trail terrain near home but
+      # is the difference between snapping and not on alpine trails.
       foot-hiking:
         enabled: true
+      # Cycling paths and forest tracks, for the legs a runner shares with bikes.
       cycling-mountain:
-        enabled: true
-      driving-car:
         enabled: true

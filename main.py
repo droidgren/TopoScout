@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import math
 import mimetypes
 import os
@@ -90,16 +91,49 @@ STRAVA_HEATMAP_PROXY_URL = os.getenv("STRAVA_HEATMAP_PROXY_URL", "http://strava-
 HEATMAP_ACTIVITIES = {"all", "ride", "run", "winter", "water"}
 HEATMAP_COLORS = {"bluered", "hot", "blue", "purple", "gray", "mobileblue"}
 
-# --- On-prem openrouteservice (GPX track editor's snap-to-route) ----------------------
-# Empty (the default) disables routing entirely; /api/health then reports routing:false
-# and the frontend degrades to freehand editing instead of failing per drag.
+# --- openrouteservice (GPX track editor's snap-to-route) -----------------------------
+# Two upstreams, tried in order. The on-prem container holds a regional extract and is
+# preferred: fast, private, no quota. The public API covers the rest of the planet and is
+# only reached when the local graph has no route for those points — which is what a
+# request outside the extract looks like.
+#
+# Both are optional. With neither set /api/health reports routing:false and the frontend
+# degrades to freehand editing instead of failing per drag.
 ORS_BASE_URL = os.getenv("ORS_BASE_URL", "").strip()
+# Public openrouteservice. ORS_API_KEY is what enables this leg; the key stays server-side
+# and is never sent to the browser, same as the local container's address.
+#
+# HeiGIT deprecated api.openrouteservice.org on 2026-04-28 in favour of api.heigit.org and
+# shuts the old host down on 2026-08-24; quota on the old URL is already restricted, which
+# shows up here as 502s. Existing keys work unchanged on the new host — only the base URL
+# moved, gaining an /openrouteservice path segment.
+ORS_API_KEY = os.getenv("ORS_API_KEY", "").strip()
+ORS_FALLBACK_URL = os.getenv("ORS_FALLBACK_URL", "https://api.heigit.org/openrouteservice").strip()
+# The public free tier allows far fewer calls than a local instance (40/min, 2000/day at
+# the time of writing) and a drag costs up to two. Cap our own use of it so a burst of
+# editing outside the extract cannot burn the daily quota in a couple of minutes.
+ORS_FALLBACK_RATE_PER_MIN = int(os.getenv("ORS_FALLBACK_RATE_PER_MIN", "30"))
 ORS_TIMEOUT_SECONDS = float(os.getenv("ORS_TIMEOUT_SECONDS", "20"))
 ORS_RATE_PER_MIN = int(os.getenv("ORS_RATE_PER_MIN", "120"))
 ORS_MAX_RESPONSE_BYTES = int(os.getenv("ORS_MAX_RESPONSE_BYTES", str(2 * 1024 * 1024)))
+# Snap radius ceiling, and the widening ladder used when the requested radius finds no
+# routable way. Sparse mapping (alpine trails, forest tracks) routinely puts the nearest
+# way a few hundred metres from the recorded track, where the editor's 50 m default is a
+# guaranteed 2010. Each extra rung costs one more upstream call per drag, so keep it short.
+ORS_MAX_RADIUS_M = float(os.getenv("ORS_MAX_RADIUS_M", "2000"))
+# 300 m is about the limit where a snap still means anything: past that the match is a
+# different path, and the editor rejects the route anyway (GPX_EDIT_SNAP_MAX_DRIFT_M).
+ORS_RADIUS_ESCALATION_M = [
+    float(r) for r in os.getenv("ORS_RADIUS_ESCALATION_M", "300").split(",") if r.strip()
+]
 # Mirrors the profile dropdown in the edit panel; anything else 404s before we call out.
-# Must also match ors/ors-config.yml — a profile enabled here but not built there 502s.
-ORS_PROFILES = {"foot-walking", "foot-hiking", "cycling-mountain", "driving-car"}
+# Must also match ors/ors-config.yml — a profile enabled here but not built there answers
+# every request with 400/code 2003, which _ors_local_missing below learns and routes around.
+ORS_PROFILES = {"foot-hiking", "cycling-mountain"}
+# How long a profile stays marked as absent from the local graph. The mark lives in this
+# container, not in ORS, so a graph rebuild cannot clear it — the TTL is what lets a
+# rebuild take effect without restarting toposcout.
+ORS_LOCAL_MISS_TTL_SECONDS = float(os.getenv("ORS_LOCAL_MISS_TTL_SECONDS", "600"))
 
 PUBLIC_ROOT_FILES = {
     "index.html",
@@ -690,8 +724,8 @@ def on_startup() -> None:
 @app.get("/api/health")
 def health_check() -> dict[str, Any]:
     # "routing" lets the track editor disable snap-to-route up front instead of
-    # discovering it through a failed drag.
-    return {"status": "ok", "routing": bool(ORS_BASE_URL)}
+    # discovering it through a failed drag. Either upstream is enough.
+    return {"status": "ok", "routing": bool(ORS_BASE_URL or ORS_API_KEY)}
 
 
 @app.post("/api/auth/login")
@@ -1101,19 +1135,88 @@ def get_heatmap_tile(activity: str, color: str, z: int, x: int, y: int) -> Respo
     )
 
 
+# Routing failures are invisible from the browser — the editor just draws a straight line
+# — so the reason has to reach the container log or it is lost. uvicorn's logger is used
+# because it is guaranteed to have handlers attached under the deployment's run command.
+_route_log = logging.getLogger("uvicorn.error")
+
+# Profiles the local instance has told us it does not have (ORS error code 2003), with the
+# time we learned it. A missing profile is a configuration mismatch between ors-config.yml
+# and ORS_PROFILES, not a transient failure: retrying it per request wastes a round trip on
+# every drag and — worse — pushes traffic that belongs on the free local instance onto the
+# metered public API. Learned from the real response rather than pre-flighted against
+# /ors/v2/status, whose profile keys are config keys and need not match the path parameter.
+_ors_miss_lock = threading.Lock()
+_ors_local_missing: dict[str, float] = {}
+
+
+def _ors_local_has_profile(profile: str) -> bool:
+    """False while `profile` is known-absent from the local graph and the mark is fresh."""
+    with _ors_miss_lock:
+        marked_at = _ors_local_missing.get(profile)
+        if marked_at is None:
+            return True
+        if time.monotonic() - marked_at >= ORS_LOCAL_MISS_TTL_SECONDS:
+            # Expired: let the next request find out whether a rebuild has landed.
+            _ors_local_missing.pop(profile, None)
+            return True
+        return False
+
+
+def _ors_mark_local_missing(profile: str) -> bool:
+    """Mark `profile` absent locally. Returns True the first time, for one-shot logging."""
+    with _ors_miss_lock:
+        first = profile not in _ors_local_missing
+        _ors_local_missing[profile] = time.monotonic()
+        return first
+
+
+def _ors_clear_local_missing(profile: str) -> None:
+    with _ors_miss_lock:
+        _ors_local_missing.pop(profile, None)
+
+
+def _is_unknown_profile_error(response: requests.Response) -> bool:
+    """True for ORS code 2003 — 'Parameter profile has incorrect value'."""
+    if response.status_code != 400:
+        return False
+    try:
+        return response.json().get("error", {}).get("code") == 2003
+    except (ValueError, AttributeError):
+        # Malformed or non-JSON body: fall back to matching the code in the raw text.
+        return '"code":2003' in response.text.replace(" ", "")
+
+
+def _ors_directions(base_url: str, profile: str, body: dict[str, Any], api_key: str = "") -> requests.Response:
+    """One directions call. Raises requests.RequestException if the host is unreachable."""
+    headers = {"Accept": "application/geo+json", "Content-Type": "application/json"}
+    if api_key:
+        # openrouteservice takes the bare key, with no "Bearer " prefix.
+        headers["Authorization"] = api_key
+    return requests.post(
+        f"{base_url.rstrip('/')}/v2/directions/{profile}/geojson",
+        json=body,
+        headers=headers,
+        timeout=ORS_TIMEOUT_SECONDS,
+    )
+
+
 @app.post("/api/route/{profile}", include_in_schema=False)
 def post_route(profile: str, request: Request, payload: dict[str, Any] = Body(...)) -> Response:
-    """Proxy a two-point directions request to the internal openrouteservice.
+    """Proxy a two-point directions request to openrouteservice.
 
-    ORS is never exposed to the browser: only this endpoint can reach it, only for the
-    allowlisted profiles, and only with a request body we build ourselves. A plain def so
-    the blocking request runs in FastAPI's threadpool.
+    Tries the on-prem container first and falls back to the public API when it cannot
+    answer — the local graph only covers its extract, and a request outside it is
+    indistinguishable from "no routable way nearby". Neither upstream is reachable from
+    the browser: only this endpoint can call them, only for the allowlisted profiles, and
+    only with a request body we build ourselves. A plain def so the blocking requests run
+    in FastAPI's threadpool.
     """
     enforce_rate_limit("route", request, ORS_RATE_PER_MIN)
 
     if profile not in ORS_PROFILES:
         raise HTTPException(status_code=404, detail="Unknown routing profile")
-    if not ORS_BASE_URL:
+    if not ORS_BASE_URL and not ORS_API_KEY:
         raise HTTPException(status_code=503, detail="Routing is not configured")
 
     raw = payload.get("coordinates")
@@ -1135,40 +1238,122 @@ def post_route(profile: str, request: Request, payload: dict[str, Any] = Body(..
         radius = float(payload.get("radius", 50))
     except (TypeError, ValueError):
         radius = 50.0
-    radius = max(10.0, min(500.0, radius))
+    radius = max(10.0, min(ORS_MAX_RADIUS_M, radius))
 
-    # Built here, never forwarded from the client: the browser cannot smuggle extra ORS
-    # options (alternative_routes, avoid_polygons, huge radiuses) through this endpoint.
-    upstream_body = {
-        "coordinates": coordinates,
-        "elevation": True,
-        "instructions": False,
-        "geometry_simplify": False,
-        "radiuses": [radius, radius],
-    }
-    upstream = f"{ORS_BASE_URL.rstrip('/')}/v2/directions/{profile}/geojson"
-    try:
-        upstream_response = requests.post(
-            upstream,
-            json=upstream_body,
-            headers={"Accept": "application/geo+json", "Content-Type": "application/json"},
-            timeout=ORS_TIMEOUT_SECONDS,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="Routing service unreachable") from exc
+    # Local first, public second. ORS answers 404/code 2010 when a point has no routable
+    # way within `radiuses`, which is exactly what a point outside the local extract looks
+    # like — so any non-200 from the local instance is a reason to try the public API,
+    # not to give up.
+    attempts: list[tuple[str, str, str]] = []
+    if ORS_BASE_URL and _ors_local_has_profile(profile):
+        attempts.append(("local", ORS_BASE_URL, ""))
+    if ORS_API_KEY:
+        attempts.append(("public", ORS_FALLBACK_URL, ORS_API_KEY))
 
-    if upstream_response.status_code != 200:
-        # ORS answers 404/code 2010 when a point has no routable way within `radiuses`.
-        # Surface one shape of error; the editor falls back to a straight line either way.
-        raise HTTPException(status_code=502, detail="Could not route between those points")
-    if len(upstream_response.content) > ORS_MAX_RESPONSE_BYTES:
-        raise HTTPException(status_code=502, detail="Routing response too large")
+    # Widen the snap radius and try again if nobody could reach the track. The requested
+    # radius suits dense mapping; in sparse terrain (alpine trails, forest tracks) the
+    # nearest routable way is routinely a few hundred metres off, and a 2010 there is not
+    # "no road exists" but "you did not look far enough". The client decides whether a
+    # far-away snap is worth taking, so widening here cannot silently move a handle.
+    radii = [radius] + [r for r in ORS_RADIUS_ESCALATION_M if r > radius]
 
-    return Response(
-        content=upstream_response.content,
-        media_type="application/geo+json",
-        headers={"Cache-Control": "no-store"},
-    )
+    last_detail = "Could not route between those points"
+    quota_exhausted = False
+    local_disabled = False
+    for attempt_radius in radii:
+        # Built here, never forwarded from the client: the browser cannot smuggle extra ORS
+        # options (alternative_routes, avoid_polygons, huge radiuses) through this endpoint.
+        upstream_body = {
+            "coordinates": coordinates,
+            "elevation": True,
+            "instructions": False,
+            "geometry_simplify": False,
+            "radiuses": [attempt_radius, attempt_radius],
+        }
+
+        for source, base_url, api_key in attempts:
+            if source == "local" and local_disabled:
+                continue
+            if source == "public":
+                # Quota guard, separate from the per-client limit above. Raising 502 rather
+                # than 429 keeps the editor's straight-line fallback behaviour consistent.
+                try:
+                    enforce_rate_limit("route-public", request, ORS_FALLBACK_RATE_PER_MIN)
+                except HTTPException:
+                    last_detail = "Public routing quota exceeded"
+                    quota_exhausted = True
+                    break
+
+            try:
+                upstream_response = _ors_directions(base_url, profile, upstream_body, api_key)
+            except requests.RequestException as exc:
+                last_detail = "Routing service unreachable"
+                _route_log.warning("route[%s] %s unreachable: %s", source, base_url, exc)
+                continue
+
+            if upstream_response.status_code != 200:
+                last_detail = "Could not route between those points"
+                # A local 2003 is a configuration mismatch, not an unroutable point: the
+                # graph was built without this profile and no radius or retry will help.
+                # Say so once, at ERROR, and stop calling it until the TTL expires.
+                if source == "local" and _is_unknown_profile_error(upstream_response):
+                    if _ors_mark_local_missing(profile):
+                        _route_log.error(
+                            "route[local] %s has no '%s' profile (ORS code 2003). Its graph was "
+                            "built from a different profile list, so every request will fall "
+                            "through to the public API and spend quota. Fix: enable the profile "
+                            "in ors-config.yml and rebuild with REBUILD_GRAPHS=True. Skipping "
+                            "the local instance for this profile for %.0fs.",
+                            base_url, profile, ORS_LOCAL_MISS_TTL_SECONDS,
+                        )
+                    # Skip local for the remaining radii of *this* request too — widening
+                    # cannot conjure a profile — but still fall through to public below.
+                    local_disabled = True
+                    continue
+                # 401/403 means a missing or rejected key, not an unroutable point — worth
+                # calling out, because it looks identical from the browser.
+                hint = " (check ORS_API_KEY)" if upstream_response.status_code in (401, 403) else ""
+                _route_log.warning(
+                    "route[%s] %s r=%.0fm -> HTTP %s%s: %.200s",
+                    source, base_url, attempt_radius, upstream_response.status_code, hint,
+                    upstream_response.text.replace("\n", " "),
+                )
+                continue
+            if len(upstream_response.content) > ORS_MAX_RESPONSE_BYTES:
+                last_detail = "Routing response too large"
+                _route_log.warning(
+                    "route[%s] response %d bytes exceeds ORS_MAX_RESPONSE_BYTES (%d)",
+                    source, len(upstream_response.content), ORS_MAX_RESPONSE_BYTES,
+                )
+                continue
+
+            if source == "local":
+                # A local success means the profile is there after all (a rebuild landed
+                # while a stale mark was still counting down) — drop the mark immediately.
+                _ors_clear_local_missing(profile)
+            if attempt_radius != radius:
+                _route_log.info(
+                    "route[%s] succeeded at widened radius %.0fm (requested %.0fm)",
+                    source, attempt_radius, radius,
+                )
+            return Response(
+                content=upstream_response.content,
+                media_type="application/geo+json",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Route-Source": source,
+                    "X-Route-Radius": str(int(attempt_radius)),
+                },
+            )
+
+        if quota_exhausted:
+            break
+
+    # Every upstream declined. The editor falls back to a straight line either way, so the
+    # exact reason only matters in the log.
+    if not attempts:
+        _route_log.warning("route[%s] no upstream configured", profile)
+    raise HTTPException(status_code=502, detail=last_detail)
 
 
 @app.get("/", include_in_schema=False)

@@ -26,10 +26,15 @@ services:
       # "False" — otherwise every restart rebuilds the graphs from scratch (hours).
       REBUILD_GRAPHS: "False"
       CONTAINER_LOG_LEVEL: "INFO"
-      # JVM heap. Graph building is the memory-hungry phase; size XMX from the extract
-      # (see the sizing table in README.md) and give the host at least XMX + 2 GB.
+      # JVM heap. Graph building is the memory-hungry phase; size XMX from the .pbf (see
+      # the sizing table in README.md) and give the host at least XMX + 2 GB.
+      #
+      # Sized for a country extract (~700 MB .pbf) on a 16 GB host: 10g leaves the OS
+      # enough page cache to avoid thrashing, which matters because MMAP graph access
+      # reads from disk. Do not raise this past ~12g on 16 GB — an undersized *host* is
+      # worse than an undersized heap, since the build then swaps for hours before dying.
       XMS: "2g"
-      XMX: "12g"
+      XMX: "10g"
       ADDITIONAL_JAVA_OPTS: "-XX:+UseG1GC"
     volumes:
       # Everything ORS needs lives outside the image so upgrades keep the built graphs.
@@ -44,9 +49,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-      # Generous on purpose: a cold graph build for a country-sized extract takes hours,
-      # and the container must not be restarted while it works.
-      start_period: 4h
+      # The container must not be restarted while a cold build is running, or Docker
+      # kills it partway through and you start over. Sweden measures ~20 min on a 16 GB
+      # host, so 2h is ~6x headroom while still catching a genuinely wedged container in
+      # reasonable time. Raise it if you move to a larger extract.
+      start_period: 2h
     networks:
       immich_default:
         # Explicit alias so gpx-editor resolves http://ors-app:8082 regardless of the
