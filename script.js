@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.21.0";
-const BUILD_NUMBER = "3018";
+const BUILD_NUMBER = "3026";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -155,11 +155,22 @@ const GPX_EDIT_UNDO_MAX = 20;
 const GPX_EDIT_UNDO_MAX_POINTS = 400000;   // total points across all stacked snapshots
 const GPX_EDIT_CLICK_TOLERANCE_PX = 18;    // click-to-add-handle hit radius
 const GPX_EDIT_ORS_RADIUS_M = 50;          // snap radius sent to the routing service
+// How far the dragged handle may be pulled to the routed path. The backend widens the
+// snap radius when nothing is found nearby (sparse alpine/forest mapping), so a routed
+// endpoint can come back hundreds of metres away — adopting that would teleport the
+// handle out from under the cursor. Past this distance the route is still used, but the
+// handle stays where it was dropped and a straight connector bridges the gap.
+const GPX_EDIT_SNAP_ADOPT_MAX_M = 80;
+// How far a routed endpoint may sit from the point that was asked for before the whole
+// route is thrown away as unusable. Answers a different question from the constant above:
+// that one decides whether the handle moves, this one decides whether the geometry is
+// about the right stretch of ground at all.
+const GPX_EDIT_SNAP_MAX_DRIFT_M = 150;
 const GPX_EDIT_FREEHAND_SPACING_M = 50;    // densification spacing when snapping is off
 const GPX_EDIT_FREEHAND_MAX_POINTS = 200;  // cap per sub-segment
 // Must match ORS_PROFILES in main.py and the enabled profiles in ors/ors-config.yml.
-const GPX_EDIT_PROFILES = ['foot-walking', 'foot-hiking', 'cycling-mountain', 'driving-car'];
-const GPX_EDIT_DEFAULT_PROFILE = 'foot-walking';
+const GPX_EDIT_PROFILES = ['foot-hiking', 'cycling-mountain'];
+const GPX_EDIT_DEFAULT_PROFILE = 'foot-hiking';
 
 // Footer readout visibility. Zoom defaults to shown (only an explicit 'false' hides it);
 // scale and center GPS default to hidden (only an explicit 'true' shows them).
@@ -8513,9 +8524,24 @@ async function _gpxEditSpliceBetween(ai) {
     if (st.snap && routingAvailable) {
         const routed = await requestOrsRoute(startPt, endPt, st.profile);
         if (routed && routed.length >= 2) {
-            mid = routed.slice(1, -1);   // ORS echoes both endpoints; keep the interior
-            snappedA = routed[0];
-            snappedB = routed[routed.length - 1];
+            // The backend widens the snap radius when nothing routable is nearby, so a
+            // "successful" route can be matched to ways hundreds of metres away — in
+            // sparse mountain terrain, typically a road down in the valley. Splicing that
+            // in replaces the segment with a detour to somewhere the user never went,
+            // which is strictly worse than the straight line. Check both echoed endpoints
+            // and reject the whole route if either drifted too far.
+            const driftA = haversineDistance(startPt.lat, startPt.lon, routed[0].lat, routed[0].lon);
+            const last = routed[routed.length - 1];
+            const driftB = haversineDistance(endPt.lat, endPt.lon, last.lat, last.lon);
+            if (driftA <= GPX_EDIT_SNAP_MAX_DRIFT_M && driftB <= GPX_EDIT_SNAP_MAX_DRIFT_M) {
+                mid = routed.slice(1, -1);   // ORS echoes both endpoints; keep the interior
+                snappedA = routed[0];
+                snappedB = last;
+            } else {
+                const t = translations[currentLang];
+                statusDiv.textContent = t.status_gpx_edit_route_failed ||
+                    'Routing failed — a straight line was used.';
+            }
         }
     }
     if (mid === null) mid = await _gpxEditFreehandInterior(startPt, endPt);
@@ -8550,11 +8576,21 @@ async function _gpxEditRebuildAround(k) {
         const r = await _gpxEditSpliceBetween(k - 1);
         if (r.snappedB && !snapped) snapped = r.snappedB;
     }
+    // Adopt the routed endpoint only when it is close. The backend widens the snap radius
+    // when nothing routable is nearby, so in sparse terrain `snapped` can be hundreds of
+    // metres away — moving the handle there would yank it out from under the cursor and
+    // silently relocate a point the user placed deliberately. Beyond the threshold the
+    // routed geometry is still used; the handle keeps its position and the straight
+    // connector to the route remains, exactly as it already does for neighbour handles.
     if (snapped) {
-        st.points[h.idx].lat = snapped.lat;
-        st.points[h.idx].lon = snapped.lon;
-        st.points[h.idx].ele = snapped.ele;
-        if (h.marker) h.marker.setLngLat([snapped.lon, snapped.lat]);
+        const here = st.points[h.idx];
+        const drift = haversineDistance(here.lat, here.lon, snapped.lat, snapped.lon);
+        if (drift <= GPX_EDIT_SNAP_ADOPT_MAX_M) {
+            here.lat = snapped.lat;
+            here.lon = snapped.lon;
+            here.ele = snapped.ele;
+            if (h.marker) h.marker.setLngLat([snapped.lon, snapped.lat]);
+        }
     }
 }
 
@@ -8897,10 +8933,8 @@ function _updateGpxEditUI() {
     const profileSel = document.getElementById('gpxEditProfile');
     if (profileSel) {
         const optionKeys = {
-            'foot-walking': 'gpx_edit_profile_run',
-            'foot-hiking': 'gpx_edit_profile_foot',
-            'cycling-mountain': 'gpx_edit_profile_mtb',
-            'driving-car': 'gpx_edit_profile_car'
+            'foot-hiking': 'gpx_edit_profile_run',
+            'cycling-mountain': 'gpx_edit_profile_mtb'
         };
         for (const value of GPX_EDIT_PROFILES) {
             const opt = profileSel.querySelector('option[value="' + value + '"]');
