@@ -6,7 +6,6 @@ import hmac
 import json
 import logging
 import math
-import mimetypes
 import os
 import re
 import secrets
@@ -139,7 +138,6 @@ PUBLIC_ROOT_FILES = {
     "index.html",
     "style.css",
     "script.js",
-    "maplibre-boot.mjs",
     "manifest.json",
     "service-worker.js",
     "icon.svg",
@@ -205,12 +203,7 @@ app.mount("/vendor", StaticFiles(directory=APP_DIR / "vendor"), name="vendor")
 # here at the origin: the reverse proxy / compose add no cache headers, and FastAPI's
 # FileResponse / StaticFiles send none by default (Cloudflare was filling the gap with 4h).
 SHELL_NO_CACHE = {"/", "/index.html", "/service-worker.js", "/manifest.json"}
-STATIC_ASSET_SUFFIXES = (".js", ".mjs", ".css", ".pbf", ".svg")
-
-# MapLibre v6 ships as ES modules (.mjs). A wrong Content-Type is a hard block for a module
-# script, so register it here rather than trusting the interpreter's mimetypes table (the
-# entry is version-dependent, and on Windows the registry can override it).
-mimetypes.add_type("text/javascript", ".mjs")
+STATIC_ASSET_SUFFIXES = (".js", ".css", ".pbf", ".svg")
 
 # Third-party hosts the map, geocoder, and Google sign-in legitimately reach. Mirrors the
 # tile allowlist in service-worker.js; keep the two in sync when adding a map source.
@@ -238,7 +231,9 @@ CSP_REPORT_ONLY = (
     "style-src 'self' 'unsafe-inline'; "
     f"img-src 'self' data: blob: {_CSP_REMOTE_HOSTS}; "
     f"connect-src 'self' https://accounts.google.com https://nominatim.openstreetmap.org {_CSP_REMOTE_HOSTS}; "
-    "font-src 'self'; worker-src 'self'; frame-src https://accounts.google.com; "
+    # blob: is required by MapLibre GL JS 5.x, which builds its worker with
+    # URL.createObjectURL(new Blob([workerBundleString])) rather than fetching a worker file.
+    "font-src 'self'; worker-src 'self' blob:; frame-src https://accounts.google.com; "
     "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
 )
 

@@ -11,8 +11,7 @@ body {
     width: 100%;
 }
 
-/* Shown when MapLibre never loaded — most often index.html opened straight from disk, where
-   the browser blocks the ES-module fetch. Sits above #controls (z-index 2000): nothing
+/* Shown when vendor/maplibre-gl.js never loaded. Sits above #controls (z-index 2000): nothing
    underneath is usable without a map, so the dead UI should not show through. */
 .map-boot-error {
     position: fixed;
