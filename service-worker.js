@@ -1,21 +1,16 @@
-const CACHE_NAME = '3026';
+const CACHE_NAME = '3027';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
 // requests; the fetch handler matches these search-SENSITIVELY, so a new build's ?v= misses
 // the old cache and falls through to the network. index.html's ?v= MUST equal CACHE_NAME.
-const VERSIONED = ['./style.css', './maplibre-boot.mjs', './script.js', './lang/en.js', './lang/sv.js'];
+const VERSIONED = ['./style.css', './script.js', './lang/en.js', './lang/sv.js'];
 const STATIC = [
     './',
     './index.html',
     './manifest.json',
     './icon.svg',
-    // MapLibre v6 is ESM: the main bundle and the worker BOTH import the shared chunk, and the
-    // worker (a client of this service worker) fetches it through the handler below. All three
-    // must be precached or the map goes blank offline.
-    './vendor/maplibre-gl.mjs',
-    './vendor/maplibre-gl-shared.mjs',
-    './vendor/maplibre-gl-worker.mjs',
+    './vendor/maplibre-gl.js',
     './vendor/maplibre-gl.css',
     './vendor/maplibre-contour.min.js',
     './vendor/jspdf.umd.min.js',
