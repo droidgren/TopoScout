@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3026">
+    <link rel="stylesheet" href="style.css?v=3027">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,7 +71,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.21.0</span> (Build <span id="app-build">3026</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.22.0</span> (Build <span id="app-build">3027</span>)
             </p>
 
             <details
@@ -79,11 +79,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.22.0:</strong> New <strong>Create Route</strong> button — click a start point and an end point on the map and the app builds a route between them along real roads and paths, then opens it in the track editor so you can drag handles to shape it. Works without the routing backend too, as a straight line you can still edit.</li>
                     <li><strong>v2.21.0:</strong> New <strong>Edit track</strong> mode — drag handles along a loaded GPX route to reshape it. Edits snap to real trails and roads via routing (running or MTB), with Undo/Redo and a freehand toggle. Routes that snap far from the track are rejected in favour of a straight line.</li>
                     <li><strong>v2.20.0:</strong> The search box now understands <strong>DMS</strong> (57° 44' 24" N, 12° 06' 36" E), <strong>degrees + decimal minutes</strong>, decimal degrees written with a <strong>comma</strong> (57,811266 12,091825) and <strong>Plus Codes</strong> (R36R+GP4 Göteborg). Precise coordinates now zoom to level 15.</li>
                     <li><strong>v2.19.2:</strong> Updated the map engine to <strong>MapLibre GL JS 6.3.0</strong> — tilt/3D pan and zoom gestures no longer slip off the terrain point you grabbed, and the slope map overlay stops leaking video memory each time its opacity slider moves.</li>
                     <li><strong>v2.19.1:</strong> Opening <code>index.html</code> directly from disk now shows a clear explanation instead of a blank page — the map engine needs the app to be served over http (installing the app still works fully offline).</li>
-                    <li><strong>v2.19.0:</strong> <strong>Google sign-in now sticks</strong> — a signed-in account is kept for 90 days (renewed on every visit) through a secure server-side session, so reloads, app updates and restarts no longer sign you out.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -622,7 +622,28 @@
                     <input type="file" id="gpx-file-input" accept=".gpx" style="display:none;">
                     <div class="gpx-action-row routes-poi-row">
                         <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg><span id="btn-gpx-label" class="btn-label">Load GPX Route</span></button>
+                        <button id="route-create-btn" class="route-create-btn" onclick="toggleRouteCreateMode()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span class="btn-label">Create Route</span></button>
                         <button id="poi-btn" class="poi-btn" onclick="openPoiLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg><span id="btn-poi-label" class="btn-label">Add POI</span></button>
+                    </div>
+                    <div id="route-create-panel" class="gpx-edit-panel" style="display:none;">
+                        <p id="route-create-hint" class="gpx-edit-hint"></p>
+                        <div class="control-row">
+                            <span id="lbl-route-create-profile" class="control-label">Routing profile:</span>
+                            <select id="routeCreateProfile" onchange="setRouteCreateProfile(this.value)">
+                                <option value="foot-hiking">Running/Walking</option>
+                                <option value="cycling-mountain">Bike/Mountain bike</option>
+                            </select>
+                        </div>
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="routeCreateSnap" checked onchange="setRouteCreateSnap(this.checked)">
+                            <label id="lbl-route-create-snap" for="routeCreateSnap">Snap to roads/paths</label>
+                        </div>
+                        <p id="route-create-step" class="gpx-edit-count"></p>
+                        <div class="gpx-edit-btns">
+                            <button id="route-create-cancel-btn"
+                                class="cancel-btn route-create-cancel-btn"
+                                onclick="cancelRouteCreation()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="btn-label">Cancel</span></button>
+                        </div>
                     </div>
                     <div id="gpx-track-info" class="gpx-track-info" style="display:none;"></div>
                     <div id="gpx-action-row" class="gpx-action-row" style="display:none;">
@@ -738,13 +759,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3026"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3027"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3026"></script>
-    <script defer src="lang/sv.js?v=3026"></script>
-    <script defer src="script.js?v=3026"></script>
+    <script defer src="lang/en.js?v=3027"></script>
+    <script defer src="lang/sv.js?v=3027"></script>
+    <script defer src="script.js?v=3027"></script>
 </body>
 
 </html>

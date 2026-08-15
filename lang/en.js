@@ -184,7 +184,7 @@ const LANG_EN = {
     tutorial_slope_title: "Slope Map",
     tutorial_slope_text: "Generate a color-coded slope map within the search radius. Use the opacity slider and filter settings to highlight specific slope angles. If you disable Show Radius first, the slope map is generated for the whole visible map instead.",
     tutorial_routes_title: "Add Routes and POIs",
-    tutorial_routes_text: "• Routes: Load a GPX file to overlay a route on the map, with options for track color, width, distance labels, slope coloring, waypoints, and the elevation profile.\n• Edit track: Reshape a loaded route — press Edit track, drag the handles along it, and each change snaps to real roads and paths (turn snapping off to draw freehand). Undo, Redo and Save sit in the panel, and Download GPX then exports the edited track.\n• POIs: Save your own Points of Interest — sign in with Google, tap Add POI, then tap the map to drop a star pin with a name, description, and color. POIs show elevation and can be moved, edited, or deleted; the Show POIs checkbox toggles them on the map.",
+    tutorial_routes_text: "• Routes: Load a GPX file to overlay a route on the map, with options for track color, width, distance labels, slope coloring, waypoints, and the elevation profile.\n• Create route: Press Create Route, click a start point and an end point, and the app routes between them along real roads and paths — then hands the result straight to the track editor.\n• Edit track: Reshape a loaded route — press Edit track, drag the handles along it, and each change snaps to real roads and paths (turn snapping off to draw freehand). Undo, Redo and Save sit in the panel, and Download GPX then exports the edited track.\n• POIs: Save your own Points of Interest — sign in with Google, tap Add POI, then tap the map to drop a star pin with a name, description, and color. POIs show elevation and can be moved, edited, or deleted; the Show POIs checkbox toggles them on the map.",
     tutorial_search_title: "Search & Location",
     tutorial_search_text: "Search for any place by name or coordinates — decimal degrees (57.811266, 12.091825), degrees/minutes/seconds (57° 44' 24\" N, 12° 06' 36\" E), degrees + decimal minutes (57° 44.400' N), or a Plus Code such as R36R+GP4 Göteborg. Use the GPS button to jump to your current location.",
     tutorial_share_title: "Share Map View",
@@ -246,6 +246,19 @@ const LANG_EN = {
     btn_gpx_clear: "Clear Route",
     btn_gpx_download: "Download GPX",
     status_gpx_downloaded: "GPX downloaded as {name}.",
+
+    // --- Create route ---
+    btn_route_create: "Create Route",
+    route_create_hint: "Click a start point on the map, then an end point. The route follows real roads and paths between them and opens in the track editor.",
+    route_create_confirm_replace: "Creating a route replaces the track currently on the map. Continue?",
+    step_route_create_start: "Click the start point.",
+    step_route_create_end: "Click the end point.",
+    status_route_create_start: "Click the start point of your new route.",
+    status_route_create_end: "Now click the end point.",
+    status_route_create_too_close: "That is the start point — click somewhere further away.",
+    status_route_create_too_far: "Those points are {n} km apart — pick two that are closer together.",
+    status_route_create_failed: "Could not build a route between those two points.",
+    status_route_create_done: "Route created ({n} points) — drag the handles to reshape it, then Save.",
 
     // --- GPX track editing ---
     btn_gpx_edit: "Edit track",

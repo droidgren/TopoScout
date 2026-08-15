@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.21.0";
-const BUILD_NUMBER = "3026";
+const APP_VERSION = "2.22.0";
+const BUILD_NUMBER = "3027";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -171,6 +171,18 @@ const GPX_EDIT_FREEHAND_MAX_POINTS = 200;  // cap per sub-segment
 // Must match ORS_PROFILES in main.py and the enabled profiles in ors/ors-config.yml.
 const GPX_EDIT_PROFILES = ['foot-hiking', 'cycling-mountain'];
 const GPX_EDIT_DEFAULT_PROFILE = 'foot-hiking';
+
+// --- Create route ---
+// Two map clicks become a routed track. Both span guards run before any network call.
+// Floor for "the two clicks are the same place". The live threshold is the editor's click
+// tolerance converted to meters, so it scales with zoom; this floor keeps a deeply
+// zoomed-in map from accepting the two clicks a browser reports for one double-click.
+const ROUTE_CREATE_MIN_SPAN_M = 15;
+// Refuse beyond this rather than fail slowly. openrouteservice caps a single directions
+// request well below this, so the request would 502 and drop through to the freehand
+// fallback — which would then densify a continent-spanning straight line and fire
+// GPX_EDIT_FREEHAND_MAX_POINTS DEM lookups for a route nobody meant to draw.
+const ROUTE_CREATE_MAX_SPAN_M = 100000;
 
 // Footer readout visibility. Zoom defaults to shown (only an explicit 'false' hides it);
 // scale and center GPS default to hidden (only an explicit 'true' shows them).
@@ -1760,6 +1772,14 @@ let gpxEditMode = false;
 let gpxEditState = null;
 let _gpxEditRenderDebounce = null;
 let gpxTextIsGenerated = false;
+// Last routing choice, shared by the Create Route panel and the track editor: the profile a
+// route is drawn with is the one its later edits should re-route with, and a user who turned
+// snapping off once did not mean "until you next open the editor".
+let routingPrefs = { profile: GPX_EDIT_DEFAULT_PROFILE, snap: true };
+// Create route. routeCreateState.start is the first click; `busy` covers the routing
+// request, during which further map clicks are ignored but Cancel still works.
+let routeCreateMode = false;
+let routeCreateState = null;
 let searchCircle = null;
 let centerMarker = null;
 let isLocked = false;
@@ -2275,6 +2295,8 @@ function updateLanguage() {
         if (document.getElementById('gpx-download-btn')) document.querySelector('#gpx-download-btn .btn-label').textContent = t.btn_gpx_download;
         // Covers the Edit button label, the panel labels/options and the button states.
         _updateGpxEditUI();
+        // Covers the Create Route button label, its panel labels/options and step text.
+        _updateRouteCreateUI();
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
         if (mcToggle) {
             mcToggle.querySelector('.btn-label').textContent = t.btn_manual_climb;
@@ -4079,6 +4101,9 @@ function enterPoiPlacementMode(moveId, statusKey, fallbackStatus) {
         }
         return;
     }
+    // Nothing is committed while picking route points, so take the click over rather than
+    // refusing — unlike track editing above, there is nothing to lose.
+    if (routeCreateMode) cancelRouteCreation();
     closePoiModal();
     poiPlacementMode = true;
     poiPlacementMoveId = moveId || null;
@@ -4229,6 +4254,8 @@ window.savePoiForm = async function () {
 window.clearGpxRoute = function () {
     // No prompt: the user is explicitly destroying the track the edits belong to.
     _gpxEditForceExit();
+    // Likewise for a half-placed new route: there is no track left to build it against.
+    _routeCreateForceExit();
     clearGpxTrackSourceAndLayers();
     clearMarkerCollection(currentMarkers);
     currentMarkers = [];
@@ -5117,6 +5144,9 @@ function applyParsedGpxData(parsedGpx, options = {}) {
     // Leave edit mode before gpxTrackData is replaced: gpxEditState.segIndex would
     // otherwise dangle into a different track and corrupt the next splice.
     _gpxEditForceExit();
+    // Same reason: a shared ?gpx= link resolving or a file opening mid-flow must not leave
+    // a half-placed route waiting for its second click over a different track.
+    _routeCreateForceExit();
     gpxTrackData = {
         segments: parsedGpx.segments,
         waypoints: parsedGpx.waypoints,
@@ -7899,6 +7929,8 @@ function enterManualClimbMode() {
             'Finish or cancel track editing first.';
         return;
     }
+    // Nothing is committed while picking route points, so take the click over.
+    if (routeCreateMode) cancelRouteCreation();
     manualClimbMode = true;
     manualClimbPoints = [];
     manualClimbMarkers = [];
@@ -8157,7 +8189,7 @@ function _gpxEditPickSegment() {
     return best;
 }
 
-function enterGpxEditMode() {
+function enterGpxEditMode(options = {}) {
     const t = translations[currentLang];
     if (!gpxTrackData) {
         statusDiv.textContent = t.status_gpx_edit_no_track || 'Load a GPX track before editing.';
@@ -8173,6 +8205,9 @@ function enterGpxEditMode() {
     // run alongside it.
     if (poiPlacementMode) cancelPoiPlacement();
     if (manualClimbMode) cancelManualClimbMode();
+    // A no-op when the editor is entered from the create flow (which tears down first);
+    // it matters when the user presses Edit track while still picking points.
+    if (routeCreateMode) _routeCreateForceExit();
 
     const seg = gpxTrackData.segments[segIndex];
     gpxEditMode = true;
@@ -8182,8 +8217,8 @@ function enterGpxEditMode() {
         points: seg.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
         handles: [],
         nextHandleId: 1,
-        snap: routingAvailable,
-        profile: GPX_EDIT_DEFAULT_PROFILE,
+        snap: routingPrefs.snap && routingAvailable,
+        profile: routingPrefs.profile,
         undo: [],
         redo: [],
         undoPointCount: 0,
@@ -8217,7 +8252,11 @@ function enterGpxEditMode() {
 
     _updateGpxEditUI();
 
-    if (!routingAvailable) {
+    if (options.statusMessage) {
+        // Create Route already explained the situation, including a missing backend, and
+        // its message names the next action. Do not bury it under the generic prompt.
+        statusDiv.textContent = options.statusMessage;
+    } else if (!routingAvailable) {
         statusDiv.textContent = t.status_gpx_edit_route_unavailable ||
             'Snap to route needs the online backend; freehand editing is used.';
     } else if (gpxTrackData.segments.length > 1) {
@@ -8802,6 +8841,7 @@ window.setGpxEditSnap = function (enabled) {
     if (!gpxEditState) return;
     // Affects the next drag only; existing geometry is left as the user shaped it.
     gpxEditState.snap = !!enabled && routingAvailable;
+    routingPrefs.snap = gpxEditState.snap;
     const box = document.getElementById('gpxEditSnap');
     if (box) box.checked = gpxEditState.snap;
 };
@@ -8810,6 +8850,7 @@ window.setGpxEditProfile = function (profile) {
     if (!gpxEditState) return;
     if (GPX_EDIT_PROFILES.indexOf(profile) === -1) return;
     gpxEditState.profile = profile;
+    routingPrefs.profile = profile;
 };
 
 // --- Save / cancel ------------------------------------------------------------------
@@ -8996,6 +9037,318 @@ function _gpxEditAssertInvariants() {
         if (problems.length) console.warn('[gpx-edit] invariant broken:', problems.join(', '));
     } catch (e) {
         /* never let a diagnostic break editing */
+    }
+}
+
+// ==========================================
+// 5e. CREATE ROUTE
+// ==========================================
+//
+// Two map clicks — a start and an end — become a routed track that is handed straight to
+// the track editor. Everything about the geometry is borrowed from section 5d: the same ORS
+// request, the same drift/adopt thresholds, the same freehand fallback. That is the point —
+// a created route and an edited one must be made of the same stuff, or the first drag after
+// creation would behave differently from every drag after it.
+//
+// Nothing is committed until the second click resolves: cancelling at any moment, even
+// mid-request, leaves the map exactly as it was.
+
+window.toggleRouteCreateMode = function () {
+    routeCreateMode ? cancelRouteCreation() : enterRouteCreateMode();
+};
+
+function enterRouteCreateMode() {
+    const t = translations[currentLang];
+    // Refuse rather than exit track editing for it — those edits are unsaved. Same stance
+    // as POI placement and Manual mode.
+    if (gpxEditMode) {
+        statusDiv.textContent = t.status_gpx_edit_busy ||
+            'Finish or cancel track editing first.';
+        return;
+    }
+    // A created route replaces the loaded one outright (applyParsedGpxData installs a single
+    // segment, and the fresh editor session starts with an empty undo stack). Ask before the
+    // user starts clicking rather than after, so the answer costs nothing to give.
+    if (gpxTrackData) {
+        const warning = t.route_create_confirm_replace ||
+            'Creating a route replaces the track currently on the map. Continue?';
+        if (!window.confirm(warning)) return;
+    }
+    // Nothing is lost by dropping these — neither has committed anything yet.
+    if (poiPlacementMode) cancelPoiPlacement();
+    if (manualClimbMode) cancelManualClimbMode();
+
+    routeCreateMode = true;
+    routeCreateState = { start: null, marker: null, busy: false, minimizedByUs: false };
+
+    // On a phone the expanded panel covers most of the map, so both clicks would have to
+    // land in the strip below it. Fold it away like the POI modal does; the step prompt
+    // lives in the status line, which sits outside #controls-content and stays visible.
+    if (window.innerWidth <= 600 && !isControlsMinimized) {
+        setControlsMinimized(true);
+        routeCreateState.minimizedByUs = true;
+    }
+
+    const btn = document.getElementById('route-create-btn');
+    if (btn) btn.classList.add('active');
+    const panel = document.getElementById('route-create-panel');
+    if (panel) panel.style.display = 'block';
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.add('route-create-active');
+
+    _updateRouteCreateUI();
+    statusDiv.textContent = routingAvailable
+        ? (t.status_route_create_start || 'Click the start point of your new route.')
+        : (t.status_gpx_edit_route_unavailable ||
+            'Snap to route needs the online backend; freehand editing is used.');
+}
+
+// Both clicks land here. The first records the start, the second routes to it.
+async function handleRouteCreateMapClick(lat, lon) {
+    const st = routeCreateState;
+    const t = translations[currentLang];
+    if (!st || st.busy) return;
+
+    if (!st.start) {
+        st.start = { lat, lon, ele: null };
+        st.marker = _routeCreateStartMarker(lat, lon);
+        _updateRouteCreateUI();
+        statusDiv.textContent = t.status_route_create_end || 'Now click the end point.';
+        return;
+    }
+
+    // Both guards run before any network call. The lower one uses the editor's click
+    // tolerance converted to meters, so it scales with zoom and catches a second click that
+    // landed on the start marker; the upper one is where a mis-click on a zoomed-out map
+    // stops being a route request.
+    const spanM = haversineDistance(st.start.lat, st.start.lon, lat, lon);
+    const minSpanM = Math.max(ROUTE_CREATE_MIN_SPAN_M,
+        GPX_EDIT_CLICK_TOLERANCE_PX * metersPerPixel());
+    if (spanM < minSpanM) {
+        statusDiv.textContent = t.status_route_create_too_close ||
+            'That is the start point — click somewhere further away.';
+        return;
+    }
+    if (spanM > ROUTE_CREATE_MAX_SPAN_M) {
+        statusDiv.textContent = (t.status_route_create_too_far ||
+            'Those points are {n} km apart — pick two that are closer together.')
+            .replace('{n}', Math.round(spanM / 1000));
+        return;
+    }
+
+    st.busy = true;
+    _updateRouteCreateUI();
+    statusDiv.textContent = t.status_gpx_edit_routing || 'Calculating route…';
+
+    let points = null;
+    try {
+        points = await _routeCreateBuildPoints(st.start, { lat, lon, ele: null });
+    } catch (e) {
+        points = null;   // treated as a routing failure below
+    }
+
+    // The request can take a minute in the worst case (the backend retries two upstreams at
+    // two radii, 20 s each), and Cancel deliberately works throughout. If the user used it —
+    // or a ?gpx= link resolved and installed a track meanwhile — drop the result on the
+    // floor rather than overwriting whatever they did instead.
+    if (!routeCreateMode || routeCreateState !== st) return;
+    st.busy = false;
+
+    if (!points || points.length < 2) {
+        _updateRouteCreateUI();
+        statusDiv.textContent = t.status_route_create_failed ||
+            'Could not build a route between those two points.';
+        return;
+    }
+
+    _routeCreateTeardown();
+    _routeCreateInstall(points);
+}
+
+// The geometry between the two clicked points. A deliberate mirror of
+// _gpxEditSpliceBetween(): same request, same drift rejection, same adopt threshold, same
+// freehand fallback — see the comments there for why each threshold exists.
+async function _routeCreateBuildPoints(startPt, endPt) {
+    let mid = null, a = startPt, b = endPt;
+
+    if (routingPrefs.snap && routingAvailable) {
+        const routed = await requestOrsRoute(startPt, endPt, routingPrefs.profile);
+        if (routed && routed.length >= 2) {
+            const last = routed[routed.length - 1];
+            const driftA = haversineDistance(startPt.lat, startPt.lon, routed[0].lat, routed[0].lon);
+            const driftB = haversineDistance(endPt.lat, endPt.lon, last.lat, last.lon);
+            if (driftA <= GPX_EDIT_SNAP_MAX_DRIFT_M && driftB <= GPX_EDIT_SNAP_MAX_DRIFT_M) {
+                mid = routed.slice(1, -1);   // ORS echoes both endpoints; keep the interior
+                // Adopt a snapped endpoint only when it is close. There is no cursor to yank
+                // away from here, but a start point a few hundred metres from where the user
+                // pointed is still somewhere they did not choose; past the threshold the
+                // routed middle is kept and a straight connector bridges the gap, exactly as
+                // a drag leaves it.
+                if (driftA <= GPX_EDIT_SNAP_ADOPT_MAX_M) a = routed[0];
+                if (driftB <= GPX_EDIT_SNAP_ADOPT_MAX_M) b = last;
+            } else {
+                const t = translations[currentLang];
+                statusDiv.textContent = t.status_gpx_edit_route_failed ||
+                    'Routing failed — a straight line was used.';
+            }
+        }
+    }
+    if (mid === null) mid = await _gpxEditFreehandInterior(a, b);
+
+    // ORS returns elevations, so an adopted endpoint already has one. A clicked endpoint
+    // does not; sample it from the DEM tiles the app already caches, so gain/loss and the
+    // elevation profile are not broken by two null-elevation ends.
+    if (a.ele === null || a.ele === undefined) {
+        a = { lat: a.lat, lon: a.lon, ele: await _gpxEditElevationAt(a.lat, a.lon) };
+    }
+    if (b.ele === null || b.ele === undefined) {
+        b = { lat: b.lat, lon: b.lon, ele: await _gpxEditElevationAt(b.lat, b.lon) };
+    }
+
+    return [a, ...mid, b];
+}
+
+// Hands the finished geometry to the normal "a route was loaded" path, then straight into
+// the editor. Going through applyParsedGpxData() rather than assembling gpxTrackData here is
+// deliberate: it is the one place that drops a stale ?gpx= share link, resets the download
+// text, reveals the Clear/Edit/Download row and redraws the info panel and the elevation
+// profile. A second copy of that would drift.
+function _routeCreateInstall(points) {
+    const t = translations[currentLang];
+    applyParsedGpxData({
+        segments: [points],
+        waypoints: [],
+        totalPoints: points.length,
+        stats: computeTrackStats([points])
+    }, {
+        // The user is looking at the two points they just clicked; refitting would move the
+        // map out from under them.
+        skipFitBounds: true
+    });
+    // applyParsedGpxData leaves currentGpxRawText null (there was no file) and marks the text
+    // as the user's own bytes. Serializing now makes Download GPX work immediately and keeps
+    // saveGpxEdits() from warning about losing extras of a file that never existed.
+    regenerateCurrentGpxText();
+
+    // Straight into the editor: the whole point of the two clicks is to get something worth
+    // shaping, and the seeded start/middle/end handles are where the user reaches next.
+    enterGpxEditMode({
+        statusMessage: (t.status_route_create_done ||
+            'Route created ({n} points) — drag the handles to reshape it, then Save.')
+            .replace('{n}', points.length)
+    });
+}
+
+// The placed start point, drawn as the editor's endpoint handle so it already looks like the
+// handle it is about to become. Not draggable, and pointer-events:none in the CSS so it
+// cannot swallow a second click that lands on top of it.
+function _routeCreateStartMarker(lat, lon) {
+    const el = document.createElement('div');
+    el.className = 'gpx-edit-handle endpoint route-create-start';
+    return new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([lon, lat])
+        .addTo(map._map);
+}
+
+window.setRouteCreateProfile = function (profile) {
+    if (GPX_EDIT_PROFILES.indexOf(profile) === -1) return;
+    routingPrefs.profile = profile;
+};
+
+window.setRouteCreateSnap = function (enabled) {
+    routingPrefs.snap = !!enabled && routingAvailable;
+    const box = document.getElementById('routeCreateSnap');
+    if (box) box.checked = routingPrefs.snap;
+};
+
+window.cancelRouteCreation = function () {
+    const t = translations[currentLang];
+    if (!routeCreateMode) return;
+    // No confirm, unlike cancelGpxEditMode: nothing has been committed, so there is no
+    // geometry to restore and nothing to lose. Allowed while busy on purpose — the routing
+    // request has no client-side timeout and the backend can spend the better part of a
+    // minute on it; refusing here would lock the user in.
+    _routeCreateTeardown();
+    statusDiv.textContent = t.status_ready || 'Ready.';
+};
+
+// Leaves create mode without a status message — for the paths that are about to install or
+// destroy a track anyway (Clear Route, another GPX loading, entering the editor).
+function _routeCreateForceExit() {
+    if (!routeCreateMode) return;
+    _routeCreateTeardown();
+}
+
+function _routeCreateTeardown() {
+    const st = routeCreateState;
+    if (st) {
+        if (st.marker) st.marker.remove();
+        // Only undo a minimize we did ourselves; if the user folded the panel away by hand,
+        // leave it that way.
+        if (st.minimizedByUs && isControlsMinimized) setControlsMinimized(false);
+    }
+    routeCreateMode = false;
+    routeCreateState = null;
+
+    const btn = document.getElementById('route-create-btn');
+    if (btn) btn.classList.remove('active');
+    const panel = document.getElementById('route-create-panel');
+    if (panel) panel.style.display = 'none';
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.remove('route-create-active');
+    _updateRouteCreateUI();
+}
+
+// Runs on every language switch too, long before the button is ever pressed — every lookup
+// is defensive and a null routeCreateState is a normal state, not an error.
+function _updateRouteCreateUI() {
+    const t = translations[currentLang];
+    const st = routeCreateState;
+
+    const btnLabel = document.querySelector('#route-create-btn .btn-label');
+    if (btnLabel) btnLabel.textContent = t.btn_route_create || 'Create Route';
+    const hint = document.getElementById('route-create-hint');
+    if (hint) hint.textContent = t.route_create_hint || '';
+    const profileLabel = document.getElementById('lbl-route-create-profile');
+    if (profileLabel) profileLabel.textContent = t.lbl_gpx_edit_profile || 'Routing profile:';
+    const snapLabel = document.getElementById('lbl-route-create-snap');
+    if (snapLabel) snapLabel.textContent = t.lbl_gpx_edit_snap || 'Snap to roads/paths';
+    const cancelLabel = document.querySelector('#route-create-cancel-btn .btn-label');
+    if (cancelLabel) cancelLabel.textContent = t.btn_cancel || 'Cancel';
+
+    const profileSel = document.getElementById('routeCreateProfile');
+    if (profileSel) {
+        const optionKeys = {
+            'foot-hiking': 'gpx_edit_profile_run',
+            'cycling-mountain': 'gpx_edit_profile_mtb'
+        };
+        for (const value of GPX_EDIT_PROFILES) {
+            const opt = profileSel.querySelector('option[value="' + value + '"]');
+            if (opt && t[optionKeys[value]]) opt.textContent = t[optionKeys[value]];
+        }
+        // Re-read the shared prefs rather than trusting the DOM: the editor's own picker
+        // writes the same setting, and either panel may have been the last to change it.
+        profileSel.value = routingPrefs.profile;
+        profileSel.disabled = !!(st && st.busy);
+    }
+
+    // Snapping needs the backend proxy; without it the box is off and locked and the route
+    // becomes a straight line, exactly as in the editor.
+    const snapBox = document.getElementById('routeCreateSnap');
+    if (snapBox) {
+        snapBox.disabled = !routingAvailable || !!(st && st.busy);
+        snapBox.checked = routingAvailable && routingPrefs.snap;
+    }
+
+    // The step prompt is duplicated here because the status line is the only copy visible
+    // while the panel is folded away on mobile, and the panel is the only copy visible once
+    // some other action has overwritten the status line.
+    const step = document.getElementById('route-create-step');
+    if (step) {
+        step.textContent = !st ? ''
+            : st.busy ? (t.status_gpx_edit_routing || 'Calculating route…')
+                : !st.start ? (t.step_route_create_start || 'Click the start point.')
+                    : (t.step_route_create_end || 'Click the end point.');
     }
 }
 
@@ -9299,6 +9652,14 @@ map.on('click', (e) => {
         if (e.lngLat) handleGpxEditMapClick(e.lngLat.lat, e.lngLat.lng);
         return;
     }
+    if (routeCreateMode) {
+        // A browser reports a double-click as two clicks, so double-click-to-zoom would
+        // otherwise place the start and the end on the same pixel. `detail` is the click
+        // count on a real mouse and 0/1 for a synthesized tap, so touch pays nothing.
+        if (e.originalEvent && e.originalEvent.detail > 1) return;
+        if (e.lngLat) handleRouteCreateMapClick(e.lngLat.lat, e.lngLat.lng);
+        return;
+    }
     if (poiPlacementMode) {
         if (e.lngLat) handlePoiPlacementClick(e.lngLat.lat, e.lngLat.lng);
         return;
@@ -9336,6 +9697,10 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (gpxEditMode) {
         cancelGpxEditMode();   // prompts when there are unsaved edits
+        return;
+    }
+    if (routeCreateMode) {
+        cancelRouteCreation();
         return;
     }
     if (poiPlacementMode) {
