@@ -604,9 +604,13 @@ button {
     background-color: #256f46;
 }
 
+/* Three labelled buttons no longer fit one row on a narrow panel; flex-basis 30% lets them
+   wrap to a second row instead of clipping their labels, as the Clear/Edit/Download row
+   above already does. */
 .gpx-action-row .gpx-btn,
+.gpx-action-row .route-create-btn,
 .gpx-action-row .poi-btn {
-    flex: 1;
+    flex: 1 1 30%;
     width: auto;
     margin-top: 0;
 }
@@ -1746,6 +1750,48 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     cursor: grabbing;
     transform: scale(1.25);
     border-color: #673ab7;
+}
+
+/* ── Create route ───────────────────────────────────────────────────────────── */
+/* The same purple as Edit track: both make geometry out of the routing service, and the
+   colour is what says the two belong together. Sized like its row-mates (12px/14px), not
+   like the Edit button in the narrower action row below it. */
+.route-create-btn {
+    background-color: #7e57c2;
+    color: #fff;
+    padding: 12px;
+    font-size: 14px;
+    width: 100%;
+    margin-top: 5px;
+    transition: all 0.3s ease;
+}
+
+.route-create-btn:hover {
+    background-color: #673ab7;
+}
+
+.route-create-btn.active {
+    background-color: #673ab7;
+    outline: 2px solid #b39ddb;
+}
+
+.route-create-cancel-btn {
+    flex: 1;
+    padding: 8px;
+    font-size: 13px;
+}
+
+/* Crosshair cursor while picking the start and end points */
+#map.route-create-active .maplibregl-canvas {
+    cursor: crosshair !important;
+}
+
+/* The placed start point. Borrows the editor's endpoint handle so it already looks like the
+   handle it becomes, but it is not draggable and must not eat the second click when the two
+   land close together. */
+.gpx-edit-handle.route-create-start {
+    cursor: default;
+    pointer-events: none;
 }
 
 /* Radius controls injected inside an analysis section */

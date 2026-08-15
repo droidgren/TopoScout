@@ -184,7 +184,7 @@ const LANG_SV = {
     tutorial_slope_title: "Lutningskarta",
     tutorial_slope_text: "Generera en färgkodad lutningskarta inom sökradien. Använd opacitetsreglaget och filterinställningarna för att markera specifika lutningsvinklar. Om du först avmarkerar Visa radie skapas lutningskartan för hela den synliga kartan.",
     tutorial_routes_title: "Lägg till spår och POI:er",
-    tutorial_routes_text: "• Spår: Ladda en GPX-fil för att visa ett spår på kartan, med inställningar för spårfärg, bredd, avståndsmarkeringar, lutningsfärgning, vägpunkter och höjdprofilen.\n• Redigera spår: Ändra ett laddat spår — tryck på Redigera spår och dra i handtagen längs det. Varje ändring fäster mot riktiga vägar och stigar (stäng av fästningen för att rita på frihand). Ångra, Gör om och Spara finns i panelen, och Ladda ner GPX exporterar sedan det redigerade spåret.\n• POI:er: Spara egna intressepunkter – logga in med Google, tryck på Lägg till POI och tryck sedan på kartan för att placera en stjärnnål med namn, beskrivning och färg. POI:er visar höjd och kan flyttas, redigeras eller tas bort; kryssrutan Visa POI:er växlar dem på kartan.",
+    tutorial_routes_text: "• Spår: Ladda en GPX-fil för att visa ett spår på kartan, med inställningar för spårfärg, bredd, avståndsmarkeringar, lutningsfärgning, vägpunkter och höjdprofilen.\n• Skapa spår: Tryck på Skapa spår, klicka på en startpunkt och en slutpunkt, så beräknar appen ett spår mellan dem längs riktiga vägar och stigar — och öppnar det direkt i spårredigeraren.\n• Redigera spår: Ändra ett laddat spår — tryck på Redigera spår och dra i handtagen längs det. Varje ändring fäster mot riktiga vägar och stigar (stäng av fästningen för att rita på frihand). Ångra, Gör om och Spara finns i panelen, och Ladda ner GPX exporterar sedan det redigerade spåret.\n• POI:er: Spara egna intressepunkter – logga in med Google, tryck på Lägg till POI och tryck sedan på kartan för att placera en stjärnnål med namn, beskrivning och färg. POI:er visar höjd och kan flyttas, redigeras eller tas bort; kryssrutan Visa POI:er växlar dem på kartan.",
     tutorial_search_title: "Sök & Position",
     tutorial_search_text: "Sök efter valfri plats med namn eller koordinater — decimalgrader (57,811266 12,091825), grader/minuter/sekunder (57° 44′ 24″ N, 12° 06′ 36″ Ö), grader + decimalminuter (57° 44,400′ N) eller en Plus-kod som R36R+GP4 Göteborg. Använd GPS-knappen för att hoppa till din position.",
     tutorial_share_title: "Dela kartvy",
@@ -246,6 +246,19 @@ const LANG_SV = {
     btn_gpx_clear: "Rensa spår",
     btn_gpx_download: "Ladda ner GPX",
     status_gpx_downloaded: "GPX nedladdad som {name}.",
+
+    // --- Skapa spår ---
+    btn_route_create: "Skapa spår",
+    route_create_hint: "Klicka på en startpunkt på kartan och sedan på en slutpunkt. Spåret följer riktiga vägar och stigar mellan punkterna och öppnas i spårredigeraren.",
+    route_create_confirm_replace: "Om du skapar ett spår ersätts spåret som ligger på kartan. Fortsätt?",
+    step_route_create_start: "Klicka på startpunkten.",
+    step_route_create_end: "Klicka på slutpunkten.",
+    status_route_create_start: "Klicka på startpunkten för ditt nya spår.",
+    status_route_create_end: "Klicka nu på slutpunkten.",
+    status_route_create_too_close: "Det är startpunkten — klicka längre bort.",
+    status_route_create_too_far: "Punkterna ligger {n} km isär — välj två som ligger närmare varandra.",
+    status_route_create_failed: "Kunde inte skapa något spår mellan de två punkterna.",
+    status_route_create_done: "Spår skapat ({n} punkter) — dra i handtagen för att ändra det och spara sedan.",
 
     // --- Redigering av GPX-spår ---
     btn_gpx_edit: "Redigera spår",
