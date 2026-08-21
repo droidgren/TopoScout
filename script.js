@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.23.1";
-const BUILD_NUMBER = "3033";
+const APP_VERSION = "2.24.0";
+const BUILD_NUMBER = "3034";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1643,7 +1643,6 @@ clearRefreshUrlFlag();
 let waterAnalysisEnabled = false;
 let climbStepRes = 10;
 let climbScanAngles = 32;
-let mobileElevationText = null;
 let peakMinPixelDistance = normalizePeakMinPixelDistance(localStorage.getItem('topo_peak_min_pixel_dist'));
 
 function normalizePeakMinPixelDistance(value) {
@@ -2205,6 +2204,19 @@ function updateLanguage() {
         document.getElementById('app-title').textContent = t.title;
         document.title = t.title;
         document.getElementById('liveLabel').textContent = t.live_label;
+        // Tile labels are static text now, written here rather than rebuilt on every pan.
+        const zoomLbl = document.getElementById('lbl-zoom');
+        if (zoomLbl) zoomLbl.textContent = t.zoom_label || 'Zoom';
+        const scaleLbl = document.getElementById('lbl-scale');
+        if (scaleLbl) scaleLbl.textContent = t.scale_label || 'Scale';
+        // The footer shows no words, so the label that used to explain the distance survives
+        // only as the pin's tooltip and its accessible name.
+        const gpsPair = document.getElementById('center-gps-dist');
+        if (gpsPair) {
+            const gpsLabel = t.center_to_gps_label || 'Center to GPS';
+            gpsPair.title = gpsLabel;
+            gpsPair.setAttribute('aria-label', gpsLabel);
+        }
         document.getElementById('lbl-layers').textContent = t.lbl_layers;
         document.getElementById('lbl-radius').textContent = t.lbl_radius + ' (' + distUnitLabel() + '):';
         document.getElementById('lbl-points').textContent = t.lbl_points;
@@ -6552,41 +6564,49 @@ window.adjustNumber = function (inputId, amount) {
     }
 };
 
+// Show or hide one readout wrapper and, when shown, write its value into the child span the
+// markup provides. `value` may be a function so an expensive computation is skipped entirely
+// while that readout is switched off — updateUI() runs on every frame of a pan.
+function setReadout(wrapper, valueId, shown, value) {
+    if (!wrapper) return;
+    if (!shown) {
+        wrapper.style.display = 'none';
+        return;
+    }
+    const el = document.getElementById(valueId);
+    if (el) el.textContent = typeof value === 'function' ? value() : value;
+    wrapper.style.display = '';
+}
+
 function updateUI() {
     if (!zoomLabel) return;
     const t = translations[currentLang];
     const zoom = map.getZoom();
+    // Each readout is a wrapper carrying the id and the show/hide, with its label written once
+    // by the translation pass and only the value rewritten here — so a pan does not retranslate
+    // the panel, and the zoom label is no longer the one hardcoded English string in the set.
     const displayZoom = Number.isInteger(zoom) ? zoom.toString() : zoom.toFixed(1);
-    zoomLabel.innerText = 'Zoom: ' + displayZoom;
-    zoomLabel.style.display = isZoomShown() ? '' : 'none';
+    setReadout(zoomLabel, 'zoom-value', isZoomShown(), displayZoom);
 
-    const scaleLabel = document.getElementById('scale-level');
-    if (scaleLabel) {
-        if (isScaleShown()) {
-            scaleLabel.innerText = (t.scale_label || 'Scale') + ': ' + formatScale(niceScaleDenominator(computeScaleDenominator()));
-            scaleLabel.style.display = '';
-        } else {
-            scaleLabel.style.display = 'none';
-        }
-    }
+    setReadout(
+        document.getElementById('scale-level'), 'scale-value', isScaleShown(),
+        () => formatScale(niceScaleDenominator(computeScaleDenominator())));
 
-    const gpsDist = document.getElementById('center-gps-dist');
-    if (gpsDist) {
-        if (lastGpsPosition && isCenterGpsShown()) {
+    setReadout(
+        document.getElementById('center-gps-dist'), 'center-gps-value',
+        !!lastGpsPosition && isCenterGpsShown(),
+        () => {
             const c = map.getCenter();
-            const m = haversineDistance(c.lat, c.lng, lastGpsPosition.lat, lastGpsPosition.lng);
-            gpsDist.innerText = (t.center_to_gps_label || 'Center to GPS') + ': ' + formatDistance(m);
-            gpsDist.style.display = '';
-        } else {
-            gpsDist.style.display = 'none';
-        }
-    }
+            return formatDistance(haversineDistance(c.lat, c.lng, lastGpsPosition.lat, lastGpsPosition.lng));
+        });
 
     const coordsLabel = document.getElementById('coords-level');
     if (coordsLabel) {
         if (isCoordsShown()) {
             const c = map.getCenter();
-            coordsLabel.innerText = (t.coords_label || 'Coords') + ': ' + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5);
+            // No "Coords:" prefix any more — the pair identifies itself, and the label the
+            // footer used to carry survives only as the tooltip.
+            coordsLabel.textContent = c.lat.toFixed(5) + ', ' + c.lng.toFixed(5);
             coordsLabel.title = t.coords_copy_hint || 'Tap to copy';
             coordsLabel.style.display = '';
         } else {
@@ -6594,13 +6614,21 @@ function updateUI() {
         }
     }
 
-    // The row itself goes when every readout in it is off, so the header sits straight on the
-    // elevation box instead of over an empty flex item still collecting the panel's 10px gap.
-    const metricsRow = document.querySelector('.header-metrics');
-    if (metricsRow) {
-        const anyShown = Array.from(metricsRow.children)
-            .some((el) => el.style.display !== 'none');
-        metricsRow.style.display = anyShown ? '' : 'none';
+    // A hidden readout is still a child, so :only-child cannot spot the lone-item cases in
+    // CSS — count them here instead. The footer line goes when both its items are off, and
+    // whatever is left alone centres rather than sitting against an edge as a fragment. The
+    // tile row always has the elevation hero, so it never hides and the box never disappears.
+    const shownCount = (el) => Array.from(el.children)
+        .filter((child) => child.style.display !== 'none').length;
+
+    const tiles = document.querySelector('.data-tiles');
+    if (tiles) tiles.classList.toggle('solo', shownCount(tiles) === 1);
+
+    const foot = document.getElementById('data-box-foot');
+    if (foot) {
+        const shown = shownCount(foot);
+        foot.style.display = shown ? '' : 'none';
+        foot.classList.toggle('solo', shown === 1);
     }
 
     const searchCenter = getSearchCenter();
@@ -6708,7 +6736,6 @@ let centerElevationRunId = 0;
 async function updateCenterElevation() {
     if (!centerHeightDisplay) return;
     const runId = ++centerElevationRunId;
-    const useCompactElevationStatus = window.innerWidth <= 600;
     const center = map.getCenter();
     setAnalysisButtonsDisabled(true);
     centerHeightDisplay.textContent = "...";
@@ -6724,11 +6751,6 @@ async function updateCenterElevation() {
 
     const showNoData = () => {
         centerHeightDisplay.textContent = "N/A";
-        if (useCompactElevationStatus) {
-            mobileElevationText = "N/A";
-            const t = translations[currentLang];
-            statusDiv.textContent = (t.status_elevation || "Elevation") + ": N/A";
-        }
     };
 
     try {
@@ -6739,11 +6761,6 @@ async function updateCenterElevation() {
             showNoData();
         } else {
             centerHeightDisplay.textContent = formatElevation(h);
-            if (useCompactElevationStatus) {
-                const t = translations[currentLang];
-                mobileElevationText = formatElevation(h);
-                statusDiv.textContent = (t.status_elevation || "Elevation") + ": " + mobileElevationText;
-            }
         }
     } catch (err) {
         if (runId !== centerElevationRunId) return;

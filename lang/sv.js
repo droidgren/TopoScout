@@ -1,9 +1,9 @@
 const LANG_SV = {
     title: "TopoScout",
     live_label: "HÖJD ÖVER HAVET",
+    zoom_label: "Zoom",
     scale_label: "Skala",
     center_to_gps_label: "Centrum till GPS",
-    coords_label: "Koordinater",
     coords_copy_hint: "Tryck för att kopiera",
     lbl_layers: "Kartlager:",
     lbl_radius: "Sökradie",

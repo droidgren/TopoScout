@@ -1,9 +1,9 @@
 const LANG_EN = {
     title: "TopoScout",
     live_label: "ELEVATION",
+    zoom_label: "Zoom",
     scale_label: "Scale",
     center_to_gps_label: "Center to GPS",
-    coords_label: "Coords",
     coords_copy_hint: "Tap to copy",
     lbl_layers: "Map Layer:",
     lbl_radius: "Search Radius",
