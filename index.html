@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3027">
+    <link rel="stylesheet" href="style.css?v=3028">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,7 +71,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.22.0</span> (Build <span id="app-build">3027</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.22.0</span> (Build <span id="app-build">3028</span>)
             </p>
 
             <details
@@ -759,13 +759,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3027"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3028"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3027"></script>
-    <script defer src="lang/sv.js?v=3027"></script>
-    <script defer src="script.js?v=3027"></script>
+    <script defer src="lang/en.js?v=3028"></script>
+    <script defer src="lang/sv.js?v=3028"></script>
+    <script defer src="script.js?v=3028"></script>
 </body>
 
 </html>

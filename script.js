@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.22.0";
-const BUILD_NUMBER = "3027";
+const BUILD_NUMBER = "3028";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1735,6 +1735,7 @@ let gpsMarker = null;          // native maplibregl.Marker for live GPS position
 let gpsAccuracyCircle = null;  // L.circle showing GPS margin of error (meters)
 let gpsWatchId = null;         // navigator.geolocation watch id (null = tracking off)
 let lastGpsPosition = null;    // {lat, lng} of the most recent GPS fix, or null when tracking is off
+let gpsHasCentered = false;    // true once a fix has recentered the map; keeps later fixes from moving it
 let slopeOverlay = null;
 let extraOverlayLayer = null;
 let slopeLegend = null;
@@ -3704,6 +3705,7 @@ function stopGpsTracking() {
     if (gpsAccuracyCircle) { gpsAccuracyCircle.remove(); gpsAccuracyCircle = null; }
     document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.remove('active'));
     lastGpsPosition = null;
+    gpsHasCentered = false;
     updateUI(); // hide the Center-to-GPS readout now that tracking is off
 }
 
@@ -3724,6 +3726,13 @@ function locateUser() {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         lastGpsPosition = { lat, lng };
         updateUI(); // refresh the Center-to-GPS distance for the new fix
+        // The very first fix of a tracking session recenters the map once, keeping the
+        // user's current zoom. Every later fix only moves the marker and the ring, so the
+        // map never jumps out from under a user who has panned away.
+        if (!gpsHasCentered) {
+            gpsHasCentered = true;
+            map.setView([lat, lng], map.getZoom());
+        }
         if (gpsMarker) {
             gpsMarker.setLngLat([lng, lat]);
         } else {
@@ -3752,19 +3761,16 @@ function locateUser() {
         } else if (gpsAccuracyCircle) {
             gpsAccuracyCircle.remove();
             gpsAccuracyCircle = null;
-            // Signal just tightened to pinpoint — snap to the now-precise position,
-            // keeping the user's current zoom.
-            if (Number.isFinite(acc)) {
-                map.setView([lat, lng], map.getZoom());
-            }
         }
     }
 
     document.querySelectorAll('.gps-toggle').forEach((b) => b.classList.add('active'));
 
-    // Initial fix recenters the map once; continuous updates only move the marker.
+    // Both calls feed the same handler; whichever fix lands first does the single
+    // recentering (guarded by gpsHasCentered), the rest just move the marker.
+    gpsHasCentered = false;
     navigator.geolocation.getCurrentPosition(
-        (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], map.getZoom()); updateGpsMarker(pos); statusDiv.textContent = t.status_done; },
+        (pos) => { updateGpsMarker(pos); statusDiv.textContent = t.status_done; },
         () => { statusDiv.textContent = t.status_gps_error; stopGpsTracking(); },
         { enableHighAccuracy: true }
     );
