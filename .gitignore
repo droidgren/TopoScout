@@ -23,3 +23,4 @@ tests/static-server.mjs
 .github/workflows/playwright.yml
 tests/playwright.config.ts
 tests/package-lock.json
+UTMB_2025.gpx
