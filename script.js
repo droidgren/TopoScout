@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3036";
+const BUILD_NUMBER = "3037";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -7666,7 +7666,7 @@ const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
-    { targetSelector: '.toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
+    { targetSelector: '#controls .toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_tools_title', textKey: 'tutorial_tools_text', expandControls: true },
     { targetSelector: '.layer-row', targetSelectorEnd: '#extra-layer-row', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true, enableRouteOverlay: true },
     { targetSelector: '#radius-controls', targetSelectorEnd: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
