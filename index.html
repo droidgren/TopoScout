@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3034">
+    <link rel="stylesheet" href="style.css?v=3035">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -79,7 +79,7 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
-                    <li><strong>v2.24.0:</strong> The elevation box is now a single <strong>data box</strong>: elevation stays the big number, with Zoom and Scale as tiles beside it and distance-to-GPS and coordinates on a line below. It replaces the separate readout row, and it finally shows on phones too.</li>
+                    <li><strong>v2.24.0:</strong> The elevation box is now a single <strong>data box</strong>: elevation stays the big number, with Zoom and Scale as tiles beside it and distance-to-GPS and coordinates on a line below. Distance-to-GPS and coordinates now show by default, and the box finally appears on phones too.</li>
                     <li><strong>v2.23.1:</strong> The <strong>Route info</strong> panel now uses the same glass and the same +/&minus; minimize button as the control panel. The optional Zoom, Scale and Coordinates readouts moved from beside the status bar to a line under the header, so status messages get the panel's full width.</li>
                     <li><strong>v2.23.0:</strong> Route length, elevation gain/loss and min/max now live in a new <strong>Route info</strong> panel floating over the map — top-left on desktop, a collapsible sheet above the elevation profile on phones — together with Undo, Redo, Save and Cancel. It names the loaded track, so the header reads <em>Route info (UTMB_2025)</em>. Editing no longer means opening the control panel over the map you are shaping.</li>
                     <li><strong>v2.22.1:</strong> Fixed the GPS button recentering the map twice — once right away, and again when the fix tightened to a precise position. It now centers once per GPS session.</li>
@@ -178,28 +178,28 @@
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-zoom" style="font-size: 13px; line-height: 1;">Show zoom</span>
                         <span class="adv-help" id="help-show-zoom" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-zoom">Shows the current zoom level in the panel footer. (Default: Enabled)</span>
+                        <span class="adv-tip" id="tip-show-zoom">Shows the current zoom level in the data box. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
                         <input type="checkbox" id="showScale"
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-scale" style="font-size: 13px; line-height: 1;">Show scale</span>
                         <span class="adv-help" id="help-show-scale" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-scale">Shows the current map scale (e.g. 1:50 000) in the panel footer. (Default: Disabled)</span>
+                        <span class="adv-tip" id="tip-show-scale">Shows the current map scale (e.g. 1:50 000) in the data box. (Default: Disabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
-                        <input type="checkbox" id="showCenterGps"
+                        <input type="checkbox" id="showCenterGps" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-center-gps" style="font-size: 13px; line-height: 1;">Show center to GPS</span>
                         <span class="adv-help" id="help-show-center-gps" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-center-gps">Shows the distance from your GPS position to the map crosshair while GPS is on. (Default: Disabled)</span>
+                        <span class="adv-tip" id="tip-show-center-gps">Shows the distance from your GPS position to the map crosshair, next to a pin in the data box, while GPS is on. (Default: Enabled)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
-                        <input type="checkbox" id="showCoords"
+                        <input type="checkbox" id="showCoords" checked
                             style="margin: 0; width: 16px; height: 16px; cursor: pointer;">
                         <span id="lbl-show-coords" style="font-size: 13px; line-height: 1;">Show coordinates</span>
                         <span class="adv-help" id="help-show-coords" tabindex="0" role="img" onclick="event.preventDefault();event.stopPropagation();">i</span>
-                        <span class="adv-tip" id="tip-show-coords">Shows the coordinates of the map center in the panel footer. Tap to copy. (Default: Disabled)</span>
+                        <span class="adv-tip" id="tip-show-coords">Shows the coordinates of the map center in the data box. Tap to copy. (Default: Enabled)</span>
                     </label>
                 </div>
             </details>
@@ -802,13 +802,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3034"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3035"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3034"></script>
-    <script defer src="lang/sv.js?v=3034"></script>
-    <script defer src="script.js?v=3034"></script>
+    <script defer src="lang/en.js?v=3035"></script>
+    <script defer src="lang/sv.js?v=3035"></script>
+    <script defer src="script.js?v=3035"></script>
 </body>
 
 </html>
