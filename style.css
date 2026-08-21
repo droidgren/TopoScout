@@ -2643,6 +2643,52 @@ body.print-mode .route-info-panel {
     opacity: 1;
 }
 
+/* Both glyphs ship in the button and a breakpoint picks one, the same arrangement as the
+   platform-swapped share icon and the full/short route stat labels — the alternative is
+   re-rendering the button on resize for no gain. The chevron is the mobile one. */
+.ri-icon-chevron {
+    display: none;
+}
+
+/* Mobile: the panel is a bottom sheet sitting directly on top of the elevation profile bar,
+   so its toggle has to be that bar's toggle and not the control panel's. Everything below is
+   .elevation-profile-toggle's look, deliberately duplicated rather than shared — change one
+   and change the other. Placed after the .toggle-btn rules above because a media query adds
+   no specificity, so this only overrides them by coming later. */
+@media (max-width: 600px) {
+    .ri-icon-pm {
+        display: none;
+    }
+
+    .ri-icon-chevron {
+        display: block;
+    }
+
+    .route-info-toggle {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        color: #555;
+        padding: 1px 6px;
+        line-height: 1;
+        transition: transform 0.3s ease;
+    }
+
+    .route-info-toggle:hover {
+        background: #fff;
+        border-color: #888;
+    }
+
+    .route-info-toggle .icon-svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .route-info-panel.minimized .route-info-toggle {
+        transform: rotate(180deg);
+    }
+}
+
 /* Section expand/collapse +/- toggle */
 .section-toggle .icon-svg {
     width: 16px;
