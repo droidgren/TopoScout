@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3033">
+    <link rel="stylesheet" href="style.css?v=3034">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -79,11 +79,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.24.0:</strong> The elevation box is now a single <strong>data box</strong>: elevation stays the big number, with Zoom and Scale as tiles beside it and distance-to-GPS and coordinates on a line below. It replaces the separate readout row, and it finally shows on phones too.</li>
                     <li><strong>v2.23.1:</strong> The <strong>Route info</strong> panel now uses the same glass and the same +/&minus; minimize button as the control panel. The optional Zoom, Scale and Coordinates readouts moved from beside the status bar to a line under the header, so status messages get the panel's full width.</li>
                     <li><strong>v2.23.0:</strong> Route length, elevation gain/loss and min/max now live in a new <strong>Route info</strong> panel floating over the map — top-left on desktop, a collapsible sheet above the elevation profile on phones — together with Undo, Redo, Save and Cancel. It names the loaded track, so the header reads <em>Route info (UTMB_2025)</em>. Editing no longer means opening the control panel over the map you are shaping.</li>
                     <li><strong>v2.22.1:</strong> Fixed the GPS button recentering the map twice — once right away, and again when the fix tightened to a precise position. It now centers once per GPS session.</li>
                     <li><strong>v2.22.0:</strong> New <strong>Create Route</strong> button — click a start point and an end point on the map and the app builds a route between them along real roads and paths, then opens it in the track editor so you can drag handles to shape it. Works without the routing backend too, as a straight line you can still edit.</li>
-                    <li><strong>v2.21.0:</strong> New <strong>Edit track</strong> mode — drag handles along a loaded GPX route to reshape it. Edits snap to real trails and roads via routing (running or MTB), with Undo/Redo and a freehand toggle. Routes that snap far from the track are rejected in favour of a straight line.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -383,18 +383,35 @@
             </div>
         </div>
 
-        <!-- Optional readouts (Advanced settings). Right-aligned under the header buttons so
-             #status below keeps the panel's full width; updateUI() shows and hides each span. -->
-        <div class="header-metrics">
-            <span id="zoom-level" class="zoom-badge">Zoom: 11</span>
-            <span id="scale-level" class="zoom-badge">Scale: --</span>
-            <span id="center-gps-dist" class="zoom-badge" style="display:none;">Center to GPS: -- m</span>
-            <span id="coords-level" class="zoom-badge" style="display:none; cursor:pointer;">Coords: --</span>
-        </div>
-
-        <div class="live-height-box">
-            <span id="liveLabel" class="live-label">ELEVATION</span>
-            <span id="center-h" class="live-value">-- m</span>
+        <!-- The panel's single readout surface: elevation as the hero tile, the optional
+             Zoom/Scale tiles beside it, and distance-to-GPS + coordinates on a divided footer
+             line. updateUI() shows and hides the wrappers carrying #zoom-level, #scale-level,
+             #center-gps-dist and #coords-level; the dividers follow via a CSS sibling rule.
+             Sits outside #controls-content, so it survives minimizing. -->
+        <div id="data-box" class="data-box">
+            <div class="data-tiles">
+                <span class="tile hero">
+                    <span id="liveLabel" class="t-label">ELEVATION</span>
+                    <span id="center-h" class="t-value">-- m</span>
+                </span>
+                <span id="zoom-level" class="tile">
+                    <span id="lbl-zoom" class="t-label">Zoom</span>
+                    <span id="zoom-value" class="t-value">--</span>
+                </span>
+                <span id="scale-level" class="tile">
+                    <span id="lbl-scale" class="t-label">Scale</span>
+                    <span id="scale-value" class="t-value">--</span>
+                </span>
+            </div>
+            <!-- No word labels down here: the pin stands in for "Center to GPS" and a
+                 coordinate pair identifies itself. Both carry the old label text as a title. -->
+            <div id="data-box-foot" class="data-box-foot">
+                <span id="center-gps-dist" class="dbf-pair" style="display:none;">
+                    <svg class="icon-svg pin-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span id="center-gps-value" class="dbf-value">--</span>
+                </span>
+                <span id="coords-level" class="dbf-value" style="display:none;">--</span>
+            </div>
         </div>
 
         <div id="controls-content">
@@ -785,13 +802,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3033"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3034"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3033"></script>
-    <script defer src="lang/sv.js?v=3033"></script>
-    <script defer src="script.js?v=3033"></script>
+    <script defer src="lang/en.js?v=3034"></script>
+    <script defer src="lang/sv.js?v=3034"></script>
+    <script defer src="script.js?v=3034"></script>
 </body>
 
 </html>

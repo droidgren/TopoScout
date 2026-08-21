@@ -66,8 +66,17 @@ body {
         top: 10px;
     }
 
-    .live-height-box {
-        display: none;
+    /* No rule hides .data-box here any more: it is the only place the readouts live, so
+       hiding it on a phone would drop Zoom, Scale and Coords entirely. The layout is the
+       same as desktop; the hero just gives back a couple of pixels, and the footer is free
+       to wrap because a phone panel is in fact wider than the desktop box. */
+    .tile.hero .t-value {
+        font-size: 22px;
+    }
+
+    .data-box-foot {
+        flex-wrap: wrap;
+        row-gap: 2px;
     }
 }
 
@@ -160,21 +169,6 @@ h3 {
     display: flex;
     align-items: flex-end;
     margin-top: 4px;
-}
-
-/* The optional readouts, as one right-aligned line under the header buttons rather than a
-   column beside #status. Flush right because that is the edge they used to occupy — against
-   the left edge they read as a subtitle to the app name. updateUI() hides the whole row when
-   every readout in it is off; the negative margin trims the panel's 10px flex gap to a gap
-   that reads as "attached to the header". */
-.header-metrics {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    column-gap: 10px;
-    row-gap: 1px;
-    margin-top: -6px;
-    text-align: right;
 }
 
 /* MODAL (COMMON DESIGN) */
@@ -384,36 +378,135 @@ h3 {
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 
-.live-height-box {
+/* --- DATA BOX ---
+   The panel's one readout surface. Elevation is the hero tile; Zoom and Scale sit beside it
+   as tiles, and the optional distance-to-GPS and coordinates share a divided footer line.
+   Blue is kept from the old elevation box, but it now means "live data" rather than
+   "elevation" — every value in the panel lives here. */
+.data-box {
     background-color: #e3f2fd;
     border: 1px solid #90caf9;
-    color: #1565c0;
-    padding: 10px;
     border-radius: 8px;
-    text-align: center;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
     margin-bottom: 5px;
 }
 
-#controls.minimized .live-height-box {
+#controls.minimized .data-box {
     background-color: rgba(227, 242, 253, 0.6);
     border: 1px solid rgba(144, 202, 249, 0.4);
     backdrop-filter: blur(2px);
 }
 
-.live-label {
-    font-size: 11px;
+.data-tiles {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.tile {
+    padding: 0 10px;
+    flex: 0 0 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* The divider is a sibling rule, so it appears and disappears with the tiles themselves —
+   nothing in updateUI() has to work out which tile is currently first. */
+.tile + .tile {
+    border-left: 1px solid rgba(21, 101, 192, 0.25);
+}
+
+/* The hero takes the slack, so with no optional tiles shown it fills the box and its
+   text-align below re-centres the elevation exactly where it used to sit. */
+.tile.hero {
+    padding-left: 0;
+    flex: 1 1 auto;
+}
+
+.data-tiles.solo .tile.hero {
+    text-align: center;
+}
+
+/* 9.5px rather than the old 11px, and that is load-bearing: Swedish's
+   "HÖJD ÖVER HAVET" is ~125px at 11px and would push the Scale tile onto a second row. */
+.t-label {
+    font-size: 9.5px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     font-weight: bold;
-    display: block;
-    margin-bottom: 2px;
+    color: #5b7e9c;
+    white-space: nowrap;
+}
+
+.t-value {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1a4b7a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.tile.hero .t-label {
     color: #555;
 }
 
-.live-value {
+.tile.hero .t-value {
     font-size: 24px;
     font-weight: 800;
+    color: #1565c0;
+}
+
+/* Footer line: no word labels. The pin stands in for "Center to GPS" (it carries the label
+   as its title) and a coordinate pair needs no introduction. Dropping those two words is
+   also what keeps the line inside the box in Swedish, where they are the longest strings. */
+.data-box-foot {
+    border-top: 1px solid rgba(21, 101, 192, 0.25);
+    padding-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* One item left: centre it rather than pinning it to an edge, where it reads as a fragment. */
+.data-box-foot.solo {
+    justify-content: center;
+}
+
+.dbf-pair {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.dbf-value {
     font-family: monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #1a4b7a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pin-icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    color: #5b7e9c;
+}
+
+#coords-level {
+    cursor: pointer;
 }
 
 .gold-icon {
@@ -1258,15 +1351,6 @@ select {
 
 #extra-layer-row {
     margin-bottom: 10px;
-}
-
-.zoom-badge {
-    color: #56666f;
-    padding: 0;
-    font-size: 10.5px;
-    font-weight: bold;
-    font-family: monospace;
-    white-space: nowrap;
 }
 
 #status {
