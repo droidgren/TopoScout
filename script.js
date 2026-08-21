@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3034";
+const BUILD_NUMBER = "3035";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -192,8 +192,8 @@ const SHOW_CENTER_GPS_KEY = 'topo_show_center_gps';
 const SHOW_COORDS_KEY = 'topo_show_coords';
 function isZoomShown() { try { return localStorage.getItem(SHOW_ZOOM_KEY) !== 'false'; } catch (e) { return true; } }
 function isScaleShown() { try { return localStorage.getItem(SHOW_SCALE_KEY) === 'true'; } catch (e) { return false; } }
-function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) === 'true'; } catch (e) { return false; } }
-function isCoordsShown() { try { return localStorage.getItem(SHOW_COORDS_KEY) === 'true'; } catch (e) { return false; } }
+function isCenterGpsShown() { try { return localStorage.getItem(SHOW_CENTER_GPS_KEY) !== 'false'; } catch (e) { return true; } }
+function isCoordsShown() { try { return localStorage.getItem(SHOW_COORDS_KEY) !== 'false'; } catch (e) { return true; } }
 
 const MAP_SOURCES = {
     "opentopo": { url: OPENTOPO_URL, attribution: 'OpenTopoMap', maxZoom: 17 },
