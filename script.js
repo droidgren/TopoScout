@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.22.1";
-const BUILD_NUMBER = "3028";
+const APP_VERSION = "2.23.0";
+const BUILD_NUMBER = "3032";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2298,6 +2298,8 @@ function updateLanguage() {
         _updateGpxEditUI();
         // Covers the Create Route button label, its panel labels/options and step text.
         _updateRouteCreateUI();
+        // Covers the floating route panel's title and toggle label.
+        _updateRouteInfoUI();
         const mcToggle = document.getElementById('manual-climb-toggle-btn');
         if (mcToggle) {
             mcToggle.querySelector('.btn-label').textContent = t.btn_manual_climb;
@@ -2336,7 +2338,7 @@ function updateLanguage() {
         const uploadedGpxTitle = document.getElementById('uploaded-gpx-title');
         if (uploadedGpxTitle) uploadedGpxTitle.textContent = isBackendEnabled() ? (t.uploaded_gpx_title || '') : (t.uploaded_gpx_title_local || '');
         renderUploadedFiles();
-        updateGpxTrackInfo();
+        _updateRouteInfoPanel();
 
         // POI labels
         if (document.getElementById('poi-btn')) document.querySelector('#poi-btn .btn-label').textContent = t.btn_add_poi;
@@ -4281,8 +4283,8 @@ window.clearGpxRoute = function () {
     history.replaceState(null, '', location.pathname + (queryString ? '?' + queryString : '') + location.hash);
     const actionRow = document.getElementById('gpx-action-row');
     if (actionRow) actionRow.style.display = 'none';
-    const infoDiv = document.getElementById('gpx-track-info');
-    if (infoDiv) { infoDiv.style.display = 'none'; infoDiv.innerHTML = ''; }
+    // gpxTrackData is already null by here, so this hides the panel.
+    _updateRouteInfoPanel();
     hideElevationProfile();
     statusDiv.textContent = translations[currentLang].status_gpx_cleared;
 };
@@ -4476,32 +4478,6 @@ function computeTrackStats(allSegments) {
     };
 }
 
-function updateGpxTrackInfo() {
-    const infoDiv = document.getElementById('gpx-track-info');
-    if (!infoDiv || !gpxTrackData) return;
-    const t = translations[currentLang];
-    const d = gpxTrackData;
-    const unit = getDistanceUnit();
-    let lengthStr;
-    if (unit === 'mi') {
-        const miles = d.length / 1609.344;
-        lengthStr = miles >= 1 ? miles.toFixed(2) + ' mi' : (d.length * 3.28084).toFixed(0) + ' ft';
-    } else {
-        lengthStr = d.length >= 1000 ? (d.length / 1000).toFixed(2) + ' km' : Math.round(d.length) + ' m';
-    }
-    let html = `<span>${t.gpx_info_length}:</span> ${lengthStr}`;
-    if (d.gain > 0 || d.loss > 0) {
-        html += `<br><span>${t.gpx_info_gain}:</span> +${formatElevation(d.gain)}`;
-        html += `<br><span>${t.gpx_info_loss}:</span> -${formatElevation(d.loss)}`;
-    }
-    if (d.minElev !== null) {
-        html += `<br><span>${t.gpx_info_min_elev}:</span> ${formatElevation(d.minElev)}`;
-        html += `<br><span>${t.gpx_info_max_elev}:</span> ${formatElevation(d.maxElev)}`;
-    }
-    infoDiv.innerHTML = html;
-    infoDiv.style.display = 'block';
-}
-
 // Global unit system: 'metric' (km, m) or 'imperial' (mi, ft). Metric is the
 // canonical internal unit everywhere; we only convert at the UI boundary.
 let unitSystem = 'metric';
@@ -4615,7 +4591,7 @@ function setUnitSystem(value) {
     updateLanguage();
     updateUI();
     rebuildGpxLayer();
-    updateGpxTrackInfo();
+    _updateRouteInfoPanel();
     updateCenterElevation();
     if (map) map.refreshContours();
     if (elevationProfileData && !elevationProfileMinimized) drawElevationProfile();
@@ -5165,7 +5141,7 @@ function applyParsedGpxData(parsedGpx, options = {}) {
     gpxTextIsGenerated = false;
 
     rebuildGpxLayer();
-    updateGpxTrackInfo();
+    _updateRouteInfoPanel();
     showElevationProfile();
 
     if (!options.skipFitBounds) {
@@ -5835,23 +5811,25 @@ function buildElevationProfileData(allSegments) {
     return points;
 }
 
-function getElevationBarHeight() {
-    if (!elevationProfileData) return 0;
-    const container = document.getElementById('elevation-profile');
-    if (!container || container.style.display === 'none') return 0;
-
-    const body = document.getElementById('elevation-profile-body');
-    const rect = body ? body.getBoundingClientRect() : container.getBoundingClientRect();
-    if (rect.height > 0) {
-        return rect.height;
-    }
-
-    if (elevationProfileMinimized) return 26;
-    return window.innerWidth >= 600 ? 150 : 130;
+// How much of the viewport bottom is covered by docked chrome — the elevation profile plus,
+// on mobile, the route info panel stacked above it.
+//
+// Measuring the dock rather than summing its children is what keeps this honest as panels
+// come and go: a hidden panel, a collapsed one mid-transition, and (on desktop) the route
+// panel lifted out of the flex flow by position:fixed all report correctly with no special
+// case. The dock's own height is 0 when everything inside it is display:none.
+function getBottomDockHeight() {
+    const dock = document.getElementById('bottom-dock');
+    if (!dock) return 0;
+    return dock.getBoundingClientRect().height;
 }
 
 function adjustMapControlsForElevation() {
-    const h = getElevationBarHeight();
+    const h = getBottomDockHeight();
+    // #controls and #bottom-dock share z-index 2000 and the dock is later in the DOM, so a
+    // long control panel would otherwise scroll under it and become unreachable. Its CSS
+    // caps max-height against this.
+    document.documentElement.style.setProperty('--bottom-dock-h', Math.ceil(h) + 'px');
     const maplibreBottomRight = document.querySelector('.maplibregl-ctrl-bottom-right');
     const maplibreBottomLeft = document.querySelector('.maplibregl-ctrl-bottom-left');
 
@@ -6334,6 +6312,9 @@ function removeElevationMarker() {
         // Crossing the 600px breakpoint (or rotating the device) moves the
         // GPS/nav groups between corners while the route legend is on.
         updateZoomControlVisibility();
+        // The header has less room to fit into, and crossing the breakpoint adds or removes
+        // the length from it — either way the fitted size is stale.
+        _fitRouteInfoHeadline();
         adjustMapControlsForElevation();
     });
 
@@ -6400,28 +6381,43 @@ function removeElevationMarker() {
         });
     }
 
-    const elevationProfileBody = document.getElementById('elevation-profile-body');
-    if (elevationProfileBody && 'ResizeObserver' in window) {
-        let lastBodyWidth = 0;
-        let lastBodyHeight = 0;
+    // The whole route-panel header is a toggle target, not just its chevron — it is the only
+    // affordance left once the panel is collapsed to a strip. The button is excluded because
+    // its own onclick already fired and the click bubbles up through here.
+    const routeInfoHeader = document.getElementById('route-info-header');
+    if (routeInfoHeader) {
+        routeInfoHeader.addEventListener('click', (e) => {
+            if (e.target.closest('.route-info-toggle')) return;
+            toggleRouteInfoPanel();
+        });
+    }
+
+    // Observes the whole dock, not just the elevation body: both panels animate their
+    // collapse over 0.3s, and the toggles call adjustMapControlsForElevation() synchronously
+    // — before the transition has moved anything. Without this the map controls would settle
+    // one animation behind whichever panel was last toggled.
+    const bottomDock = document.getElementById('bottom-dock');
+    if (bottomDock && 'ResizeObserver' in window) {
+        let lastDockWidth = 0;
+        let lastDockHeight = 0;
         const resizeObserver = new ResizeObserver((entries) => {
             const entry = entries[0];
-            if (!entry || !elevationProfileData) return;
+            if (!entry) return;
 
             const width = entry.contentRect.width;
             const height = entry.contentRect.height;
-            if (Math.abs(width - lastBodyWidth) < 0.5 && Math.abs(height - lastBodyHeight) < 0.5) {
+            if (Math.abs(width - lastDockWidth) < 0.5 && Math.abs(height - lastDockHeight) < 0.5) {
                 return;
             }
 
-            lastBodyWidth = width;
-            lastBodyHeight = height;
+            lastDockWidth = width;
+            lastDockHeight = height;
             adjustMapControlsForElevation();
-            if (!elevationProfileMinimized) {
+            if (elevationProfileData && !elevationProfileMinimized) {
                 scheduleElevationProfileRedraw();
             }
         });
-        resizeObserver.observe(elevationProfileBody);
+        resizeObserver.observe(bottomDock);
     }
 })();
 
@@ -8257,6 +8253,8 @@ function enterGpxEditMode(options = {}) {
     if (mapEl) mapEl.classList.add('gpx-edit-active');
 
     _updateGpxEditUI();
+    // Reveals the Undo/Redo/Save/Cancel row in the floating panel.
+    _updateRouteInfoPanel();
 
     if (options.statusMessage) {
         // Create Route already explained the situation, including a missing backend, and
@@ -8357,9 +8355,14 @@ function _gpxEditCreateHandleMarker(handle) {
 
 function _gpxEditRestyleHandles() {
     const handles = gpxEditState.handles;
+    const last = handles.length - 1;
     handles.forEach((h, k) => {
         if (!h.el) return;
         h.el.classList.toggle('endpoint', _gpxEditIsEndpointHandle(k));
+        // Start and end were the same green, so the two ends of the track looked identical
+        // and you could not tell which one you were about to drag. The k !== 0 guard keeps a
+        // degenerate single-handle state from being start and end at once.
+        h.el.classList.toggle('endpoint-end', k === last && k !== 0);
     });
 }
 
@@ -8883,7 +8886,7 @@ window.saveGpxEdits = function () {
 
     _gpxEditTeardown();
     rebuildGpxLayer();
-    updateGpxTrackInfo();
+    _updateRouteInfoPanel();
     showElevationProfile();
     statusDiv.textContent = t.status_gpx_edit_saved ||
         'Track edits saved. Download GPX now exports the edited track.';
@@ -8903,7 +8906,7 @@ window.cancelGpxEditMode = function () {
 
     _gpxEditTeardown();
     rebuildGpxLayer();
-    updateGpxTrackInfo();
+    _updateRouteInfoPanel();
     showElevationProfile();
     statusDiv.textContent = t.status_gpx_edit_cancelled ||
         'Editing cancelled — the track was restored.';
@@ -8942,6 +8945,8 @@ function _gpxEditTeardown() {
     const mapEl = document.getElementById('map');
     if (mapEl) mapEl.classList.remove('gpx-edit-active');
     _updateGpxEditUI();
+    // gpxEditMode is false by now, so this drops the panel back to read-only.
+    _updateRouteInfoPanel();
 }
 
 // --- Rendering & UI -----------------------------------------------------------------
@@ -8957,7 +8962,7 @@ function _gpxEditRefreshRender() {
         _gpxEditRenderDebounce = null;
         if (!gpxTrackData) return;
         Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
-        updateGpxTrackInfo();
+        _updateRouteInfoPanel();
         if (getGpxShowElevProfile()) showElevationProfile();
     }, 300);
 }
@@ -9085,14 +9090,17 @@ function enterRouteCreateMode() {
     if (manualClimbMode) cancelManualClimbMode();
 
     routeCreateMode = true;
-    routeCreateState = { start: null, marker: null, busy: false, minimizedByUs: false };
+    routeCreateState = { start: null, marker: null, busy: false };
 
     // On a phone the expanded panel covers most of the map, so both clicks would have to
     // land in the strip below it. Fold it away like the POI modal does; the step prompt
     // lives in the status line, which sits outside #controls-content and stays visible.
+    //
+    // Deliberately never unfolded again: the route's metrics and its Save/Cancel now live in
+    // the floating route panel, so there is nothing left in the control panel that finishing
+    // a route requires. Springing it back open would only bury the route just drawn.
     if (window.innerWidth <= 600 && !isControlsMinimized) {
         setControlsMinimized(true);
-        routeCreateState.minimizedByUs = true;
     }
 
     const btn = document.getElementById('route-create-btn');
@@ -9287,12 +9295,7 @@ function _routeCreateForceExit() {
 
 function _routeCreateTeardown() {
     const st = routeCreateState;
-    if (st) {
-        if (st.marker) st.marker.remove();
-        // Only undo a minimize we did ourselves; if the user folded the panel away by hand,
-        // leave it that way.
-        if (st.minimizedByUs && isControlsMinimized) setControlsMinimized(false);
-    }
+    if (st && st.marker) st.marker.remove();
     routeCreateMode = false;
     routeCreateState = null;
 
@@ -9355,6 +9358,198 @@ function _updateRouteCreateUI() {
             : st.busy ? (t.status_gpx_edit_routing || 'Calculating route…')
                 : !st.start ? (t.step_route_create_start || 'Click the start point.')
                     : (t.step_route_create_end || 'Click the end point.');
+    }
+}
+
+// ==========================================
+// 5f. ROUTE INFO PANEL
+// ==========================================
+//
+// The route's metrics and its edit actions, floating over the map rather than living in the
+// control panel. Editing needs both the actions and the map at once, which the control panel
+// cannot give you on a phone — it is a full-width sheet, so reaching Save meant covering the
+// track you were shaping.
+//
+// Two things make this simpler than it looks:
+//   1. Every state is derivable from `gpxTrackData` and `gpxEditMode`, so one function reads
+//      those and sets the whole panel. There is no third piece of state to keep in sync, and
+//      no per-caller display juggling like the old #gpx-track-info had.
+//   2. The layout switch (bottom sheet under 600px, top-left card above) is pure CSS. On
+//      desktop the panel is position:fixed, which also lifts it out of #bottom-dock's flex
+//      flow — so getBottomDockHeight() excludes it without being told to.
+//
+// Button labels and disabled states still come from _updateGpxEditUI(); it addresses them by
+// id and the ids did not change when the markup moved. Only visibility is decided here.
+
+let routeInfoMinimized = false;
+
+const ROUTE_INFO_HEADLINE_PX = 11;      // matches .elevation-profile-label
+const ROUTE_INFO_HEADLINE_MIN_PX = 9;   // below this the name ellipsizes instead
+
+// The loaded track's name for display, or null when there isn't one.
+//
+// Strips only the .gpx extension — deliberately not sanitizeGpxFilename(), which also
+// rewrites filesystem-invalid characters to underscores. That is correct for a download
+// filename and wrong for a label: it would render "Trail: North" as "Trail_ North".
+//
+// Two cases legitimately have no name. A route built by Create Route never had a file, and a
+// cold ?gpx= share link sets both name globals to the opaque backend id — printing that would
+// be worse than printing nothing.
+function currentGpxDisplayName() {
+    const name = currentGpxFilename || currentGpxRawFilename;
+    if (!name || name === currentSharedGpxId) return null;
+    return String(name).replace(/\.gpx$/i, '').trim() || null;
+}
+
+// Shrink the header text just enough to fit one line. A long track name plus the length can
+// overrun the strip on a phone, and the sheet's height is fixed by design — so width is the
+// only axis left to give.
+//
+// One proportional step rather than a stepping loop: the text is a single unwrapped line, so
+// its width scales very nearly linearly with font size, and every attempt costs a forced
+// layout. Past the floor the CSS ellipsis on #route-info-name takes over, which truncates the
+// label and leaves "Route info" and the distance whole.
+function _fitRouteInfoHeadline() {
+    const el = document.getElementById('route-info-headline');
+    const nameEl = document.getElementById('route-info-name');
+    if (!el) return;
+    el.style.fontSize = '';
+    // A hidden panel measures 0 wide; scaling against that would floor the size for the next
+    // time it is shown.
+    if (!el.clientWidth) return;
+
+    // The headline's own scrollWidth cannot be trusted to report the overflow: the name
+    // ellipsizes itself first, so the row always "fits" and the shortfall hides inside the
+    // truncated child. What the name had to give up is therefore part of the measurement.
+    const clipped = nameEl ? nameEl.scrollWidth - nameEl.clientWidth : 0;
+    const overflow = Math.max(el.scrollWidth - el.clientWidth, clipped);
+    // 1px of slack: scrollWidth rounds up, and a sub-pixel difference is not real overflow.
+    if (overflow <= 1) return;
+
+    const natural = el.clientWidth + overflow;
+    const scaled = Math.floor(ROUTE_INFO_HEADLINE_PX * el.clientWidth / natural);
+    el.style.fontSize = Math.max(ROUTE_INFO_HEADLINE_MIN_PX, scaled) + 'px';
+}
+
+window.toggleRouteInfoPanel = function () {
+    const panel = document.getElementById('route-info-panel');
+    if (!panel) return;
+    routeInfoMinimized = !routeInfoMinimized;
+    panel.classList.toggle('minimized', routeInfoMinimized);
+    _updateRouteInfoUI();
+    // Fires before the 0.3s transition has moved anything; the ResizeObserver on #bottom-dock
+    // corrects the offsets as it animates. Same arrangement as toggleElevationProfile().
+    adjustMapControlsForElevation();
+};
+
+// The single source of truth for the panel: what exists, and which of it is actionable.
+function _updateRouteInfoPanel() {
+    const panel = document.getElementById('route-info-panel');
+    if (!panel) return;
+
+    // No track, nothing to report. Hiding rather than emptying keeps the dock's measured
+    // height at zero, which is what drops the map controls back to their CSS defaults.
+    if (!gpxTrackData) {
+        panel.style.display = 'none';
+        adjustMapControlsForElevation();
+        return;
+    }
+
+    panel.style.display = '';
+    _renderRouteStats();
+
+    // Which route this is. Both slots are always written; CSS decides whether the length is
+    // shown here (mobile) or as the first stat row (desktop).
+    const nameEl = document.getElementById('route-info-name');
+    if (nameEl) {
+        const name = currentGpxDisplayName();
+        nameEl.textContent = name ? '(' + name + ')' : '';
+    }
+    const headlineLength = document.getElementById('route-info-headline-length');
+    if (headlineLength) headlineLength.textContent = formatDistance(gpxTrackData.length);
+
+    // Read-only unless editing: a loaded track has nothing to undo, save or cancel, and
+    // showing four dead buttons reads as broken rather than as "not applicable".
+    const actions = document.getElementById('route-info-actions');
+    if (actions) actions.style.display = gpxEditMode ? 'flex' : 'none';
+
+    _updateRouteInfoUI();
+    _fitRouteInfoHeadline();
+    adjustMapControlsForElevation();
+}
+
+// One row per stat on desktop, a single scrolling line of abbreviations on a phone.
+//
+// Both label forms are emitted for every stat and the media query picks one, rather than
+// re-rendering on resize: "Elevation Gain: +10510 m" is three times the width of
+// "Gain: +10510 m" and will not fit a phone, while the abbreviations are needlessly terse on
+// a 300px card that has the room. Length is emitted too but hidden on mobile, where it is
+// promoted into the header instead.
+//
+// The conditionals match what the metrics block always did — a GPX with no elevation data
+// gets a Length row and nothing else, rather than a column of nulls.
+function _renderRouteStats() {
+    const statsEl = document.getElementById('route-info-stats');
+    if (!statsEl || !gpxTrackData) return;
+    const t = translations[currentLang];
+    const d = gpxTrackData;
+
+    const rows = [['length', t.route_info_length || 'Length', t.gpx_info_length, formatDistance(d.length)]];
+    if (d.gain > 0 || d.loss > 0) {
+        rows.push(['gain', t.route_info_gain || 'Gain', t.gpx_info_gain, '+' + formatElevation(d.gain)]);
+        rows.push(['loss', t.route_info_loss || 'Loss', t.gpx_info_loss, '-' + formatElevation(d.loss)]);
+    }
+    if (d.minElev !== null) {
+        rows.push(['min', t.route_info_min || 'Min', t.gpx_info_min_elev, formatElevation(d.minElev)]);
+        rows.push(['max', t.route_info_max || 'Max', t.gpx_info_max_elev, formatElevation(d.maxElev)]);
+    }
+
+    // textContent per cell rather than one innerHTML string: the values are formatted
+    // numbers, but the labels come from the translation files and should never be parsed
+    // as markup.
+    statsEl.textContent = '';
+    for (const [key, short, full, value] of rows) {
+        const stat = document.createElement('div');
+        // is-length is what lets the mobile rule hide this row once the header carries it.
+        stat.className = 'route-stat' + (key === 'length' ? ' is-length' : '');
+        // Redundant on desktop, where the full label is on screen — but on mobile the
+        // abbreviation is all that shows, and this is what spells it out.
+        if (full) stat.title = full;
+        const labelEl = document.createElement('span');
+        labelEl.className = 'route-stat-label';
+        const fullEl = document.createElement('span');
+        fullEl.className = 'lbl-full';
+        fullEl.textContent = (full || short) + ':';
+        const shortEl = document.createElement('span');
+        shortEl.className = 'lbl-short';
+        shortEl.textContent = short + ':';
+        labelEl.appendChild(fullEl);
+        labelEl.appendChild(shortEl);
+        const valueEl = document.createElement('span');
+        valueEl.className = 'route-stat-value';
+        valueEl.textContent = value;
+        stat.appendChild(labelEl);
+        stat.appendChild(valueEl);
+        statsEl.appendChild(stat);
+    }
+}
+
+// Runs on every language switch too, long before any track exists — every lookup is
+// defensive and a hidden panel is a normal state, not an error.
+function _updateRouteInfoUI() {
+    const t = translations[currentLang];
+
+    const title = document.getElementById('route-info-title');
+    if (title) title.textContent = t.route_info_title || 'Route info';
+
+    const toggle = document.getElementById('route-info-toggle');
+    if (toggle) {
+        const label = routeInfoMinimized
+            ? (t.route_info_expand || 'Expand route info')
+            : (t.route_info_minimize || 'Minimize route info');
+        toggle.title = label;
+        toggle.setAttribute('aria-label', label);
+        toggle.setAttribute('aria-expanded', String(!routeInfoMinimized));
     }
 }
 
@@ -9922,6 +10117,10 @@ function redrawPrintWindow() {
 
 function enterPrintMode() {
     if (printModeState) return;
+    // #printmap-panel anchors to the map's top-left, which on desktop is exactly where the
+    // route info panel floats. Print mode is desktop-only (isMobileDevice() gates the
+    // launcher), so the two always collide; yield the corner for the duration.
+    document.body.classList.add('print-mode');
     const t = translations[currentLang] || {};
     const cont = map._map.getContainer();
 
@@ -10003,6 +10202,7 @@ function enterPrintMode() {
 
 function exitPrintMode() {
     if (!printModeState) return;
+    document.body.classList.remove('print-mode');
     window.removeEventListener('resize', printModeState.onResize);
     if (printModeState.overlay && printModeState.overlay.parentNode) printModeState.overlay.parentNode.removeChild(printModeState.overlay);
     if (printModeState.panel && printModeState.panel.parentNode) printModeState.panel.parentNode.removeChild(printModeState.panel);

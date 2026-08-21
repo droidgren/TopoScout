@@ -51,6 +51,10 @@ body {
     backdrop-filter: blur(5px);
     max-height: 90vh;
     max-height: 90dvh;
+    /* #bottom-dock paints over this panel (same z-index, later in the DOM), so without
+       this the tail of a long control panel scrolls underneath it and cannot be reached.
+       --bottom-dock-h is kept current by adjustMapControlsForElevation(). */
+    max-height: calc(90dvh - var(--bottom-dock-h, 0px));
     overflow-y: auto;
 }
 
@@ -709,20 +713,6 @@ button {
     cursor: crosshair;
 }
 
-.gpx-track-info {
-    background: #f5f5f5;
-    border-radius: 8px;
-    padding: 8px 10px;
-    margin-top: 6px;
-    font-size: 12px;
-    line-height: 1.6;
-    color: #444;
-}
-
-.gpx-track-info span {
-    font-weight: 600;
-}
-
 .gpx-km-label {
     background: rgba(255, 255, 255, 0.85);
     border: 1px solid #666;
@@ -1057,6 +1047,20 @@ body.map-sliders-on .maplibregl-ctrl-bottom-left .slope-legend {
 .icon-btn:hover {
     background: #e2e6ea;
     color: #2563eb;
+}
+
+/* Undo/redo spend most of their life disabled, and on the route panel's translucent
+   background the UA default greying is too faint to read as "unavailable". */
+.icon-btn:disabled {
+    background: #f1f3f5;
+    border-color: #e0e3e7;
+    color: #b0b6bd;
+    cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+    background: #f1f3f5;
+    color: #b0b6bd;
 }
 
 .icon-btn svg {
@@ -1728,14 +1732,30 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     cursor: crosshair !important;
 }
 
+/* The Start/End chips are not redrawn during a drag: _gpxEditRefreshRender() deliberately
+   skips rebuildGpxMarkers(), which would tear down and recreate every marker on every drag.
+   So while editing they mark where the track *used* to begin and end — drag an endpoint and
+   the label stays behind, sitting on top of the handle you are trying to grab. Hide them
+   until the edit is committed; rebuildGpxLayer() on save/cancel redraws them in their new
+   places, by which point this class is already gone. */
+#map.gpx-edit-active .gpx-start-end-label {
+    display: none;
+}
+
 /* Draggable handles on the edited track. touch-action:none is required or mobile
    Chrome pans the map instead of starting the drag. */
+/* The ring colour goes through a custom property so the four states below cascade by source
+   order rather than by specificity. Written the obvious way, `.endpoint.endpoint-end` (0,3,0)
+   would outrank `.dragging` (0,2,0) and the end handle would keep its red ring mid-drag,
+   silently losing the drag feedback. As variables every rule is (0,2,0) and .dragging wins by
+   coming last. */
 .gpx-edit-handle {
+    --handle-ring: #7e57c2;
     width: 14px;
     height: 14px;
     border-radius: 50%;
     background: #fff;
-    border: 3px solid #7e57c2;
+    border: 3px solid var(--handle-ring);
     box-sizing: border-box;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
     cursor: grab;
@@ -1743,13 +1763,18 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
 }
 
 .gpx-edit-handle.endpoint {
-    border-color: #2AAD27;
+    --handle-ring: #2AAD27;
+}
+
+/* Only the last handle — so the end of the track is distinguishable from its start. */
+.gpx-edit-handle.endpoint-end {
+    --handle-ring: #D32F2F;
 }
 
 .gpx-edit-handle.dragging {
+    --handle-ring: #673ab7;
     cursor: grabbing;
     transform: scale(1.25);
-    border-color: #673ab7;
 }
 
 /* ── Create route ───────────────────────────────────────────────────────────── */
@@ -1993,13 +2018,53 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     }
 }
 
-/* --- ELEVATION PROFILE BAR --- */
-.elevation-profile {
+/* --- BOTTOM DOCK --- */
+/* Holds the route info panel stacked above the elevation profile. Both used to position
+   themselves; now the dock owns the anchoring and the flex column does the stacking, so
+   neither needs to know the other's height. pointer-events is off on the dock itself
+   because it spans the full width even when its children are short — without this, the
+   empty strip beside a collapsed bar would swallow map drags.
+
+   Keep this element free of padding and borders: adjustMapControlsForElevation() adds
+   env(safe-area-inset-bottom) on top of the height it measures here, so notch padding on
+   the dock would be counted twice and lift the map controls by double the inset. (The
+   bars therefore still sit under the home indicator, exactly as the elevation bar did
+   before the dock existed. Fixing that means dropping the three `+ env(...)` terms in
+   that function in the same change.)
+
+   Never give this element transform, filter, backdrop-filter, perspective, contain,
+   will-change or opacity < 1. Any of those would both make it the containing block for
+   the desktop panel's position:fixed — dropping the card into this corner — and become
+   the backdrop root for .elevation-profile-body's blur, flattening it to a grey wash. */
+#bottom-dock {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    /* Explicit: flex-start would collapse the full-bleed bars to content width. */
+    pointer-events: none;
+}
+
+#bottom-dock > * {
+    /* No shrinking — the default flex-shrink:1 would squash the elevation canvas if the
+       dock ever grew past the viewport. */
+    flex: 0 0 auto;
+    pointer-events: auto;
+}
+
+/* --- ELEVATION PROFILE BAR --- */
+/* A flex child of #bottom-dock: the column stretches it full-bleed, so it needs no
+   positioning of its own. The inner -body keeps position:relative and its explicit height,
+   which is what the overlay anchors to and what the canvas measures itself against.
+   position:relative + z-index only to make paint order explicit — this bar's upward
+   box-shadow must land on the route panel above it, not under it. */
+.elevation-profile {
+    position: relative;
+    z-index: 1;
     transition: none;
 }
 
@@ -2044,7 +2109,11 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
         cursor: pointer;
         left: 0;
         right: 0;
-        padding: 4px 10px;
+        /* 5px on the left, not 10: .elevation-profile-label adds its own 5px of chip padding
+           on top, which puts its text at 10px — the same left edge as the route panel's
+           header and stats row stacked directly above. The right stays 10px so the two
+           chevrons keep lining up. */
+        padding: 4px 10px 4px 5px;
     }
 
     /* Bigger touch target for dragging track-edit handles with a fingertip. */
@@ -2118,6 +2187,251 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
 
 .elevation-profile.minimized #elevation-canvas {
     display: none;
+}
+
+/* --- ROUTE INFO PANEL --- */
+/* Route metrics + the track-edit actions, floating over the map instead of living in the
+   control panel. Desktop is the base case (a card in the map's top-left, like #controls is
+   written); the mobile override below returns it to the dock flow as a bottom sheet.
+   position:fixed is doing double duty here — it places the card AND lifts it out of
+   #bottom-dock's flex flow, which is what keeps it out of getBottomDockHeight(). */
+.route-info-panel {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    /* Autofit: as wide as the widest row and no wider. A created route with no name and no
+       elevation data has no business reserving the same width as a named 172 km track.
+       max-content rather than relying on the shrink-to-fit an absolutely-positioned box
+       already does, because that resolves against the whole viewport and would let a long
+       name run the card across the map. The cap is the old fixed width, so this only ever
+       makes the card narrower; past it the headline's font-shrink and the name's ellipsis
+       take over. min-width keeps the degenerate case (a bare "Route info" over a single
+       Length row) reading as a card rather than a fragment. */
+    width: max-content;
+    min-width: 170px;
+    max-width: min(300px, calc(100vw - 28px));
+    z-index: 2000;
+}
+
+.route-info-body {
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(5px);
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.route-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    height: 30px;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* "Route info (UTMB_2025)" on desktop, with the length appended on mobile. One wrapper so
+   _fitRouteInfoHeadline() can scale all three parts with a single font-size write; the
+   children inherit it. 11px/700/#555 to match .elevation-profile-label directly below —
+   without that label's translucent chip background, which only exists so it stays legible
+   over the canvas. */
+.route-info-headline {
+    flex: 1;
+    /* Without min-width:0 a flex child refuses to shrink below its content, so the name
+       inside it would never reach its ellipsis. */
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.route-info-title {
+    font-size: inherit;
+    font-weight: 700;
+    color: #555;
+    flex: none;
+}
+
+/* The only part that may be truncated: past the font-size floor the label gives way so the
+   distance beside it stays whole. */
+.route-info-name {
+    font-size: inherit;
+    font-weight: 600;
+    color: #666;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Desktop shows the length as the first stat row instead. */
+.route-info-headline-length {
+    display: none;
+}
+
+.route-info-toggle {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #555;
+    padding: 1px 6px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.route-info-toggle:hover {
+    background: #fff;
+    border-color: #888;
+}
+
+.route-info-toggle .icon-svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+/* Collapsed: the header strip is all that survives, and the chevron flips — same language
+   as the elevation profile bar directly below it. */
+.route-info-panel.minimized .route-info-toggle {
+    transform: rotate(180deg);
+}
+
+/* The collapse animates max-height rather than height because the content is variable —
+   the stat chips come and go with the track's data and the action row only exists while
+   editing, so there is no fixed number to transition to and no reason to make the JS
+   re-measure one. The cap only has to exceed the tallest realistic content. */
+.route-info-content {
+    padding: 0 10px 10px;
+    max-height: 320px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
+}
+
+.route-info-panel.minimized .route-info-content {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+}
+
+/* Desktop has the vertical room, so each stat gets its own line and its full label. The
+   mobile override below turns this into the one-line scrolling strip. */
+.route-info-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Both label variants are always in the DOM and swapped by media query rather than
+   re-rendered on resize: the breakpoint switch is then instant, and the JS only has to
+   re-run when the content itself changes. */
+.route-stat-label .lbl-short {
+    display: none;
+}
+
+.route-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    /* A chip is one unbreakable unit — without this the label and its value split across
+       lines ("Length: 6.59" / "km") as soon as the strip runs short of width. */
+    white-space: nowrap;
+}
+
+.route-stat-label {
+    font-weight: 600;
+    color: #666;
+}
+
+.route-stat-value {
+    color: #222;
+    font-variant-numeric: tabular-nums;
+}
+
+.route-info-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+/* Print map is desktop-only and anchors its settings panel to the same corner. */
+body.print-mode .route-info-panel {
+    display: none !important;
+}
+
+@media (max-width: 600px) {
+
+    /* Back into the dock flow as a full-bleed bottom sheet. The desktop autofit clamps
+       must be cleared too, or the sheet would stop at 300px instead of spanning the phone. */
+    .route-info-panel {
+        position: static;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .route-info-body {
+        border-radius: 0;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .route-info-header {
+        padding: 6px 10px;
+    }
+
+    .route-info-content {
+        padding: 0 10px 8px;
+    }
+
+    /* One scrollable line rather than a wrapping block. Wrapping would change the panel's
+       height whenever a number gained a digit, and every height change moves the MapLibre
+       corners through the dock's ResizeObserver — during a handle drag, where the metrics
+       are rewritten every 300ms, that reads as the zoom controls twitching. */
+    .route-info-stats {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        gap: 0 14px;
+    }
+
+    .route-info-stats::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Abbreviated labels, and Length promoted into the header — between them that is what
+       keeps a 172 km track's numbers on one line without growing the sheet. */
+    .route-stat-label .lbl-full {
+        display: none;
+    }
+
+    .route-stat-label .lbl-short {
+        display: inline;
+    }
+
+    .route-stat.is-length {
+        display: none;
+    }
+
+    .route-info-headline-length {
+        display: inline;
+        flex: none;
+        font-weight: 600;
+        color: #222;
+        font-variant-numeric: tabular-nums;
+    }
 }
 
 /* ============================================================
