@@ -154,18 +154,27 @@ h3 {
     display: block;
 }
 
+/* #status alone now — the readouts moved up under the header, which is what gives a long
+   scan result the panel's full width instead of the ~40% it had beside the badge column. */
 .footer-row {
     display: flex;
-    justify-content: space-between;
     align-items: flex-end;
     margin-top: 4px;
 }
 
-.footer-metrics {
+/* The optional readouts, as one right-aligned line under the header buttons rather than a
+   column beside #status. Flush right because that is the edge they used to occupy — against
+   the left edge they read as a subtitle to the app name. updateUI() hides the whole row when
+   every readout in it is off; the negative margin trims the panel's 10px flex gap to a gap
+   that reads as "attached to the header". */
+.header-metrics {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    column-gap: 10px;
+    row-gap: 1px;
+    margin-top: -6px;
+    text-align: right;
 }
 
 /* MODAL (COMMON DESIGN) */
@@ -1252,11 +1261,12 @@ select {
 }
 
 .zoom-badge {
-    color: #495057;
+    color: #56666f;
     padding: 0;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: bold;
     font-family: monospace;
+    white-space: nowrap;
 }
 
 #status {
@@ -2214,10 +2224,11 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
 }
 
 .route-info-body {
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(5px);
-    border-radius: 10px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+    -webkit-backdrop-filter: blur(5px);
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
     overflow: hidden;
 }
 
@@ -2274,36 +2285,10 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     display: none;
 }
 
-.route-info-toggle {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid #bbb;
-    border-radius: 4px;
-    cursor: pointer;
-    color: #555;
-    padding: 1px 6px;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s ease;
-}
-
-.route-info-toggle:hover {
-    background: #fff;
-    border-color: #888;
-}
-
-.route-info-toggle .icon-svg {
-    width: 14px;
-    height: 14px;
-    display: block;
-}
-
-/* Collapsed: the header strip is all that survives, and the chevron flips — same language
-   as the elevation profile bar directly below it. */
-.route-info-panel.minimized .route-info-toggle {
-    transform: rotate(180deg);
-}
+/* .route-info-toggle has no styling of its own: the button carries .toggle-btn as well, and
+   that is where its whole appearance comes from — borderless, 22px icon, blue on hover, the
+   same control #controls and every section header use. The class stays on the element only so
+   the minimized +/- rule (down with the other .toggle-btn rules) can target this one. */
 
 /* The collapse animates max-height rather than height because the content is variable —
    the stat chips come and go with the track's data and the action row only exists while
@@ -2383,6 +2368,10 @@ body.print-mode .route-info-panel {
     }
 
     .route-info-body {
+        /* The desktop card is 50% glass because it floats over the map with room to spare.
+           A full-bleed sheet on a phone is read at arm's length against whatever tile is
+           underneath, so it stays near-opaque. */
+        background: rgba(255, 255, 255, 0.92);
         border-radius: 0;
         box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
     }
@@ -2561,6 +2550,12 @@ body.print-mode .route-info-panel {
 }
 
 #controls.minimized .toggle-btn .pm-v {
+    opacity: 1;
+}
+
+/* Collapsed: the header strip is all that survives, and the "-" becomes a "+". Same control
+   and same language as the panel opposite it. */
+.route-info-panel.minimized .route-info-toggle .pm-v {
     opacity: 1;
 }
 

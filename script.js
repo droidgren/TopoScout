@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.23.0";
-const BUILD_NUMBER = "3032";
+const APP_VERSION = "2.23.1";
+const BUILD_NUMBER = "3033";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6593,6 +6593,16 @@ function updateUI() {
             coordsLabel.style.display = 'none';
         }
     }
+
+    // The row itself goes when every readout in it is off, so the header sits straight on the
+    // elevation box instead of over an empty flex item still collecting the panel's 10px gap.
+    const metricsRow = document.querySelector('.header-metrics');
+    if (metricsRow) {
+        const anyShown = Array.from(metricsRow.children)
+            .some((el) => el.style.display !== 'none');
+        metricsRow.style.display = anyShown ? '' : 'none';
+    }
+
     const searchCenter = getSearchCenter();
     const markerColor = isLocked ? '#e67e22' : '#007bff';
 
