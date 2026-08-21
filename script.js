@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3035";
+const BUILD_NUMBER = "3036";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6393,7 +6393,7 @@ function removeElevationMarker() {
         });
     }
 
-    // The whole route-panel header is a toggle target, not just its chevron — it is the only
+    // The whole route-panel header is a toggle target, not just its button — it is the only
     // affordance left once the panel is collapsed to a strip. The button is excluded because
     // its own onclick already fired and the click bubbles up through here.
     const routeInfoHeader = document.getElementById('route-info-header');

@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3035">
+    <link rel="stylesheet" href="style.css?v=3036">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -736,7 +736,7 @@
                         <span id="route-info-name" class="route-info-name"></span>
                         <span id="route-info-headline-length" class="route-info-headline-length"></span>
                     </span>
-                    <button id="route-info-toggle" class="toggle-btn route-info-toggle" onclick="toggleRouteInfoPanel()" title="Minimize"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></button>
+                    <button id="route-info-toggle" class="toggle-btn route-info-toggle" onclick="toggleRouteInfoPanel()" title="Minimize"><svg class="icon-svg ri-icon-pm" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg><svg class="icon-svg ri-icon-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
                 </div>
                 <div id="route-info-content" class="route-info-content">
                     <div id="route-info-stats" class="route-info-stats"></div>
@@ -802,13 +802,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3035"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3036"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3035"></script>
-    <script defer src="lang/sv.js?v=3035"></script>
-    <script defer src="script.js?v=3035"></script>
+    <script defer src="lang/en.js?v=3036"></script>
+    <script defer src="lang/sv.js?v=3036"></script>
+    <script defer src="script.js?v=3036"></script>
 </body>
 
 </html>
