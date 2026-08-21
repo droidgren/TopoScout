@@ -317,6 +317,17 @@ const LANG_EN = {
     gpx_info_loss: "Elevation Loss",
     gpx_info_min_elev: "Min Elevation",
     gpx_info_max_elev: "Max Elevation",
+
+    // --- Route info panel ---
+    // Short chip labels; the gpx_info_* strings above are the tooltips.
+    route_info_length: "Length",
+    route_info_gain: "Gain",
+    route_info_loss: "Loss",
+    route_info_min: "Min Elev.",
+    route_info_max: "Max Elev.",
+    route_info_title: "Route info",
+    route_info_minimize: "Minimize route info",
+    route_info_expand: "Expand route info",
     gpx_start: "Start",
     gpx_end: "End",
     elevation_profile: "Elevation Profile",

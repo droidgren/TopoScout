@@ -317,6 +317,17 @@ const LANG_SV = {
     gpx_info_loss: "Höjdminskning",
     gpx_info_min_elev: "Lägsta höjd",
     gpx_info_max_elev: "Högsta höjd",
+
+    // --- Spårinfopanel ---
+    // Korta etiketter för chipen; gpx_info_*-strängarna ovan används som verktygstips.
+    route_info_length: "Längd",
+    route_info_gain: "Upp",
+    route_info_loss: "Ner",
+    route_info_min: "Min höjd",
+    route_info_max: "Max höjd",
+    route_info_title: "Spårinfo",
+    route_info_minimize: "Minimera spårinfo",
+    route_info_expand: "Expandera spårinfo",
     gpx_start: "Start",
     gpx_end: "Mål",
     elevation_profile: "Höjdprofil",
