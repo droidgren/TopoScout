@@ -542,7 +542,11 @@ h3 {
         margin-right: auto;
     }
 
+    /* Block, not the column flex the labelled desktop tile needs: the "|" below is a
+       ::before on the tile itself, and inside a flex column it becomes an item of its own
+       and stacks above the value instead of sitting in front of it. */
     .tile {
+        display: block;
         padding: 0;
     }
 
@@ -572,6 +576,21 @@ h3 {
     .data-box .data-tiles > .tile.lead::before,
     .data-box .data-box-foot > .lead::before {
         content: none;
+    }
+
+    /* Zoom is the only bare figure on the line — elevation carries its unit, scale its
+       "1:", the GPS distance its pin, and a coordinate pair reads as itself. Desktop needs
+       none of this: the tile keeps its "ZOOM" label there.
+
+       A literal in CSS is safe only because zoom_label is "Zoom" in both en.js and sv.js;
+       a third locale that renames it would have to move this into the markup. */
+    #zoom-value::before {
+        content: "Zoom: ";
+    }
+
+    /* All five readouts is the widest the line ever gets, so the prefix gives way first. */
+    .data-box.scale-on #zoom-value::before {
+        content: "Z: ";
     }
 
     .tile.hero .t-value {
