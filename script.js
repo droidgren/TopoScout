@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3039";
+const BUILD_NUMBER = "3040";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6623,6 +6623,23 @@ function updateUI() {
 
     const tiles = document.querySelector('.data-tiles');
     if (tiles) tiles.classList.toggle('solo', shownCount(tiles) === 1);
+
+    // Mobile draws a "|" before every optional readout; the first one must not lead with a
+    // separator, and which one is first depends on what is switched on. display:contents
+    // flattens the tiles and the footer items into one visual row but leaves them in
+    // separate parents, so :first-child cannot see across them — mark it here instead.
+    const optional = [
+        document.getElementById('zoom-level'),
+        document.getElementById('scale-level'),
+        document.getElementById('center-gps-dist'),
+        document.getElementById('coords-level'),
+    ].filter(Boolean);
+    let leadTaken = false;
+    for (const el of optional) {
+        const visible = el.style.display !== 'none';
+        el.classList.toggle('lead', visible && !leadTaken);
+        if (visible) leadTaken = true;
+    }
 
     const foot = document.getElementById('data-box-foot');
     if (foot) {

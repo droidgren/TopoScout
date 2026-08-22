@@ -65,19 +65,6 @@ body {
         right: 10px;
         top: 10px;
     }
-
-    /* No rule hides .data-box here any more: it is the only place the readouts live, so
-       hiding it on a phone would drop Zoom, Scale and Coords entirely. The layout is the
-       same as desktop; the hero just gives back a couple of pixels, and the footer is free
-       to wrap because a phone panel is in fact wider than the desktop box. */
-    .tile.hero .t-value {
-        font-size: 22px;
-    }
-
-    .data-box-foot {
-        flex-wrap: wrap;
-        row-gap: 2px;
-    }
 }
 
 #controls.minimized #controls-content {
@@ -507,6 +494,110 @@ h3 {
 
 #coords-level {
     cursor: pointer;
+}
+
+/* --- MOBILE: the data box is not a box ---
+   Placed here, after the rules above, because a media query adds no specificity: the same
+   selectors at the top of the file would lose to the base definitions simply by coming
+   first. */
+@media (max-width: 600px) {
+    /* --- The data box is not a box on a phone ---
+       Same DOM as desktop, flattened to one line: elevation holds the left edge and the
+       optional readouts clump against the right. The box cost ~100px at the top of a panel
+       that is already full-bleed, and its second row existed only to carry labels that a
+       phone does not need — the values identify themselves.
+
+       display:contents on the two inner groups is what does it: the tiles and the footer
+       items stop being two stacked containers and become direct children of one flex row,
+       with no markup change and nothing for updateUI() to know about. */
+    .data-box {
+        flex-direction: row;
+        align-items: baseline;
+        flex-wrap: nowrap;
+        gap: 7px;
+        background-color: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        margin-bottom: 0;
+        margin-top: -3px;
+        /* All five readouts fill the width exactly; scroll rather than shrink the type.
+           Same arrangement as .route-info-stats on mobile. */
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .data-box::-webkit-scrollbar {
+        display: none;
+    }
+
+    .data-tiles,
+    .data-box-foot {
+        display: contents;
+    }
+
+    /* One auto margin absorbs the free space, so everything after the elevation sits right.
+       With the hero alone there is nothing to push and it falls back to plain left. */
+    .tile.hero {
+        margin-right: auto;
+    }
+
+    .tile {
+        padding: 0;
+    }
+
+    /* The vertical rules and the labels are what made this two rows tall; the pipes below
+       take over the job of separating. */
+    .tile + .tile {
+        border-left: none;
+    }
+
+    .t-label {
+        display: none;
+    }
+
+    /* A pipe before every optional readout. ::before rather than markup, so a separator
+       comes and goes with the readout it belongs to. */
+    .data-tiles > .tile:not(.hero)::before,
+    .data-box-foot > *::before {
+        content: "|";
+        color: #b0bec5;
+        font-weight: 400;
+        margin-right: 7px;
+    }
+
+    /* Which readout comes first depends on what is switched on, and display:contents
+       hides that from :first-child — the tiles and the footer items are siblings visually
+       but not structurally. updateUI() marks the first visible one instead. */
+    .data-box .data-tiles > .tile.lead::before,
+    .data-box .data-box-foot > .lead::before {
+        content: none;
+    }
+
+    .tile.hero .t-value {
+        font-size: 13px;
+    }
+
+    .t-value,
+    .dbf-value {
+        font-size: 10.5px;
+        color: #37474f;
+    }
+
+    .pin-icon {
+        width: 11px;
+        height: 11px;
+        flex: 0 0 11px;
+        align-self: center;
+    }
+
+    /* The minimized panel keeps the line, so the box's translucent-blue minimized styling
+       has to go with the box — otherwise the bare line picks up a tint and an outline. */
+    #controls.minimized .data-box {
+        background-color: transparent;
+        border: none;
+        backdrop-filter: none;
+    }
 }
 
 .gold-icon {
