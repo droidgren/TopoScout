@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3041";
+const BUILD_NUMBER = "3042";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -6640,6 +6640,14 @@ function updateUI() {
         el.classList.toggle('lead', visible && !leadTaken);
         if (visible) leadTaken = true;
     }
+
+    // Zoom carries a written prefix on mobile, spelled out normally and abbreviated once
+    // scale is also on and the line is at its widest. Which one is a CSS choice, but only
+    // the JS knows scale is showing: #scale-level follows #zoom-level, and CSS has no
+    // previous-sibling combinator to look back with.
+    const box = document.getElementById('data-box');
+    const scaleEl = document.getElementById('scale-level');
+    if (box && scaleEl) box.classList.toggle('scale-on', scaleEl.style.display !== 'none');
 
     const foot = document.getElementById('data-box-foot');
     if (foot) {
