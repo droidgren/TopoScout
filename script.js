@@ -2,7 +2,7 @@
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
 const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3040";
+const BUILD_NUMBER = "3041";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -7681,6 +7681,10 @@ let _routeOverlayBeforeTutorial = 'none'; // Route Overlay dropdown value to res
 
 const tutorialSteps = [
     { targetSelector: null, titleKey: 'tutorial_welcome_title', textKey: 'tutorial_welcome_text' },
+    // Early, and no expandControls: the box sits outside #controls-content, so it is on screen
+    // with the panel collapsed. Its labels are stripped on mobile, which is what this step is
+    // for — naming the bare values in the order they appear.
+    { targetSelector: '#data-box', titleKey: 'tutorial_elevation_title', textKey: 'tutorial_elevation_text' },
     { targetSelector: '#share-map-btn', titleKey: 'tutorial_share_title', textKey: 'tutorial_share_text' },
     { targetSelector: '.info-btn', titleKey: 'tutorial_info_title', textKey: 'tutorial_info_text' },
     { targetSelector: '#controls .toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },

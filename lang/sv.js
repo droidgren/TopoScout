@@ -160,8 +160,10 @@ const LANG_SV = {
     tutorial_info_text: "Öppnar infopanelen:\n• Ändringslogg och appversion\n• Språk: engelska / svenska\n• Avancerade inställningar\n• Starta om guiden när du vill",
     tutorial_minimize_title: "Kontrollpanelen",
     tutorial_minimize_text: "Fäller ihop panelen till rubriken — höjden och avläsningarna syns fortfarande.\n• Mobil: tryck på kartan för att fälla ihop, på panelen för att öppna\n• Guiden öppnar varje del efter hand",
-    tutorial_elevation_title: "Höjd i realtid",
-    tutorial_elevation_text: "Här visas höjden ovan havet i kartans mittpunkt. Flytta kartan för att se den uppdateras.",
+    // Named for the elevation box it was written for; that box now carries every live
+    // readout, and on mobile it carries them unlabelled, which is what this step explains.
+    tutorial_elevation_title: "Liveavläsningar",
+    tutorial_elevation_text: "Livevärden för kartans centrum, i ordning:\n• Höjd över havet\n• Zoomnivå\n• Kartskala\n• Avstånd till din GPS-position från hårkorset\n• Koordinater — tryck för att kopiera\nAllt utom höjden kan stängas av under Avancerade inställningar.",
     tutorial_layers_title: "Kartlager & Ledlager",
     tutorial_layers_text: "Välj kartlager och sök sedan efter en plats med namn eller koordinater. Använd GPS-knappen för att hoppa till din aktuella position. Vissa kartlager kräver en gratis API-nyckel.",
     tutorial_layers_tools_text: "• Kartlager: välj kartstil — vissa kräver en gratis API-nyckel\n• Ledlager: ritar markerade leder, och en lista visar dem som syns i vyn\n• Klicka på en led i listan för att visa bara den; Visa alla tar tillbaka alla",

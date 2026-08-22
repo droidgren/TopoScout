@@ -160,8 +160,10 @@ const LANG_EN = {
     tutorial_info_text: "Opens the info panel:\n• Changelog and app version\n• Language: English / Swedish\n• Advanced settings\n• Restart this tour any time",
     tutorial_minimize_title: "Control Panel",
     tutorial_minimize_text: "Collapses the panel to its header — elevation and the readouts stay visible.\n• Mobile: tap the map to collapse, tap the panel to reopen\n• The tour opens each section as it goes",
-    tutorial_elevation_title: "Live Elevation",
-    tutorial_elevation_text: "This display shows the real-time elevation at the map center. Move the map to see it update.",
+    // Named for the elevation box it was written for; that box now carries every live
+    // readout, and on mobile it carries them unlabelled, which is what this step explains.
+    tutorial_elevation_title: "Live Readouts",
+    tutorial_elevation_text: "The live values for the map center, in order:\n• Elevation\n• Zoom\n• Scale\n• Distance to your GPS position from the crosshair\n• Coordinates — tap to copy\nAll but elevation are optional, under Advanced settings.",
     tutorial_layers_title: "Map Layers & Route Overlay",
     tutorial_layers_text: "Choose a map layer, then search for a place by name or coordinates. Use the GPS button to jump to your current location. Some map layers require a free API key.",
     tutorial_layers_tools_text: "• Map layer: pick a map style — some need a free API key\n• Route overlay: draws marked trails, and a legend lists the ones in view\n• Click a trail in the legend to show only that one; Show all brings them back",
