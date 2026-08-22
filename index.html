@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3040">
+    <link rel="stylesheet" href="style.css?v=3041">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -802,13 +802,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3040"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3041"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3040"></script>
-    <script defer src="lang/sv.js?v=3040"></script>
-    <script defer src="script.js?v=3040"></script>
+    <script defer src="lang/en.js?v=3041"></script>
+    <script defer src="lang/sv.js?v=3041"></script>
+    <script defer src="script.js?v=3041"></script>
 </body>
 
 </html>
