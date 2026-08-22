@@ -23,7 +23,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3042">
+    <link rel="stylesheet" href="style.css?v=3043">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -407,8 +407,8 @@
                  coordinate pair identifies itself. Both carry the old label text as a title. -->
             <div id="data-box-foot" class="data-box-foot">
                 <span id="center-gps-dist" class="dbf-pair" style="display:none;">
-                    <svg class="icon-svg pin-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <span id="center-gps-value" class="dbf-value">--</span>
+                    <svg class="icon-svg pin-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><!--
+                 --><span id="center-gps-value" class="dbf-value">--</span>
                 </span>
                 <span id="coords-level" class="dbf-value" style="display:none;">--</span>
             </div>
@@ -802,13 +802,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3042"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3043"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3042"></script>
-    <script defer src="lang/sv.js?v=3042"></script>
-    <script defer src="script.js?v=3042"></script>
+    <script defer src="lang/en.js?v=3043"></script>
+    <script defer src="lang/sv.js?v=3043"></script>
+    <script defer src="script.js?v=3043"></script>
 </body>
 
 </html>
