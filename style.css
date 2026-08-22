@@ -567,6 +567,10 @@ h3 {
         content: "|";
         color: #b0bec5;
         font-weight: 400;
+        /* Not inherited: .tile and .dbf-pair carry no font-size and would fall through to
+           body's 16px, while #coords-level is itself a .dbf-value and would come out at
+           10.5px — three separators, two different sizes. */
+        font-size: 10.5px;
         margin-right: 7px;
     }
 
@@ -590,7 +594,7 @@ h3 {
 
     /* All five readouts is the widest the line ever gets, so the prefix gives way first. */
     .data-box.scale-on #zoom-value::before {
-        content: "Z: ";
+        content: "Z:";
     }
 
     .tile.hero .t-value {
@@ -600,14 +604,24 @@ h3 {
     .t-value,
     .dbf-value {
         font-size: 10.5px;
+        font-weight: 600;
         color: #37474f;
+    }
+
+    /* Blockified as a flex item, which is the point: a block box takes its baseline from
+       its own text, so the digits land on the line instead of on the icon's bottom edge,
+       which is what a nested flex container was aligning by. */
+    .dbf-pair {
+        display: inline;
     }
 
     .pin-icon {
         width: 11px;
         height: 11px;
-        flex: 0 0 11px;
-        align-self: center;
+        /* flex:/align-self: are inert now the pair is inline; margin replaces the gap it
+           lost, rather than leaning on the collapsed whitespace in the markup. */
+        vertical-align: middle;
+        margin-right: 4px;
     }
 
     /* The minimized panel keeps the line, so the box's translucent-blue minimized styling
