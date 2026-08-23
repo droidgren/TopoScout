@@ -1,6 +1,6 @@
 # TopoScout
 
-TopoScout is a browser-based terrain analysis tool for finding high points, comparing climbs, visualizing slope, and overlaying GPX routes directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend. Its designed to work on mobile devices as well, and can be [installed as an app](#installing-as-an-app-pwa).
+TopoScout is a browser-based terrain analysis tool for creating and editing routes, finding high points, comparing climbs, visualizing slope, and overlaying GPX tracks directly on the map. The app runs fully client-side, so terrain analysis happens in the browser without a custom backend. Its designed to work on mobile devices as well, and can be [installed as an app](#installing-as-an-app-pwa).
 
 🌐 Open the [Live demo](https://toposcout.org/) with GPX store.
 
@@ -10,6 +10,8 @@ TopoScout is a browser-based terrain analysis tool for finding high points, comp
 - **Find Highest Points** within a configurable search radius.
 - **Find Climbs** by scanning many directions and ranking routes by cumulative ascent.
 - **Slope Map** overlay with opacity and slope-angle filtering.
+- **Create Route** by clicking a start and an end on the map — the track is built along real roads and trails, then handed straight to the editor.
+- **Edit track** by dragging handles along the route; each drag re-routes and snaps, or draw freehand with snapping off.
 - **GPX route overlay** with customizable styling and route stats.
 - **Points of Interest (POIs)** saved to your Google account, with a custom name, description, and color.
 - **Print map** export of the framed area to a print-ready PDF (A4/A3/A2, WGS 84 or SWEREF 99), desktop only.
@@ -30,10 +32,12 @@ TopoScout focuses on terrain discovery rather than just displaying a single heig
 - **Slope visualization** renders a color-coded raster overlay that highlights shallow terrain, steep hillsides, and very steep ground.
 - **Water filtering** can exclude water-colored areas from analysis to reduce false positives.
 
-### GPX route tools
+### Route tools
 
-The built-in GPX overlay lets you add route context while inspecting the terrain.
+Routes are first-class here: you can **draw one from scratch**, reshape it by hand, or bring in a GPX file — all in the browser, all under **Create Routes and POIs** at the top of the control panel.
 
+- **Create Route**: click a start point, click an end point, and the app builds the track between them along real roads and paths via [self-hosted routing](#self-hosted-routing-openrouteservice), then opens it in the track editor with start/midpoint/end handles already placed. Cancel and `Esc` work throughout, including mid-request. Pairs more than 100 km apart, and second clicks landing on the start point, are refused before any network call. Without the routing backend it still works, as a straight editable line. The new route is an ordinary in-memory track, so **Download GPX** works immediately.
+- **Edit track**: reshape a loaded route by dragging handles along it. Three handles (start, midpoint, end) are placed automatically, and clicking the track adds more; right-click (or long-press) removes one. Each drag re-routes the two sub-segments either side of the moved handle, snapping to real trails and roads via [self-hosted routing](#self-hosted-routing-openrouteservice) — turn **Snap to roads/paths** off for freehand editing. The panel has Undo, Redo, Save and Cancel, and the routing profile can be set to running/walking (default) or bike/mountain bike, and applies per drag rather than per session.
 - Load a local `.gpx` file directly in the browser.
 - Customize track color and line width.
 - Toggle distance labels in kilometers or miles.
@@ -42,7 +46,6 @@ The built-in GPX overlay lets you add route context while inspecting the terrain
 - View route summary stats including distance, elevation gain/loss, and min/max elevation.
 - Open an **elevation profile bar** for the loaded route: hover or drag to scrub along the track, scroll to zoom the profile, and use the arrow keys to step (hold `Shift` for larger steps).
 - Enable **Sync Map with Profile** to pan the map to a blue marker that follows the profile cursor.
-- **Edit track**: reshape a loaded route by dragging handles along it. Three handles (start, midpoint, end) are placed automatically, and clicking the track adds more; right-click (or long-press) removes one. Each drag re-routes the two sub-segments either side of the moved handle, snapping to real trails and roads via [self-hosted routing](#self-hosted-routing-openrouteservice) — turn **Snap to roads/paths** off for freehand editing. The panel has Undo, Redo, Save and Cancel, and the routing profile can be set to running/walking (default) or bike/mountain bike, and applies per drag rather than per session.
 - **Download** the loaded route back to a `.gpx` file (saved under its current name). After saving edits the file is regenerated from the edited geometry, so per-point timestamps and sensor extensions from the original are not preserved.
 - Optionally upload, list, share, rename, and delete GPX routes when the [optional backend](#optional-backend-gpx-upload-and-sharing) is running.
 - To acess your GPX file you log i with your Google account
@@ -149,18 +152,20 @@ Optional overlays can be drawn on top of any base layer from the **Route Overlay
 - Click the **3D** button next to search to turn on 3D terrain relief.
 - Use **Advanced settings** (in the About menu) for **Overzoom**, **Tilt**, and **3D Exaggeration**.
 
-### 3. Run analysis
+### 3. Create routes and POIs
+
+- Expand **Create Routes and POIs** — the first section in the control panel.
+- Click **Create Route**, then click a start and an end on the map to draw a track along real roads and paths, and drag its handles to shape it.
+- Or load an existing GPX file, and use **Edit** to reshape it the same way.
+- Sign in and tap **Add POI** to drop a saved Point of Interest; toggle pins with **Show POIs**.
+- Tune track styling and visibility options, and open the elevation profile to scrub along the route.
+
+### 4. Run analysis
 
 - Open **Find Highest Points** to rank peaks inside the active radius.
 - Open **Find Climbs** to look for strong uphill routes over a fixed measurement distance.
 - Open **Generate Slope Map** to paint the terrain by steepness.
-
-### 4. Add routes and POIs
-
-- Expand **Add Routes and POIs**.
-- Load a GPX file, or sign in and tap **Add POI** to drop a saved Point of Interest.
-- Tune track styling and visibility options, and toggle pins with **Show POIs**.
-- Compare routes and POIs against peak, climb, and slope results already on the map.
+- Compare the results against any route or POIs already on the map.
 
 ### 5. Print a map (desktop)
 
@@ -374,6 +379,7 @@ Routing failures are logged to the container log with the upstream, radius and s
 
 ## Changelog
 
+- **v2.25.1:** **Add Routes and POIs** is now **Create Routes and POIs**, and it has moved from the bottom of the control panel to the top, above the three analysis sections. The old name and the old position both dated from when the section did one thing — overlay a GPX file you had made somewhere else. Since v2.21.0 you can reshape a loaded track by dragging handles along it, and since v2.22.0 you can draw one from nothing by clicking a start and an end, so the section is where routes are *authored*, not where an import is parked; "Add" undersold it and last place buried it under three tools you may never open. The **spotlight tutorial** walks the panel in the new order — the routes step now follows Map Layers & Route Overlay and precedes Find Highest Points — so the tour still reads top to bottom; step count and every other step are unchanged. The radius controls stay with the analysis sections they belong to: they are re-parented into whichever one is open, and the routes section still switches **Show Radius** off when expanded, since it is not a radius-scoped tool. Swedish gains a fix along the way: the panel header said **rutter** while the tutorial step said **spår** for the same section, and both now read **Skapa spår och POI:er**. This README changed with the app — **Create Route** and **Edit track** are named in Core Capabilities, *GPX route tools* is now *Route tools* and leads with creating a route rather than mentioning editing sixteen bullets in, and *Using The App* creates routes before it runs analysis.
 - **v2.25.0:** The app was invisible to search engines and produced a blank preview when anyone shared a link, because `<head>` carried nothing beyond a title and a viewport tag. It now has a descriptive `<title>` and meta description, a `<link rel="canonical">` pinned to `https://toposcout.org/`, full Open Graph and Twitter card tags backed by a real 1200x630 share image, and JSON-LD describing the app. The canonical matters more here than on a normal site: every share link this app generates carries a `?lang=` (often a `?gpx=` too) plus a `#lat/lng/zoom` hash, so the same single page was reachable at unlimited distinct URLs, and it answered on both the apex and `www`. `www.toposcout.org` now 301s to the apex, and `robots.txt` and `sitemap.xml` exist for the first time. **Accessibility:** the header title is now the page's one `<h1>` (rendered pixel-identically, with the keywords in a visually hidden span), and every icon-only button has a localized accessible name — the twelve +/− steppers, the install-bar dismiss, the elevation-profile toggle and the copy-coordinates buttons previously had none at all, and the 3D button's label was stuck in English after switching to Swedish. `<html lang>` now follows the chosen language instead of always claiming `en`. The four collapsible panel sections (“Find Highest Points” and friends) were click-only `<div>`s: unreachable by keyboard and invisible to a screen reader's heading list. They are now `<h2>` headings wrapping real disclosure `<button>`s with `aria-expanded`/`aria-controls` and a focus ring, which also gives the panel a proper H1 → H2 outline. Rendering is unchanged — verified pixel-identical at DPR 3 for all four sections, collapsed and expanded. Also fixed the manual-climb result popup, whose header had shipped as mojibake (`ߓanual Climb`) since the feature landed in `cd36fcc` — the 📏 glyph is restored and the label is translated instead of hard-coded English. **Security headers:** HSTS (staged at a short max-age, to be raised to a year once verified) and a `Permissions-Policy` that confines geolocation to this origin and switches off the camera, microphone and every other device API the app never touches.
 - **v2.24.0:** The blue elevation box became a **data box** holding every live readout in the panel. Elevation keeps the 24 px hero slot; **Zoom** and **Scale** sit beside it as tiles behind thin dividers, and the optional **distance to GPS** and **coordinates** share a divided line below. Those two ship enabled now, alongside zoom — with the readouts no longer competing with the status text for the footer there is room to show them, and the GPS distance costs nothing until GPS is actually on. Scale stays opt-in. On phones the box is not a box at all: the same markup is flattened by a mobile-only media block into one line of small monospace values under the header, elevation holding the left edge and the optional readouts pushed right, pipe-separated. The box cost ~100 px at the top of a panel that is already full-bleed, and its second row existed only to carry labels a phone does not need — the values identify themselves. That drops a minimized panel from ~171 px to ~92 px: a header, a row of numbers and a status message. This replaces the separate readout row added in 2.23.1, which left the panel with two competing surfaces — a bare unlabelled monospace line floating on the panel background, and under it a bordered box that existed to hold one number. Blue is kept but re-read: it now means *live data* rather than *elevation*. The footer line carries no word labels at all — a pin glyph stands in for "Center to GPS" and a coordinate pair introduces itself — which is also what keeps that line inside the box in Swedish, where `Centrum till GPS` and `Koordinater` were the two longest strings in the panel. Height tracks what you have switched on: the dividers are a CSS sibling rule so they appear and vanish with the tiles themselves, the footer line hides when both its items are off, and with every readout disabled the box collapses to exactly the elevation box it replaced. In the shipping default (Zoom only) it is 3 px *shorter* than 2.23.1, because the tile sits beside the elevation rather than on its own line. Two things fell out of the restructure. The box is no longer hidden below 600 px, so phones get Zoom, Scale and coordinates for the first time — and `updateCenterElevation()` no longer mirrors the elevation into the status line there, a workaround that existed only because the box was hidden, which means the mobile status line is finally free for status. And because each readout is now a wrapper with its label written once by the translation pass and only its value rewritten on pan, the hardcoded English `'Zoom: '` prefix is gone; the zoom label is translated like every other label in the panel.
 - **v2.23.1:** GUI consistency pass on the two things v2.23.0 left mismatched. The **Route info** panel now wears the control panel's glass — `rgba(255,255,255,0.5)` with a 5 px backdrop blur, a 12 px radius and the panel's shadow, in place of the near-opaque 94% card it shipped as — so the two cards flanking the map read as one system instead of two. Its minimize control changed with it: the bordered chevron that rotated on collapse is now the same borderless **+**/**−** button the control panel and every section header use, reusing the existing `.toggle-btn` rules rather than duplicating them. The phone sheet deliberately stays near-opaque, since a full-bleed sheet is read against whatever tile happens to be under it. Second, the optional **Zoom**, **Scale**, **Center to GPS** and **Coordinates** readouts moved out of the footer. They had been a right-hand column sharing `.footer-row` with the status text, and with all four enabled they took roughly a third of the panel's width and stood four rows tall, so anything longer than a few words wrapped — on a phone that is worse still, because the status line doubles as the elevation readout there. They are now a single right-aligned line under the header buttons, which keeps them on the edge they already occupied (flush left they would have read as a subtitle to the app name) and hands the status bar the full width. The row hides itself when every readout is switched off, so the header sits straight on the elevation box rather than over an empty gap, and it stays outside `#controls-content` exactly as the footer was — still visible with the panel minimized, and tap-to-copy on the coordinates still works.
