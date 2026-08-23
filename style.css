@@ -1,3 +1,19 @@
+/* Visible to screen readers and crawlers, not to the eye. Used by the <h1> in the header,
+   whose visible half is only the brand mark. position:absolute keeps it out of flow, so it
+   cannot widen the nowrap header row. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -88,7 +104,7 @@ body {
     gap: 8px;
 }
 
-h3 {
+h1#app-title {
     margin: 0;
     font-size: 18px;
     color: #333;
@@ -726,6 +742,19 @@ button {
     margin-top: 4px;
 }
 
+/* Purely semantic wrapper -- it exists to give the panel a heading outline, not a look, so
+   every default an <h2> would bring has to go. */
+.section-heading {
+    margin: 0;
+    font: inherit;
+}
+
+/* Now a <button> rather than a click-only <div>. Everything below the original three
+   declarations is a button reset that restores exactly what the div rendered: `color` and
+   `font` because .icon-svg strokes with currentColor and a button inherits neither; width
+   because a button shrink-wraps, which would strand the .section-toggle's margin-left:auto
+   in the middle of the row; text-align because buttons centre by default (`start`, not
+   `left`, so the computed value matches what the div resolved to). */
 .section-header {
     display: flex;
     justify-content: flex-start;
@@ -733,6 +762,20 @@ button {
     cursor: pointer;
     padding: 4px 0;
     user-select: none;
+    width: 100%;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+}
+
+/* These became keyboard-reachable with the switch to <button>, so the focus ring is the
+   thing that makes that usable. Matches the hover accent above. */
+.section-header:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 .section-header:hover .btn-icon {

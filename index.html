@@ -5,7 +5,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#2196F3">
-    <title>TopoScout</title>
+    <title>TopoScout – Topographic Map Tool for Peaks, Climbs and Slopes</title>
+    <meta name="description" content="TopoScout is a free topographic map tool that finds the highest points, steepest climbs and slope gradients in any area, plus GPX routes and 3D terrain.">
+    <!-- max-image-preview:large is what lets Google show og-image.png at full size. -->
+    <meta name="robots" content="index, follow, max-image-preview:large">
+
+    <!-- Fixed, absolute, and deliberately NOT self-referencing. Every share link this app
+         generates appends ?lang= (and often ?gpx=) plus a #lat/lng/zoom hash, so the site
+         has unlimited crawlable URLs that are all the same document; pinning the canonical
+         collapses them, and folds the droidgren.github.io mirror in with them. Also picks a
+         winner between the apex and www, which both answer 200 (main.py 301s www here). -->
+    <link rel="canonical" href="https://toposcout.org/">
+
+    <!-- Social preview. og:image must be absolute: scrapers do not resolve relative paths. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TopoScout">
+    <meta property="og:url" content="https://toposcout.org/">
+    <meta property="og:title" content="TopoScout – Topographic Map Tool for Peaks, Climbs and Slopes">
+    <meta property="og:description" content="TopoScout is a free topographic map tool that finds the highest points, steepest climbs and slope gradients in any area, plus GPX routes and 3D terrain.">
+    <meta property="og:image" content="https://toposcout.org/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The TopoScout logo on a blue field, with the tagline: find the highest points, steepest climbs and slope gradients in any area.">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:locale:alternate" content="sv_SE">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TopoScout – Topographic Map Tool for Peaks, Climbs and Slopes">
+    <meta name="twitter:description" content="TopoScout is a free topographic map tool that finds the highest points, steepest climbs and slope gradients in any area, plus GPX routes and 3D terrain.">
+    <meta name="twitter:image" content="https://toposcout.org/og-image.png">
+    <meta name="twitter:image:alt" content="The TopoScout logo on a blue field, with the tagline: find the highest points, steepest climbs and slope gradients in any area.">
 
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -23,7 +52,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3043">
+    <link rel="stylesheet" href="style.css?v=3045">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -36,6 +65,57 @@
             (navigator.platform && /^(Mac|iP)/i.test(navigator.platform))) {
             document.documentElement.classList.add('apple-platform');
         }
+    </script>
+    <!-- WebApplication is the SoftwareApplication subtype for a browser app. `offers` with
+         price 0 is what makes it eligible for a rich result at all; without an offer,
+         rating or review Google will parse the entity but never surface it. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://toposcout.org/#website",
+          "url": "https://toposcout.org/",
+          "name": "TopoScout",
+          "description": "TopoScout is a free topographic map tool that finds the highest points, steepest climbs and slope gradients in any area, plus GPX routes and 3D terrain.",
+          "inLanguage": ["en", "sv"]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://toposcout.org/#app",
+          "name": "TopoScout",
+          "url": "https://toposcout.org/",
+          "description": "TopoScout is a free topographic map tool that finds the highest points, steepest climbs and slope gradients in any area, plus GPX routes and 3D terrain.",
+          "applicationCategory": "TravelApplication",
+          "operatingSystem": "Any (web browser)",
+          "browserRequirements": "Requires JavaScript and WebGL2",
+          "inLanguage": ["en", "sv"],
+          "isAccessibleForFree": true,
+          "screenshot": "https://toposcout.org/og-image.png",
+          "image": "https://toposcout.org/og-image.png",
+          "featureList": [
+            "Find the highest points within a radius",
+            "Calculate maximum ascent and compare climbs",
+            "Visualise slope steepness",
+            "Overlay and edit GPX routes",
+            "3D terrain with hillshade and contour lines",
+            "Works offline as an installable PWA"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "author": {
+            "@type": "Person",
+            "name": "droidgren",
+            "url": "https://github.com/droidgren"
+          },
+          "isPartOf": { "@id": "https://toposcout.org/#website" }
+        }
+      ]
+    }
     </script>
 </head>
 
@@ -71,7 +151,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.23.0</span> (Build <span id="app-build">3032</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.25.0</span> (Build <span id="app-build">3045</span>)
             </p>
 
             <details
@@ -79,11 +159,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.25.0:</strong> Shared links now get a real preview card, and search engines see a title, description, canonical URL and structured data. Accessibility pass: every icon-only button has a name, the four panel sections became keyboard-reachable headings, and the page now declares the language it is showing. HTTPS is enforced and the device APIs the app never uses are switched off.</li>
                     <li><strong>v2.24.0:</strong> The elevation box is now a single <strong>data box</strong>: elevation stays the big number, with Zoom and Scale as tiles beside it and distance-to-GPS and coordinates on a line below. Distance-to-GPS and coordinates now show by default. On phones it is a single compact line instead of a box.</li>
                     <li><strong>v2.23.1:</strong> The <strong>Route info</strong> panel now uses the same glass and the same +/&minus; minimize button as the control panel. The optional Zoom, Scale and Coordinates readouts moved from beside the status bar to a line under the header, so status messages get the panel's full width.</li>
                     <li><strong>v2.23.0:</strong> Route length, elevation gain/loss and min/max now live in a new <strong>Route info</strong> panel floating over the map — top-left on desktop, a collapsible sheet above the elevation profile on phones — together with Undo, Redo, Save and Cancel. It names the loaded track, so the header reads <em>Route info (UTMB_2025)</em>. Editing no longer means opening the control panel over the map you are shaping.</li>
                     <li><strong>v2.22.1:</strong> Fixed the GPS button recentering the map twice — once right away, and again when the fix tightened to a precise position. It now centers once per GPS session.</li>
-                    <li><strong>v2.22.0:</strong> New <strong>Create Route</strong> button — click a start point and an end point on the map and the app builds a route between them along real roads and paths, then opens it in the track editor so you can drag handles to shape it. Works without the routing backend too, as a straight line you can still edit.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -374,7 +454,11 @@
         <div class="header-row">
             <span class="title-group">
                 <svg class="icon-svg app-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
-                <h3 id="app-title">TopoScout</h3>
+                <!-- The page's one and only <h1>. The visible half stays the compact brand
+                     mark the header has room for; the hidden half says what the page actually
+                     is, for search engines and screen readers. updateLanguage() rewrites the
+                     two halves separately -- see the note there before touching this. -->
+                <h1 id="app-title">TopoScout<span id="app-title-sr" class="sr-only"> — topographic map tool for finding highest points, climbs and steep slopes</span></h1>
             </span>
             <div class="header-buttons">
                 <button id="share-map-btn" class="circle-btn share-circle-btn" onclick="generateShareLink()" title="Share Map View" aria-label="Share Map View"><svg class="icon-svg share-icon-android" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><svg class="icon-svg share-icon-apple" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>
@@ -489,11 +573,18 @@
 
             <!-- Find Highest Points (collapsible) -->
             <div id="group-points" class="section-group">
-                <div class="section-header" onclick="toggleSection('section-points')">
-                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 8 5-5 5 15H2L8 10z"/><line x1="8" y1="2" x2="8" y2="8"/><polyline points="5 5 8 8 11 5"/></svg>
-                    <span id="section-points-title">Find Highest Points</span>
-                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
-                </div>
+                <!-- A disclosure button inside a heading: the <h2> gives the panel a real outline
+                     under the <h1>, and the <button> makes the control keyboard-reachable and
+                     announces its open/closed state. setSectionExpanded() keeps aria-expanded in
+                     sync -- it is the single choke point every open/close path goes through. -->
+                <h2 class="section-heading">
+                    <button type="button" class="section-header" aria-expanded="false"
+                        aria-controls="section-points" onclick="toggleSection('section-points')">
+                        <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4 8 5-5 5 15H2L8 10z"/><line x1="8" y1="2" x2="8" y2="8"/><polyline points="5 5 8 8 11 5"/></svg>
+                        <span id="section-points-title">Find Highest Points</span>
+                        <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
+                    </button>
+                </h2>
                 <div id="section-points" class="section-content">
                     <div class="control-row">
                         <span id="lbl-points" class="control-label">Num Points:</span>
@@ -509,11 +600,18 @@
 
             <!-- Find Climbs (collapsible) -->
             <div id="group-climbs" class="section-group">
-                <div class="section-header" onclick="toggleSection('section-climbs')">
-                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-                    <span id="section-climbs-title">Find Climbs</span>
-                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
-                </div>
+                <!-- A disclosure button inside a heading: the <h2> gives the panel a real outline
+                     under the <h1>, and the <button> makes the control keyboard-reachable and
+                     announces its open/closed state. setSectionExpanded() keeps aria-expanded in
+                     sync -- it is the single choke point every open/close path goes through. -->
+                <h2 class="section-heading">
+                    <button type="button" class="section-header" aria-expanded="false"
+                        aria-controls="section-climbs" onclick="toggleSection('section-climbs')">
+                        <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                        <span id="section-climbs-title">Find Climbs</span>
+                        <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
+                    </button>
+                </h2>
                 <div id="section-climbs" class="section-content">
                     <div class="control-row">
                         <span id="lbl-climb-dist" class="control-label">Measure Dist. (m):</span>
@@ -565,11 +663,18 @@
 
             <!-- Generate Slope Map (collapsible) -->
             <div id="group-slope" class="section-group">
-                <div class="section-header" onclick="toggleSection('section-slope')">
-                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
-                    <span id="section-slope-title">Generate Slope Map</span>
-                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
-                </div>
+                <!-- A disclosure button inside a heading: the <h2> gives the panel a real outline
+                     under the <h1>, and the <button> makes the control keyboard-reachable and
+                     announces its open/closed state. setSectionExpanded() keeps aria-expanded in
+                     sync -- it is the single choke point every open/close path goes through. -->
+                <h2 class="section-heading">
+                    <button type="button" class="section-header" aria-expanded="false"
+                        aria-controls="section-slope" onclick="toggleSection('section-slope')">
+                        <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-4 6 4 6-4v14l-6 4-6-4-6 4z"/><line x1="9" y1="2" x2="9" y2="16"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+                        <span id="section-slope-title">Generate Slope Map</span>
+                        <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
+                    </button>
+                </h2>
                 <div id="section-slope" class="section-content">
                     <div class="checkbox-group">
                         <div class="checkbox-row">
@@ -604,11 +709,18 @@
 
             <!-- Add Routes (collapsible) -->
             <div id="group-routes" class="section-group">
-                <div class="section-header" onclick="toggleSection('section-routes')">
-                    <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg>
-                    <span id="section-routes-title">Add Routes and POIs</span>
-                    <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
-                </div>
+                <!-- A disclosure button inside a heading: the <h2> gives the panel a real outline
+                     under the <h1>, and the <button> makes the control keyboard-reachable and
+                     announces its open/closed state. setSectionExpanded() keeps aria-expanded in
+                     sync -- it is the single choke point every open/close path goes through. -->
+                <h2 class="section-heading">
+                    <button type="button" class="section-header" aria-expanded="false"
+                        aria-controls="section-routes" onclick="toggleSection('section-routes')">
+                        <svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg>
+                        <span id="section-routes-title">Add Routes and POIs</span>
+                        <span class="section-toggle"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line class="pm-h" x1="5" y1="12" x2="19" y2="12"/><line class="pm-v" x1="12" y1="5" x2="12" y2="19"/></svg></span>
+                    </button>
+                </h2>
                 <div id="section-routes" class="section-content">
                     <div class="control-row">
                         <span id="lbl-track-color" class="control-label">Track Color:</span>
@@ -802,13 +914,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3043"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3045"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3043"></script>
-    <script defer src="lang/sv.js?v=3043"></script>
-    <script defer src="script.js?v=3043"></script>
+    <script defer src="lang/en.js?v=3045"></script>
+    <script defer src="lang/sv.js?v=3045"></script>
+    <script defer src="script.js?v=3045"></script>
 </body>
 
 </html>

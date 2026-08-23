@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.24.0";
-const BUILD_NUMBER = "3043";
+const APP_VERSION = "2.25.0";
+const BUILD_NUMBER = "3045";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1685,6 +1685,9 @@ const redIcon = new L.Icon({
 // Every POI uses the same teardrop pin (like the rank markers) with a star in
 // the white center; only the color varies. Colors come from a fixed palette.
 const POI_COLORS = ['#2e8b57', '#2A81CB', '#CB2B3E', '#F39C12', '#7E57C2', '#D81B60', '#546E7A'];
+// Index-aligned translation keys for POI_COLORS. The swatches are bare colour chips with no
+// text, so without these their accessible name is the raw hex string.
+const POI_COLOR_NAMES = ['color_green', 'color_blue', 'color_red', 'color_orange', 'color_purple', 'color_pink', 'color_grey'];
 const POI_DEFAULT_COLOR = '#2e8b57';
 
 function makePoiIcon(color) {
@@ -2200,9 +2203,24 @@ function updateLanguage() {
     const languageSelect = document.getElementById('language-select');
     if (languageSelect) languageSelect.value = '';
 
-    if (document.getElementById('app-title')) {
-        document.getElementById('app-title').textContent = t.title;
-        document.title = t.title;
+    // The whole DOM is translated at runtime, so the document language has to follow it:
+    // a Swedish page still declaring lang="en" mispronounces every string in a screen
+    // reader and misreports the page to search engines.
+    document.documentElement.lang = currentLang;
+
+    const appTitle = document.getElementById('app-title');
+    if (appTitle) {
+        // #app-title is the page's <h1> and has two halves: a visible brand-mark text node
+        // and a .sr-only span carrying the keywords. Rewrite ONLY the text node -- the
+        // `.textContent =` this replaces deleted the span on the first language switch.
+        if (appTitle.firstChild && appTitle.firstChild.nodeType === Node.TEXT_NODE) {
+            appTitle.firstChild.nodeValue = t.title;
+        }
+        const appTitleSr = document.getElementById('app-title-sr');
+        if (appTitleSr) appTitleSr.textContent = ' — ' + (t.app_title_sr || '');
+        // The <title> is a search result's headline, so it stays the long descriptive form
+        // rather than the bare brand mark shown in the header.
+        document.title = t.meta_title || t.title;
         document.getElementById('liveLabel').textContent = t.live_label;
         // Tile labels are static text now, written here rather than rebuilt on every pan.
         const zoomLbl = document.getElementById('lbl-zoom');
@@ -2260,7 +2278,10 @@ function updateLanguage() {
         if (routeLegend) refreshRouteLegend();
         if (document.getElementById('lbl-enable-tilt')) document.getElementById('lbl-enable-tilt').textContent = t.lbl_enable_tilt;
         if (document.getElementById('lbl-max-pitch')) document.getElementById('lbl-max-pitch').textContent = t.lbl_max_pitch;
-        if (enable3dBtn) enable3dBtn.title = t.lbl_enable_3d;
+        if (enable3dBtn) {
+            enable3dBtn.title = t.lbl_enable_3d;
+            enable3dBtn.setAttribute('aria-label', t.lbl_enable_3d);
+        }
         if (document.getElementById('lbl-enable-exaggeration-slider')) document.getElementById('lbl-enable-exaggeration-slider').textContent = t.lbl_enable_exaggeration_slider;
         const exaggerationSliderControl = document.getElementById('exaggeration-slider-control');
         if (exaggerationSliderControl) {
@@ -2472,7 +2493,54 @@ function updateLanguage() {
             shareMapBtn.title = t.btn_share_map_title || 'Share Map View';
             shareMapBtn.setAttribute('aria-label', t.btn_share_map_title || 'Share Map View');
         }
+
+        // The +/- steppers are icon-only (a bare "-" / "+" glyph), so they have no
+        // accessible name at all. Derive one per group from the row's already-translated
+        // .control-label rather than hand-maintaining twelve more strings: the markup is
+        // uniform (.control-row > .control-label + .number-input-group > .num-btn x2), so
+        // this keeps working when a label's wording or its unit suffix changes.
+        const decTpl = t.aria_decrease || 'Decrease {label}';
+        const incTpl = t.aria_increase || 'Increase {label}';
+        document.querySelectorAll('.number-input-group').forEach((group) => {
+            const labelEl = group.parentElement && group.parentElement.querySelector('.control-label');
+            const btns = group.querySelectorAll('.num-btn');
+            if (!labelEl || btns.length < 2) return;
+            const name = labelEl.textContent.replace(/\s*:\s*$/, '').trim();
+            if (!name) return;
+            btns[0].setAttribute('aria-label', decTpl.replace('{label}', name));
+            btns[btns.length - 1].setAttribute('aria-label', incTpl.replace('{label}', name));
+        });
+
+        const installDismiss = document.getElementById('mobile-install-dismiss');
+        if (installDismiss) {
+            const label = t.btn_dismiss_install || 'Dismiss install prompt';
+            installDismiss.title = label;
+            installDismiss.setAttribute('aria-label', label);
+        }
+
+        const climbUndoBtn = document.getElementById('manual-climb-undo-btn');
+        if (climbUndoBtn) {
+            const label = t.btn_undo_last_point || 'Undo last point';
+            climbUndoBtn.title = label;
+            climbUndoBtn.setAttribute('aria-label', label);
+        }
+
+        _updateElevationProfileToggleUI();
     }
+}
+
+// Mirrors _updateRouteInfoUI: the toggle is icon-only, and its name flips with the state,
+// so it has to be refreshed both on a language switch and on every toggle.
+function _updateElevationProfileToggleUI() {
+    const toggle = document.getElementById('elevation-profile-toggle');
+    if (!toggle) return;
+    const t = translations[currentLang] || {};
+    const label = elevationProfileMinimized
+        ? (t.elevation_profile_expand || 'Expand elevation profile')
+        : (t.elevation_profile_minimize || 'Minimize elevation profile');
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('aria-expanded', String(!elevationProfileMinimized));
 }
 
 function setLanguage(lang) {
@@ -3185,11 +3253,18 @@ function setSectionExpanded(sectionId, expanded) {
     const content = document.getElementById(sectionId);
     if (!content) return;
 
+    // The header is the section's previous sibling -- an <h2> wrapping the disclosure button.
     const header = content.previousElementSibling;
     const toggle = header ? header.querySelector('.section-toggle') : null;
+    const button = header ? header.querySelector('.section-header') : null;
     content.style.display = expanded ? 'block' : 'none';
     if (toggle) {
         toggle.classList.toggle('expanded', expanded);
+    }
+    // Every open/close path funnels through here, so this is the one place aria-expanded
+    // has to be maintained for a screen reader to track the +/- state.
+    if (button) {
+        button.setAttribute('aria-expanded', String(expanded));
     }
 }
 
@@ -4050,7 +4125,7 @@ function poiPopupHtml(poi) {
         + descLine
         + elevLine
         + '<div class="coord-box"><span>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>'
-        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">📋</button></div>'
+        + '<button class="copy-btn" title="' + (t.btn_copy_coords || 'Copy') + '" aria-label="' + (t.btn_copy_coords || 'Copy') + '" onclick="copyCoords(' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ', this)">📋</button></div>'
         + '<div class="poi-popup-actions">'
         + '<button class="secondary-btn poi-popup-btn" onclick="editPoi(\'' + poi.id + '\')">' + (t.btn_edit_poi || 'Edit') + '</button>'
         + '<button class="secondary-btn poi-popup-btn" onclick="startPoiMove(\'' + poi.id + '\')">' + (t.btn_move_poi || 'Move') + '</button>'
@@ -4182,14 +4257,17 @@ async function handlePoiPlacementClick(lat, lng) {
 function populatePoiColorSwatches(selectedColor) {
     const wrap = document.getElementById('poi-form-colors');
     if (!wrap) return;
+    const t = translations[currentLang] || {};
     poiFormSelectedColor = (POI_COLORS.indexOf(selectedColor) >= 0) ? selectedColor : POI_DEFAULT_COLOR;
     wrap.innerHTML = '';
-    POI_COLORS.forEach(color => {
+    POI_COLORS.forEach((color, i) => {
         const sw = document.createElement('button');
         sw.type = 'button';
         sw.className = 'poi-color-swatch' + (color === poiFormSelectedColor ? ' selected' : '');
         sw.style.background = color;
-        sw.setAttribute('aria-label', color);
+        const colorName = t[POI_COLOR_NAMES[i]] || color;
+        sw.title = colorName;
+        sw.setAttribute('aria-label', colorName);
         sw.addEventListener('click', () => {
             poiFormSelectedColor = color;
             wrap.querySelectorAll('.poi-color-swatch').forEach(el => el.classList.remove('selected'));
@@ -5916,6 +5994,7 @@ function toggleElevationProfile() {
         drawElevationProfile();
         scheduleElevationProfileRedraw();
     }
+    _updateElevationProfileToggleUI();
     adjustMapControlsForElevation();
 }
 
@@ -7180,7 +7259,7 @@ function findPeaks() {
             <span class="popup-meta">${t.res_dist}: ${formatDistance(dist)}</span>
             <div class="coord-box">
                 <span>${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</span>
-                <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}, this)">📋</button>
+                <button class="copy-btn" title="${t.btn_copy_coords}" aria-label="${t.btn_copy_coords}" onclick="copyCoords(${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}, this)">📋</button>
             </div>`;
         const marker = L.marker([latlng.lat, latlng.lng], markerOptions).addTo(map).bindPopup(popupContent);
         if (isHighest) marker.openPopup();
@@ -7368,7 +7447,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distStart)}</span>
                 <div class="coord-box">
                     <span>${startLatLng.lat.toFixed(5)}, ${startLatLng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${startLatLng.lat.toFixed(5)}, ${startLatLng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" aria-label="${t.btn_copy_coords}" onclick="copyCoords(${startLatLng.lat.toFixed(5)}, ${startLatLng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const startMarker = L.marker(startLatLng, { icon: greenIcon }).addTo(map)
@@ -7387,7 +7466,7 @@ function calculateMaxClimb() {
                 <span class="popup-meta">${t.res_dist_center}: ${formatDistance(distEnd)}</span>
                 <div class="coord-box">
                     <span>${endLatLng.lat.toFixed(5)}, ${endLatLng.lng.toFixed(5)}</span>
-                    <button class="copy-btn" title="${t.btn_copy_coords}" onclick="copyCoords(${endLatLng.lat.toFixed(5)}, ${endLatLng.lng.toFixed(5)}, this)">📋</button>
+                    <button class="copy-btn" title="${t.btn_copy_coords}" aria-label="${t.btn_copy_coords}" onclick="copyCoords(${endLatLng.lat.toFixed(5)}, ${endLatLng.lng.toFixed(5)}, this)">📋</button>
                 </div>`;
 
             const endMarker = L.marker(endLatLng, { icon: redIcon }).addTo(map)
@@ -8190,13 +8269,13 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <span class="popup-height">${t.res_elev}: ${formatElevation(startElev)}</span>
         <div class="coord-box">
             <span>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
-            <button class="copy-btn"
+            <button class="copy-btn" title="${t.btn_copy_coords}" aria-label="${t.btn_copy_coords}"
                     onclick="copyCoords(${s.lat.toFixed(5)},${s.lng.toFixed(5)},this)">📋</button>
         </div>`);
     markers.push(startM);
 
     const endM = L.marker(e, { icon: redIcon }).addTo(map).bindPopup(`
-        <span class="popup-header">ߓanual Climb</span>
+        <span class="popup-header">📏 ${t.res_manual_climb}</span>
         <span class="popup-height">${t.res_climb}: +${formatElevation(totalAscent)}</span>
         <span class="popup-meta">${t.res_elev}: ${formatElevation(endElev)}</span>
         <span class="popup-meta">${t.res_vertical_drop}: ${vertDrop >= 0 ? '+' : ''}${formatElevation(vertDrop)}</span>
@@ -8204,7 +8283,7 @@ function _renderManualClimbResult(totalAscent, startElev, endElev, vertDrop, slo
         <span class="popup-meta">${t.res_slope}: ${slopePct}%</span>
         <div class="coord-box">
             <span>${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span>
-            <button class="copy-btn"
+            <button class="copy-btn" title="${t.btn_copy_coords}" aria-label="${t.btn_copy_coords}"
                     onclick="copyCoords(${e.lat.toFixed(5)},${e.lng.toFixed(5)},this)">📋</button>
         </div>`);
     markers.push(endM);
