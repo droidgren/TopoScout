@@ -1,10 +1,10 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.25.0";
-const BUILD_NUMBER = "3045";
+const APP_VERSION = "2.25.1";
+const BUILD_NUMBER = "3046";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
-const ALL_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
+const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
 
 // --- Optional GPX upload/sharing backend (auto-detected; absent on static hosting) ---
@@ -3247,7 +3247,7 @@ function setControlsMinimized(minimized) {
     }
 }
 
-const tutorialSectionIds = ['section-points', 'section-climbs', 'section-slope', 'section-routes'];
+const tutorialSectionIds = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 
 function setSectionExpanded(sectionId, expanded) {
     const content = document.getElementById(sectionId);
@@ -7777,10 +7777,10 @@ const tutorialSteps = [
     { targetSelector: '#controls .toggle-btn', titleKey: 'tutorial_minimize_title', textKey: 'tutorial_minimize_text' },
     { targetSelector: '.search-group', titleKey: 'tutorial_tools_title', textKey: 'tutorial_tools_text', expandControls: true },
     { targetSelector: '.layer-row', targetSelectorEnd: '#extra-layer-row', titleKey: 'tutorial_layers_title', textKey: 'tutorial_layers_tools_text', expandControls: true, enableRouteOverlay: true },
+    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
     { targetSelector: '#radius-controls', targetSelectorEnd: '#group-points', titleKey: 'tutorial_points_title', textKey: 'tutorial_points_text', expandControls: true, expandSection: 'section-points' },
     { targetSelector: '#group-climbs', titleKey: 'tutorial_climb_title', textKey: 'tutorial_climb_text', expandControls: true, expandSection: 'section-climbs' },
     { targetSelector: '#group-slope', titleKey: 'tutorial_slope_title', textKey: 'tutorial_slope_text', expandControls: true, expandSection: 'section-slope' },
-    { targetSelector: '#group-routes', titleKey: 'tutorial_routes_title', textKey: 'tutorial_routes_text', expandControls: true, expandSection: 'section-routes' },
     { targetSelector: '.app-logo', titleKey: 'tutorial_print_title', textKey: 'tutorial_print_text', desktopOnly: true },
     { targetSelector: null, titleKey: 'tutorial_tips_title', textKey: 'tutorial_tips_text' }
 // Print map is launched from the app logo and only available on desktop, so drop that step on touch devices.

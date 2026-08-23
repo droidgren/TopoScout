@@ -1492,7 +1492,7 @@ select {
     margin-top: 5px;
 }
 
-/* Two balanced columns (3 checkboxes per side) for the Add routes & POIs section.
+/* Two balanced columns (3 checkboxes per side) for the Create routes & POIs section.
    Columns size to content and spread to the panel edges like the legacy rows. */
 .checkbox-grid {
     display: grid;
