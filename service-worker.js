@@ -1,4 +1,4 @@
-const CACHE_NAME = '3043';
+const CACHE_NAME = '3045';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page

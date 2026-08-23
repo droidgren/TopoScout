@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TopoScout is a single-page app: one document, no routes. The ?lang= / ?gpx= share
+     links and the #lat/lng/zoom hash are deliberately absent, because index.html
+     canonicalises every one of those variants to the bare URL below and listing them
+     here would contradict it. Bump <lastmod> at release. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://toposcout.org/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

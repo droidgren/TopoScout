@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import requests
@@ -143,6 +143,11 @@ PUBLIC_ROOT_FILES = {
     "manifest.json",
     "service-worker.js",
     "icon.svg",
+    # Crawler/scraper-facing files. They are not fetched by the app itself, so they are
+    # deliberately absent from the service worker's precache list.
+    "robots.txt",
+    "sitemap.xml",
+    "og-image.png",
 }
 
 DEFAULT_INDEX = {
@@ -224,6 +229,62 @@ _CSP_REMOTE_HOSTS = (
     "https://lm.clackspark.workers.dev"
 )
 
+# Crawler/scraper-facing root files. Cached for a week rather than folded into the
+# `immutable` branch below: their URLs carry no ?v=, so a year-long immutable cache would
+# make the share card and the sitemap effectively impossible to update.
+CRAWLER_ROOT_PATHS = {"/robots.txt", "/sitemap.xml", "/og-image.png"}
+
+# The one hostname the site is canonical on; every other name we own 301s to it so the
+# duplicate copies collapse. Matched exactly, never by a "www." prefix rule, because the
+# other hostnames this app answers on (e.g. elevation-finder.dedyn.io) must keep working.
+CANONICAL_HOST = "toposcout.org"
+REDIRECT_HOSTS = {"www.toposcout.org"}
+
+# HSTS. Cloudflare already 301s http->https, so this header is the part that stops the very
+# first (still plaintext) request of a session from happening at all. Deliberately staged:
+# 5 minutes now, so a mistake expires in 5 minutes rather than a year. No `preload` -- that
+# is a one-way door that takes months to undo.
+#
+# BEFORE RAISING THIS TO 31536000 (1 year), read the following. The guard below is keyed on
+# the SCHEME ONLY, not the host, so this header goes to *every* hostname this app answers
+# on -- that is deliberate, not an oversight. At a 1-year max-age it pins, for a full year:
+#
+#   * toposcout.org and all of *.toposcout.org  (includeSubDomains from the apex covers the
+#     entire zone, so every subdomain must serve HTTPS)
+#   * www.toposcout.org                          (its 301 carries the header too)
+#   * elevation-finder.dedyn.io and its subdomains
+#   * any hostname pointed at this app in future, automatically
+#
+# Pinning also removes the browser's "Proceed anyway" for certificate errors, which bites
+# hardest on the dedyn host: it is deSEC dynamic DNS resolving straight to the origin, so
+# its certificate is not Cloudflare's to renew, and it is subject to corporate TLS
+# interception -- under HSTS an intercepted connection is a hard failure, not a warning,
+# so testing from such a network stops working entirely.
+#
+# So the precondition for the raise is "every host this app answers on has a publicly
+# trusted, auto-renewing certificate" -- not just the toposcout.org zone. If that stops
+# being true, narrow the header first rather than dropping it:
+#
+#   HSTS_HOSTS = {"toposcout.org", "www.toposcout.org"}
+#   if request.url.scheme == "https" and request.url.hostname in HSTS_HOSTS:
+HSTS_MAX_AGE = 300
+HSTS_VALUE = f"max-age={HSTS_MAX_AGE}; includeSubDomains"
+
+# Switch off the device APIs the app never touches, and confine the one it does. Note this
+# header is an allowlist of *named* features only -- anything omitted keeps its browser
+# default, so this is not a default-deny. geolocation drives the GPS button/tracking marker
+# (navigator.geolocation in script.js) and must stay enabled for our own origin; `(self)`
+# grants it same-origin and denies it to any embed. fullscreen and clipboard-write are
+# omitted on purpose: their default is already `self`, and naming fullscreen here would
+# silently break MapLibre's FullscreenControl if it is ever enabled. `interest-cohort` is
+# omitted because it no longer exists and only earns a console warning.
+PERMISSIONS_POLICY = (
+    "geolocation=(self), camera=(), microphone=(), payment=(), usb=(), serial=(), "
+    "hid=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), "
+    "display-capture=(), xr-spatial-tracking=(), screen-wake-lock=(), "
+    "idle-detection=(), local-fonts=(), browsing-topics=()"
+)
+
 # Enforced immediately: no-breakage hardening — blocks click-jacking (frame-ancestors),
 # plugin/object embeds, <base> hijacking and off-site form posts.
 CSP_ENFORCED = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
@@ -243,12 +304,28 @@ CSP_REPORT_ONLY = (
 )
 
 
+def canonical_host_redirect(request: Request) -> RedirectResponse | None:
+    """301 a non-canonical hostname we own to the canonical one, preserving path + query.
+
+    The URL fragment never reaches the server, so the map hash survives on its own.
+    """
+    if request.url.hostname not in REDIRECT_HOSTS:
+        return None
+    target = request.url.replace(scheme="https", netloc=CANONICAL_HOST)
+    return RedirectResponse(str(target), status_code=301)
+
+
 @app.middleware("http")
 async def set_response_headers(request: Request, call_next):
-    response = await call_next(request)
+    # Redirect before doing any work, but still fall through to the header block below so
+    # the 301 itself carries HSTS -- otherwise the hop that matters most is unprotected.
+    redirect = canonical_host_redirect(request)
+    response = redirect if redirect is not None else await call_next(request)
     path = request.url.path
     if path in SHELL_NO_CACHE:
         response.headers["Cache-Control"] = "no-cache"
+    elif path in CRAWLER_ROOT_PATHS:
+        response.headers["Cache-Control"] = "public, max-age=604800"
     elif path.startswith(("/lang/", "/fonts/")) or path.endswith(STATIC_ASSET_SUFFIXES):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     # Everything else (the /api/* endpoints) keeps whatever Cache-Control it set itself.
@@ -257,8 +334,14 @@ async def set_response_headers(request: Request, call_next):
     # only makes sense on HTML documents, not tiles or JSON.
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # A UA must ignore HSTS received over plaintext, so sending it there is noise. uvicorn
+    # runs with --proxy-headers, so the scheme here reflects X-Forwarded-Proto from the
+    # reverse proxy that terminates TLS.
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", HSTS_VALUE)
     if response.headers.get("content-type", "").startswith("text/html"):
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers.setdefault("Permissions-Policy", PERMISSIONS_POLICY)
         response.headers.setdefault("Content-Security-Policy", CSP_ENFORCED)
         response.headers.setdefault("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY)
     return response

@@ -118,6 +118,7 @@ const LANG_EN = {
     res_dist_start_end: "Distance Start→End",
     res_elev: "Elevation",
     res_climb: "Total Ascent",
+    res_manual_climb: "Manual Climb",
     res_vertical_drop: "Vertical drop",
     res_slope: "Slope",
     layer_lm_map: "Lantmäteriet (Sweden)",
@@ -224,7 +225,7 @@ const LANG_EN = {
     btn_edit_poi: "Edit",
     btn_move_poi: "Move",
     btn_delete_poi: "Delete",
-    btn_copy_coords: "Copy",
+    btn_copy_coords: "Copy coordinates",
     confirm_delete_poi: "Delete \"{name}\"?",
     status_poi_backend_needed: "Points of interest require the online backend.",
     status_poi_placement: "Tap the map to place your POI (Esc to cancel).",
@@ -390,4 +391,26 @@ const LANG_EN = {
     print_done: "PDF ready.",
     print_error: "Could not generate the PDF. Please try again.",
     print_source_label: "Map source",
+    // --- Metadata + accessible names ---------------------------------------------------
+    // The <title> is a search result's headline, so it carries the long descriptive form;
+    // `title` above stays the compact brand mark the header has room for. app_title_sr is
+    // the visually hidden half of the <h1>. Keep meta_title (en) identical to the static
+    // <title> in index.html -- crawlers that don't run JS see that one.
+    meta_title: "TopoScout – Topographic Map Tool for Peaks, Climbs and Slopes",
+    app_title_sr: "topographic map tool for finding highest points, climbs and steep slopes",
+    // {label} is substituted with the stepper row's own visible label, e.g. "Num Climbs".
+    aria_decrease: "Decrease {label}",
+    aria_increase: "Increase {label}",
+    btn_undo_last_point: "Undo last point",
+    btn_dismiss_install: "Dismiss install prompt",
+    elevation_profile_minimize: "Minimize elevation profile",
+    elevation_profile_expand: "Expand elevation profile",
+    // Accessible names for the POI colour swatches (see POI_COLOR_NAMES in script.js).
+    color_green: "Green",
+    color_blue: "Blue",
+    color_red: "Red",
+    color_orange: "Orange",
+    color_purple: "Purple",
+    color_pink: "Pink",
+    color_grey: "Grey",
 };

@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# The GPX/POI/routing endpoints are data, not pages -- nothing there is worth indexing.
+Disallow: /api/
+
+Sitemap: https://toposcout.org/sitemap.xml
