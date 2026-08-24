@@ -293,11 +293,17 @@ CSP_ENFORCED = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form
 # mode so violations surface in the console without breaking the app (which still relies on
 # inline event handlers/styles). Promote to Content-Security-Policy once the inline handlers
 # are refactored out and the console is clean.
+# Google Identity Services needs FOUR directives, not the three that look obvious: the client
+# script, the /gsi/ iframe, its XHRs -- and a stylesheet it injects to skin the sign-in button
+# (accounts.google.com/gsi/style), which is why accounts.google.com appears in style-src too.
+# The signed-in avatar comes from lh3.googleusercontent.com (lh4/5/6 historically), so the
+# wildcard covers it. It stays out of _CSP_REMOTE_HOSTS, which mirrors the service worker's
+# tile allowlist and also feeds connect-src -- an avatar is neither a tile nor a fetch target.
 CSP_REPORT_ONLY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.gstatic.com; "
-    "style-src 'self' 'unsafe-inline'; "
-    f"img-src 'self' data: blob: {_CSP_REMOTE_HOSTS}; "
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com; "
+    f"img-src 'self' data: blob: https://*.googleusercontent.com {_CSP_REMOTE_HOSTS}; "
     f"connect-src 'self' https://accounts.google.com https://nominatim.openstreetmap.org {_CSP_REMOTE_HOSTS}; "
     "font-src 'self'; worker-src 'self'; frame-src https://accounts.google.com; "
     "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"

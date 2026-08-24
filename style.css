@@ -897,7 +897,8 @@ button {
     text-align: left;
 }
 
-.poi-form-field label {
+.poi-form-field label,
+.poi-form-field .poi-form-label {
     display: block;
     font-size: 13px;
     font-weight: 600;
