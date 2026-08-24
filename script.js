@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.25.3";
-const BUILD_NUMBER = "3048";
+const APP_VERSION = "2.26.0";
+const BUILD_NUMBER = "3049";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -5809,6 +5809,48 @@ async function uploadGpxFile(file) {
     };
 }
 
+// The stored record for the active route, but only when it is one of THIS owner's files.
+// A ?gpx= link to somebody else's route loads fine (/api/files/{id}/raw has no owner check),
+// yet re-uploading it would fork a copy under our own owner id instead of updating anything —
+// so those must never be pushed back. /api/files is already owner-filtered server-side, which
+// makes uploadedGpxFiles the authority on what we may overwrite.
+function ownedStoredGpxEntry() {
+    if (!isBackendEnabled() || !currentSharedGpxId) return null;
+    return uploadedGpxFiles.find(fileEntry => fileEntry.id === currentSharedGpxId) || null;
+}
+
+// Pushes the current GPX text back over the stored record it came from. /api/upload upserts on
+// (owner_id, filename), so re-posting under the record's own filename rewrites that record in
+// place — same id, same share link, same file on disk. Returns true only if the stored copy now
+// matches what is on screen.
+async function updateStoredGpxFromCurrent(storedId) {
+    if (!storedId || !currentGpxRawText) return false;
+
+    // A cold ?gpx= load never opens the GPX modal, so the list can still be 'idle' here and the
+    // ownership check below would wrongly say "not ours". Fetch it before deciding.
+    if (uploadedGpxListState !== 'ready') {
+        await refreshUploadedFiles();
+    }
+    if (currentSharedGpxId !== storedId) return false;   // another route loaded meanwhile
+    const entry = ownedStoredGpxEntry();
+    if (!entry || !entry.filename) return false;
+
+    // The server's filename, not currentGpxFilename: it is the upsert key and has to match
+    // byte for byte, and on a cold ?gpx= link currentGpxFilename is only the record id.
+    const text = currentGpxRawText;
+    const file = new File([text], entry.filename, { type: 'application/gpx+xml' });
+    const result = await uploadGpxFile(file);
+    if (!result) return false;
+
+    // The upload was in flight while the user could load anything else; only adopt the result
+    // if it still describes the route on screen.
+    if (currentSharedGpxId !== storedId || currentGpxRawText !== text) return false;
+    setActiveGpxSource(result);
+    currentGpxRawFilename = result.filename || currentGpxRawFilename;
+    await refreshUploadedFiles();
+    return true;
+}
+
 async function handleLocalFileSelection(file) {
     const t = translations[currentLang];
     if (!file) return;
@@ -8351,6 +8393,12 @@ function enterGpxEditMode(options = {}) {
     // it matters when the user presses Edit track while still picking points.
     if (routeCreateMode) _routeCreateForceExit();
 
+    // Saving pushes the result back over the stored record, so we need to know whether this
+    // route is actually ours before the Save confirm is worded. A cold ?gpx= link never opened
+    // the GPX modal, so the list can still be empty here; fetching it now means it has arrived
+    // long before the user has finished dragging handles.
+    if (currentSharedGpxId && uploadedGpxListState !== 'ready') refreshUploadedFiles();
+
     const seg = gpxTrackData.segments[segIndex];
     gpxEditMode = true;
     gpxEditState = {
@@ -9009,20 +9057,37 @@ window.saveGpxEdits = function () {
     const t = translations[currentLang];
     if (!st || st.busy) return;
 
+    // Captured before anything mutates. storedId is the record the edits belong to, if the
+    // route came from the backend at all; storedEntry is non-null only once we positively know
+    // that record is ours (see ownedStoredGpxEntry) and is used solely to word the confirm.
+    const storedId = currentSharedGpxId;
+    const storedEntry = ownedStoredGpxEntry();
+
     // The export stops being the user's original bytes from here on.
     if (!gpxTextIsGenerated) {
-        const warning = t.gpx_edit_confirm_lossy ||
+        let warning = t.gpx_edit_confirm_lossy ||
             'Saving rewrites the GPX from the edited geometry. Timestamps, sensor data and ' +
             'other extras from the original file will not be kept. Continue?';
+        if (storedEntry) {
+            // Replacing the stored copy is part of the same decision, so it goes in the same
+            // dialog rather than a second one the user has to dismiss.
+            warning += '\n\n' + (t.gpx_edit_confirm_lossy_stored ||
+                'The copy saved as "{name}" in your routes will also be replaced.')
+                .replace('{name}', storedEntry.filename);
+        }
         if (!window.confirm(warning)) return;
     }
 
     gpxTrackData.segments[st.segIndex] = st.points;
     Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
     regenerateCurrentGpxText();
-    // The stored copy behind ?gpx= is still the unedited original, so drop the share link
-    // rather than handing out one that no longer matches what is on screen.
-    setActiveGpxSource({ filename: currentGpxFilename || currentGpxRawFilename });
+    if (!storedId) {
+        // Nothing stored to bring along, so there is no ?gpx= link to keep.
+        setActiveGpxSource({ filename: currentGpxFilename || currentGpxRawFilename });
+    }
+    // With a stored record the link is kept on the assumption the push below lands. If it does
+    // not, the handlers there drop it — a ?gpx= link must never point at an unedited original
+    // while the edited track is on screen.
 
     _gpxEditTeardown();
     rebuildGpxLayer();
@@ -9030,6 +9095,32 @@ window.saveGpxEdits = function () {
     showElevationProfile();
     statusDiv.textContent = t.status_gpx_edit_saved ||
         'Track edits saved. Download GPX now exports the edited track.';
+
+    if (!storedId) return;
+
+    // Deliberately not awaited: the editor has already closed and the map already shows the
+    // edited track, so the upload is reported in the status line when it settles.
+    const dropStaleLink = () => {
+        if (currentSharedGpxId !== storedId) return false;   // moved on; nothing to undo
+        setActiveGpxSource({ filename: currentGpxFilename || currentGpxRawFilename });
+        return true;
+    };
+    updateStoredGpxFromCurrent(storedId).then(updated => {
+        if (!updated) {
+            // Not ours to overwrite (a shared link to somebody else's route), or another
+            // route loaded meanwhile. Same outcome as before this feature existed.
+            dropStaleLink();
+            return;
+        }
+        if (currentSharedGpxId !== storedId) return;
+        statusDiv.textContent = (t.status_gpx_stored_updated ||
+            'Track edits saved and "{name}" updated in your routes.')
+            .replace('{name}', currentGpxFilename || storedId);
+    }).catch(() => {
+        if (!dropStaleLink()) return;
+        statusDiv.textContent = t.status_gpx_stored_update_failed ||
+            'Track edits saved, but the stored copy could not be updated.';
+    });
 };
 
 window.cancelGpxEditMode = function () {
