@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.26.0";
-const BUILD_NUMBER = "3049";
+const APP_VERSION = "2.27.0";
+const BUILD_NUMBER = "3051";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -169,7 +169,7 @@ const GPX_EDIT_SNAP_MAX_DRIFT_M = 150;
 const GPX_EDIT_FREEHAND_SPACING_M = 50;    // densification spacing when snapping is off
 const GPX_EDIT_FREEHAND_MAX_POINTS = 200;  // cap per sub-segment
 // Must match ORS_PROFILES in main.py and the enabled profiles in ors/ors-config.yml.
-const GPX_EDIT_PROFILES = ['foot-hiking', 'cycling-mountain'];
+const GPX_EDIT_PROFILES = ['foot-hiking', 'cycling-mountain', 'foot-walking', 'cycling-regular'];
 const GPX_EDIT_DEFAULT_PROFILE = 'foot-hiking';
 
 // --- Create route ---
@@ -9217,7 +9217,9 @@ function _updateGpxEditUI() {
     if (profileSel) {
         const optionKeys = {
             'foot-hiking': 'gpx_edit_profile_run',
-            'cycling-mountain': 'gpx_edit_profile_mtb'
+            'cycling-mountain': 'gpx_edit_profile_mtb',
+            'foot-walking': 'gpx_edit_profile_walk',
+            'cycling-regular': 'gpx_edit_profile_bike'
         };
         for (const value of GPX_EDIT_PROFILES) {
             const opt = profileSel.querySelector('option[value="' + value + '"]');
@@ -9560,7 +9562,9 @@ function _updateRouteCreateUI() {
     if (profileSel) {
         const optionKeys = {
             'foot-hiking': 'gpx_edit_profile_run',
-            'cycling-mountain': 'gpx_edit_profile_mtb'
+            'cycling-mountain': 'gpx_edit_profile_mtb',
+            'foot-walking': 'gpx_edit_profile_walk',
+            'cycling-regular': 'gpx_edit_profile_bike'
         };
         for (const value of GPX_EDIT_PROFILES) {
             const opt = profileSel.querySelector('option[value="' + value + '"]');

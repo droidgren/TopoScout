@@ -129,7 +129,7 @@ ORS_RADIUS_ESCALATION_M = [
 # Mirrors the profile dropdown in the edit panel; anything else 404s before we call out.
 # Must also match ors/ors-config.yml — a profile enabled here but not built there answers
 # every request with 400/code 2003, which _ors_local_missing below learns and routes around.
-ORS_PROFILES = {"foot-hiking", "cycling-mountain"}
+ORS_PROFILES = {"foot-hiking", "cycling-mountain", "foot-walking", "cycling-regular"}
 # How long a profile stays marked as absent from the local graph. The mark lives in this
 # container, not in ORS, so a graph rebuild cannot clear it — the TTL is what lets a
 # rebuild take effect without restarting toposcout.

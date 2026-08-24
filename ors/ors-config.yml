@@ -1,8 +1,9 @@
 # openrouteservice configuration for the TopoScout GPX track editor.
 #
 # Copy to /share/www/openrouteservice/config/ors-config.yml and point source_file below at
-# the .pbf you actually downloaded. Only the two profiles offered by the editor's dropdown
-# are enabled — each extra profile costs build time, RAM and disk in direct proportion.
+# the .pbf you actually downloaded. Only the four profiles offered by the editor's dropdown
+# are enabled — each extra profile costs build time, RAM and disk in direct proportion, so
+# the four here roughly double the build time and graph disk of the original two.
 #
 # This is the ORS v8/v9 layout (ors.engine.profile_default.build.*, ors.engine.profiles.
 # <name>.enabled). If the pinned image rejects a key, diff against the image's own
@@ -42,14 +43,22 @@ ors:
         elevation: true
         elevation_smoothing: true
     profiles:
-      # Running — the editor's default and the only foot profile built. foot-hiking
-      # rather than foot-walking: at 45.846N 7.034E (Aosta) foot-walking could not route
-      # at any snap radius while cycling-mountain could, so the path is mapped and the
-      # walking profile was the blocker. foot-hiking weights by SAC scale and hiking-route
-      # relations, which costs some directness on mixed street/trail terrain near home but
-      # is the difference between snapping and not on alpine trails.
+      # Running — the editor's default, and the reason it is the default rather than
+      # foot-walking: at 45.846N 7.034E (Aosta) foot-walking could not route at any snap
+      # radius while cycling-mountain could, so the path is mapped and the walking profile
+      # was the blocker. foot-hiking weights by SAC scale and hiking-route relations, which
+      # costs some directness on mixed street/trail terrain near home but is the difference
+      # between snapping and not on alpine trails.
       foot-hiking:
         enabled: true
       # Cycling paths and forest tracks, for the legs a runner shares with bikes.
       cycling-mountain:
+        enabled: true
+      # Plain street-network walking, without the trail weighting above. For routing through
+      # a town, where foot-hiking's preference for paths and hiking relations detours.
+      foot-walking:
+        enabled: true
+      # Roads and cycleways at road-bike speeds — the tarmac counterpart to
+      # cycling-mountain, which prefers tracks.
+      cycling-regular:
         enabled: true

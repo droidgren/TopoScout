@@ -275,6 +275,8 @@ const LANG_SV = {
     lbl_gpx_edit_profile: "Ruttprofil:",
     gpx_edit_profile_run: "Löpning/Vandring",
     gpx_edit_profile_mtb: "Cykel/Mountainbike",
+    gpx_edit_profile_walk: "Gång (Standard)",
+    gpx_edit_profile_bike: "Cykel (Standard)",
     lbl_gpx_edit_snap: "Fäst mot vägnät/stigar",
     status_gpx_edit_active: "Redigeringsläge — dra i handtagen, klicka på spåret för att lägga till ett.",
     status_gpx_edit_routing: "Beräknar rutt…",
