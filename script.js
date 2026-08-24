@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.25.1";
-const BUILD_NUMBER = "3046";
+const APP_VERSION = "2.25.2";
+const BUILD_NUMBER = "3047";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -4268,10 +4268,15 @@ function populatePoiColorSwatches(selectedColor) {
         const colorName = t[POI_COLOR_NAMES[i]] || color;
         sw.title = colorName;
         sw.setAttribute('aria-label', colorName);
+        sw.setAttribute('aria-pressed', String(color === poiFormSelectedColor));
         sw.addEventListener('click', () => {
             poiFormSelectedColor = color;
-            wrap.querySelectorAll('.poi-color-swatch').forEach(el => el.classList.remove('selected'));
+            wrap.querySelectorAll('.poi-color-swatch').forEach(el => {
+                el.classList.remove('selected');
+                el.setAttribute('aria-pressed', 'false');
+            });
             sw.classList.add('selected');
+            sw.setAttribute('aria-pressed', 'true');
         });
         wrap.appendChild(sw);
     });
