@@ -17,6 +17,7 @@ worker.js
 blob-report/
 playwright/.cache/
 playwright/.auth/
+tests/*
 tests/example.spec.ts
 tests/coords.spec.ts
 tests/gpx-edit.spec.ts
