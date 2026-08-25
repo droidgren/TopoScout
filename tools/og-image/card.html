@@ -1,0 +1,155 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>TopoScout social card</title>
+<!--
+  Source for og-image.png (1200x630). Rendered by build.mjs — see README.md.
+  The font and terrain placeholders below are substituted at build time, so
+  opening this file directly in a browser shows an unstyled card; run the build.
+-->
+<style>
+  @font-face {
+    font-family: 'Open Sans';
+    src: url(data:font/woff2;base64,__FONT_B64__) format('woff2');
+    font-weight: 300 800; font-style: normal; font-display: block;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #061d39; }
+  #card {
+    position: relative; width: 1200px; height: 630px; overflow: hidden;
+    font-family: 'Open Sans', 'Liberation Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: linear-gradient(140deg, #0f4076 0%, #08284c 58%, #061d39 100%);
+  }
+  #card svg.layer { position: absolute; inset: 0; width: 1200px; height: 630px; }
+  .wordmark { font-weight: 800; letter-spacing: -0.022em; line-height: 1; }
+  .tagline  { font-weight: 400; letter-spacing: -0.004em; }
+  .domain   { font-weight: 700; letter-spacing: 0.055em; }
+</style>
+<body><div id="card"></div></body>
+<script>__TERRAIN_JS__</script>
+<script>
+const W = 1200, H = 630;
+const card = document.getElementById('card');
+const NS = 'http://www.w3.org/2000/svg';
+
+const svgEl = (n, attrs = {}) => {
+  const e = document.createElementNS(NS, n);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+};
+const el = (tag, css, html) => {
+  const e = document.createElement(tag);
+  if (css) e.style.cssText = css;
+  if (html != null) e.innerHTML = html;
+  return e;
+};
+
+/* The mountain, lifted straight from icon.svg so the card and the app icon
+   are the same mark. The rounded-square chip is dropped and only the glyph
+   is drawn, which lets it run much larger inside the same footprint. */
+function iconSVG({ size, rockFill, snowFill, shadow }) {
+  const s = svgEl('svg', { viewBox: '96 150 320 244', width: size, height: Math.round(size * 244 / 320) });
+  s.style.display = 'block';
+  if (shadow) s.style.filter = shadow;
+  s.appendChild(svgEl('path', { d: 'M106 384 L256 160 L406 384 Z', fill: rockFill }));
+  s.appendChild(svgEl('path', { d: 'M256 160 L320 256 L298 288 L256 224 L214 288 Z', fill: snowFill }));
+  return s;
+}
+
+/* Contour backdrop. Real marching-squares geometry over a synthetic height
+   field, so the lines crowd on steep ground and spread over flats the way a
+   printed topo map does — the regional tilt keeps that density even across
+   the whole frame instead of leaving a bald patch around the summit. */
+function contourLayer(o) {
+  const s = svgEl('svg', { class: 'layer', viewBox: `0 0 ${W} ${H}` });
+  const h = makeField(o.seed, o.fieldOpts);
+  const g = svgEl('g', { fill: 'none', stroke: o.stroke, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+  let n = 0;
+  for (let lv = o.lo; lv <= o.hi + 1e-9; lv += o.step, n++) {
+    const isIndex = o.indexEvery && n % o.indexEvery === 0;
+    for (const pts of contourLines(h, lv, o.nx || 150, o.ny || 84, W, H)) {
+      if (pts.length < 5) continue;
+      g.appendChild(svgEl('path', {
+        d: smoothPath(pts),
+        'stroke-width': isIndex ? o.indexWidth : o.width,
+        opacity: isIndex ? o.indexOpacity : o.opacity,
+      }));
+    }
+  }
+  s.appendChild(g);
+  return s;
+}
+
+/* A track in the editor, drawn the way the app draws it: the slope ramp from
+   slopeToColor() in script.js, and the drag handles from .gpx-edit-handle in
+   style.css — green start, purple middles, red end. */
+function routeLayer(ctrl) {
+  const s = svgEl('svg', { class: 'layer', viewBox: `0 0 ${W} ${H}` });
+  const d = smoothPath(ctrl, -1);
+  s.appendChild(svgEl('path', { d, fill: 'none', stroke: 'rgba(8,32,58,.38)', 'stroke-width': 16.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+
+  const defs = svgEl('defs');
+  const lg = svgEl('linearGradient', { id: 'sloperamp', x1: '0', y1: '1', x2: '1', y2: '0' });
+  [['0%', '#00b43c'], ['32%', '#2196F3'], ['62%', '#ffc800'], ['100%', '#dc1e1e']]
+    .forEach(([o, c]) => lg.appendChild(svgEl('stop', { offset: o, 'stop-color': c })));
+  defs.appendChild(lg);
+  s.appendChild(defs);
+  s.appendChild(svgEl('path', { d, fill: 'none', stroke: 'url(#sloperamp)', 'stroke-width': 8.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+
+  ctrl.forEach(([x, y], i) => {
+    const ring = i === 0 ? '#2AAD27' : (i === ctrl.length - 1 ? '#D32F2F' : '#7e57c2');
+    const g = svgEl('g');
+    g.appendChild(svgEl('circle', { cx: x, cy: y + 2, r: 12.5, fill: 'rgba(8,32,58,.35)' }));
+    g.appendChild(svgEl('circle', { cx: x, cy: y, r: 12.5, fill: '#fff' }));
+    g.appendChild(svgEl('circle', { cx: x, cy: y, r: 9.3, fill: 'none', stroke: ring, 'stroke-width': 5.2 }));
+    s.appendChild(g);
+  });
+  return s;
+}
+
+/* ---- the card ----------------------------------------------------------- */
+
+card.appendChild(el('div', 'position:absolute;inset:0;background:radial-gradient(58% 78% at 74% 34%,rgba(70,150,235,.26) 0%,rgba(70,150,235,.08) 46%,rgba(70,150,235,0) 74%);'));
+
+card.appendChild(contourLayer({
+  seed: 9, lo: -0.15, hi: 2.05, step: 0.062,
+  stroke: '#8fcaff', width: 1.5, opacity: 0.34,
+  indexEvery: 4, indexOpacity: 0.64, indexWidth: 2.7,
+  fieldOpts: {
+    main: { x: 0.86, y: 0.22, amp: 0.70, sx: 0.17, sy: 0.16 },
+    extra: 5,
+    tilt: { gx: 0.95, gy: -0.80 },
+  },
+}));
+
+card.appendChild(routeLayer([[590, 580], [660, 502], [706, 416], [786, 364], [846, 292], [928, 232]]));
+
+/* Scrim: the terrain has to stay readable under the type on the left. */
+card.appendChild(el('div', 'position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,26,50,.97) 0%,rgba(5,26,50,.93) 32%,rgba(5,26,50,.52) 50%,rgba(5,26,50,0) 64%);'));
+
+const left = el('div', 'position:absolute;left:78px;top:0;width:600px;height:630px;display:flex;flex-direction:column;justify-content:center;');
+
+const ico = iconSVG({ size: 218, rockFill: '#ffffff', snowFill: '#7fc0ff', shadow: 'drop-shadow(0 18px 34px rgba(0,0,0,.55))' });
+ico.style.marginBottom = '22px';
+left.appendChild(ico);
+
+const wm = el('div', 'font-size:88px;color:#fff;', 'TopoScout');
+wm.className = 'wordmark';
+left.appendChild(wm);
+
+const tag = el('div', 'font-size:33px;line-height:1.32;color:#d7e8fa;margin-top:20px;max-width:570px;',
+  'Route planning and GPX editing<br>on a free topographic map.');
+tag.className = 'tagline';
+left.appendChild(tag);
+
+const sub = el('div', 'font-size:21px;line-height:1.5;color:rgba(215,232,250,.72);margin-top:18px;font-weight:600;',
+  'Create Route · Edit track · Elevation profile · Slope map');
+left.appendChild(sub);
+
+const dom = el('div', 'font-size:22px;color:rgba(255,255,255,.72);margin-top:24px;', 'toposcout.org');
+dom.className = 'domain';
+left.appendChild(dom);
+
+card.appendChild(left);
+document.documentElement.setAttribute('data-ready', '1');
+</script>
