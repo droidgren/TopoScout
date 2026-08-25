@@ -52,7 +52,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3051">
+    <link rel="stylesheet" href="style.css?v=3052">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -151,7 +151,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.27.0</span> (Build <span id="app-build">3051</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.27.1</span> (Build <span id="app-build">3052</span>)
             </p>
 
             <details
@@ -159,11 +159,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.27.1:</strong> Updated the map engine to <strong>MapLibre GL JS 6.6.0</strong> &mdash; the point under the pointer is now read straight from the terrain data at full resolution, so elevation readings in 3D/tilt mode are more accurate and pointer events no longer stall the GPU. A map opened with a zoom or pitch limit also no longer ignores its saved centre and bearing.</li>
                     <li><strong>v2.27.0:</strong> The routing profile picker in <strong>Edit track</strong> and <strong>Create Route</strong> gained <strong>Walking (Standard)</strong> and <strong>Bike (Standard)</strong> below the two existing entries. They follow ordinary streets instead of preferring trails &mdash; what you want for a route through a town. The existing Running/Walking is renamed <strong>Running/Hiking</strong> &mdash; it favours trails and hiking routes, which is what separates it from the new Walking entry &mdash; and stays the default.</li>
                     <li><strong>v2.26.0:</strong> Saving track edits now also updates the stored route it was opened from &mdash; the server copy no longer keeps the old geometry, and the share link survives the edit. The Save confirmation names the stored file it is about to replace.</li>
-                    <li><strong>v2.25.3:</strong> Updated the map engine to <strong>MapLibre GL JS 6.5.0</strong> &mdash; the point under the pointer is now read straight from the terrain data at full resolution, so elevation readings in 3D/tilt mode are more accurate and panning is smoother. Switching basemap no longer degrades the frame rate, and raster tiles no longer flash when they reload.</li>
+                    <li><strong>v2.25.3:</strong> Updated the map engine to <strong>MapLibre GL JS 6.5.0</strong> &mdash; switching basemap no longer degrades the frame rate, raster tiles no longer flash when they reload, and terrain no longer slips out from under your fingers while you pan or pinch.</li>
                     <li><strong>v2.25.2:</strong> Fixed two problems the browser was reporting in the background. The staged security policy did not allow the Google profile picture or the sign-in button's stylesheet, so promoting it would have broken sign-in. The POI colour picker's <strong>Color</strong> heading also named nothing to a screen reader, and the picker now says which colour is selected.</li>
-                    <li><strong>v2.25.1:</strong> <strong>Add Routes and POIs</strong> is now <strong>Create Routes and POIs</strong>, and it sits at the <em>top</em> of the control panel instead of the bottom. Drawing a route is a thing you do, not an afterthought to a terrain scan. The tutorial walks the sections in the new order, and the Swedish label reads <em>Skapa sp&aring;r och POI:er</em> in both places (the panel said <em>rutter</em>, the tutorial said <em>sp&aring;r</em>).</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -918,13 +918,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3051"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3052"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3051"></script>
-    <script defer src="lang/sv.js?v=3051"></script>
-    <script defer src="script.js?v=3051"></script>
+    <script defer src="lang/en.js?v=3052"></script>
+    <script defer src="lang/sv.js?v=3052"></script>
+    <script defer src="script.js?v=3052"></script>
 </body>
 
 </html>
