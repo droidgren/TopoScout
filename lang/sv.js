@@ -398,7 +398,7 @@ const LANG_SV = {
     print_source_label: "Kartkälla",
     // --- Metadata + åtkomliga namn (se kommentaren i en.js) -------------------------
     meta_title: "TopoScout – Topografiskt kartverktyg för rutter, stigningar och lutningar",
-    app_title_sr: "topografiskt kartverktyg för att hitta högsta punkter, stigningar och branta lutningar",
+    app_title_sr: "topografiskt kartverktyg för att redigera rutter/gpx, hitta högsta punkter, stigningar och branta lutningar",
     aria_decrease: "Minska {label}",
     aria_increase: "Öka {label}",
     btn_undo_last_point: "Ångra senaste punkten",
