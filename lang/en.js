@@ -401,7 +401,7 @@ const LANG_EN = {
     // `title` above stays the compact brand mark the header has room for. app_title_sr is
     // the visually hidden half of the <h1>. Keep meta_title (en) identical to the static
     // <title> in index.html -- crawlers that don't run JS see that one.
-    meta_title: "TopoScout – Topographic Map Tool for Peaks, Climbs and Slopes",
+    meta_title: "TopoScout – Topographic Map Tool for Routes, Climbs and Slopes",
     app_title_sr: "topographic map tool for finding highest points, climbs and steep slopes",
     // {label} is substituted with the stepper row's own visible label, e.g. "Num Climbs".
     aria_decrease: "Decrease {label}",
