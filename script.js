@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.27.2";
-const BUILD_NUMBER = "3054";
+const APP_VERSION = "2.27.3";
+const BUILD_NUMBER = "3055";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -124,6 +124,12 @@ const ELEVATION_TILE_MAX_ZOOM = 15;
 const OVERZOOM_STORAGE_KEY = 'topo_overzoom';
 const OVERZOOM_MAX_ZOOM = 22;
 const TERRAIN_SOURCE_ID = 'elevation-dem';
+// The hillshade layer gets its OWN raster-dem source over the same Mapterhorn tiles.
+// Sharing one source with 3D terrain makes MapLibre warn, and the warning is real:
+// enabling terrain sets usedForTerrain on the shared tile manager and doubles its
+// tileSize to 1024, so the tile cover drops a zoom level and the hillshade silently
+// renders from coarser DEM tiles for as long as 3D is on.
+const HILLSHADE_SOURCE_ID = 'hillshade-dem';
 // Contour overlay: client-side contour lines generated from the same Mapterhorn DEM
 // via maplibre-contour. Labels need a glyphs/font source (the raster basemap has none).
 const GLYPHS_URL = 'fonts/{fontstack}/{range}.pbf'; // self-hosted, same-origin (offline-capable)
@@ -1303,13 +1309,19 @@ function createMapAdapter(containerId, options) {
         }
     };
 
-    function ensureTerrainSource() {
+    // Terrain and hillshade each get their own raster-dem source over the same tiles;
+    // see HILLSHADE_SOURCE_ID for why they must not share one.
+    function ensureDemSource(sourceId) {
         if (!adapter._styleReady) return false;
-        if (nativeMap.getSource(TERRAIN_SOURCE_ID)) {
+        if (nativeMap.getSource(sourceId)) {
             return true;
         }
-        nativeMap.addSource(TERRAIN_SOURCE_ID, getTerrainSourceDefinition());
+        nativeMap.addSource(sourceId, getTerrainSourceDefinition());
         return true;
+    }
+
+    function ensureTerrainSource() {
+        return ensureDemSource(TERRAIN_SOURCE_ID);
     }
 
     function syncTerrain() {
@@ -1322,7 +1334,7 @@ function createMapAdapter(containerId, options) {
         if (!adapter._styleReady) return;
         const id = 'hillshade-layer';
         if (adapter._hillshade && adapter._hillshade.enabled) {
-            ensureTerrainSource();
+            ensureDemSource(HILLSHADE_SOURCE_ID);
             const exaggeration = adapter._hillshade.exaggeration;
             if (!nativeMap.getLayer(id)) {
                 // Insert directly above the basemap but below every overlay/marker so the
@@ -1332,7 +1344,7 @@ function createMapAdapter(containerId, options) {
                 const hillshadeLayer = {
                     id,
                     type: 'hillshade',
-                    source: TERRAIN_SOURCE_ID,
+                    source: HILLSHADE_SOURCE_ID,
                     paint: { 'hillshade-exaggeration': exaggeration }
                 };
                 if (firstOverlayLayer) {
@@ -1343,8 +1355,10 @@ function createMapAdapter(containerId, options) {
             } else {
                 nativeMap.setPaintProperty(id, 'hillshade-exaggeration', exaggeration);
             }
-        } else if (nativeMap.getLayer(id)) {
-            nativeMap.removeLayer(id);
+        } else {
+            // Layer first, then its source: MapLibre refuses to drop a source still in use.
+            if (nativeMap.getLayer(id)) nativeMap.removeLayer(id);
+            if (nativeMap.getSource(HILLSHADE_SOURCE_ID)) nativeMap.removeSource(HILLSHADE_SOURCE_ID);
         }
     }
 
