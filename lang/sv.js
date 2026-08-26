@@ -397,8 +397,8 @@ const LANG_SV = {
     print_error: "Kunde inte skapa PDF:en. Försök igen.",
     print_source_label: "Kartkälla",
     // --- Metadata + åtkomliga namn (se kommentaren i en.js) -------------------------
-    meta_title: "TopoScout – Topografiskt kartverktyg för toppar, stigningar och lutningar",
-    app_title_sr: "topografiskt kartverktyg för att hitta högsta punkter, stigningar och branta lutningar",
+    meta_title: "TopoScout – Topografiskt kartverktyg för rutter, stigningar och lutningar",
+    app_title_sr: "topografiskt kartverktyg för att redigera rutter/gpx, hitta högsta punkter, stigningar och branta lutningar",
     aria_decrease: "Minska {label}",
     aria_increase: "Öka {label}",
     btn_undo_last_point: "Ångra senaste punkten",
