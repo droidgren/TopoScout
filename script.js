@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.27.3";
-const BUILD_NUMBER = "3055";
+const APP_VERSION = "2.28.0";
+const BUILD_NUMBER = "3056";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -1925,11 +1925,16 @@ const initialMapLayer = layers.opentopo;
 // module fetches from file:// URLs (null origin). Opening index.html straight from disk
 // therefore leaves `maplibregl` undefined and every call below throws "maplibregl is not
 // defined" into the console while the page just sits there blank. Say what happened instead.
-function showMapEngineError() {
+function showMapEngineError(error) {
     const t = translations[currentLang] || translations.en || {};
-    const message = location.protocol === 'file:'
-        ? (t.err_map_engine_file || "TopoScout can't run from a file:// URL: the map engine loads as an ES module, which browsers refuse to fetch from the local filesystem. Serve the folder over http instead — for example `uvicorn main:app --port 8000`, then open http://localhost:8000/. Installing the app still gives you full offline use.")
-        : (t.err_map_engine || 'The map engine failed to load. Check your connection and reload the page.');
+    // Since MapLibre 6.7.0 a failed WebGL2 context throws GPUInitializationError straight
+    // from the Map constructor, so this overlay now covers a second, unrelated cause: the
+    // engine loaded fine, the device just cannot draw with it. Different advice, same overlay.
+    const message = error && error.name === 'GPUInitializationError'
+        ? (t.err_map_webgl || 'TopoScout could not start WebGL2, which it needs to draw the map. Update your browser, or turn on hardware acceleration in its settings.')
+        : location.protocol === 'file:'
+            ? (t.err_map_engine_file || "TopoScout can't run from a file:// URL: the map engine loads as an ES module, which browsers refuse to fetch from the local filesystem. Serve the folder over http instead — for example `uvicorn main:app --port 8000`, then open http://localhost:8000/. Installing the app still gives you full offline use.")
+            : (t.err_map_engine || 'The map engine failed to load. Check your connection and reload the page.');
     const overlay = document.createElement('div');
     overlay.className = 'map-boot-error';
     const paragraph = document.createElement('p');
@@ -1946,16 +1951,27 @@ if (typeof maplibregl === 'undefined') {
         + (location.protocol === 'file:' ? ' (file:// is unsupported — serve the app over http)' : ''));
 }
 
-// Create the map
-const map = L.map('map', {
-    zoomControl: false,
-    boxZoom: false,
-    rotate: true,
-    touchRotate: true,
-    rotateControl: false,
-    bearing: 0,
-    initialTileLayer: initialMapLayer
-}).setView([savedLat, savedLng], savedZoom);
+// Create the map. Since MapLibre 6.7.0 the Map constructor throws GPUInitializationError
+// synchronously when a WebGL2 context cannot be created, so this has to be guarded the same
+// way the missing-engine case above is.
+let map;
+try {
+    map = L.map('map', {
+        zoomControl: false,
+        boxZoom: false,
+        rotate: true,
+        touchRotate: true,
+        rotateControl: false,
+        bearing: 0,
+        initialTileLayer: initialMapLayer
+    }).setView([savedLat, savedLng], savedZoom);
+} catch (error) {
+    showMapEngineError(error);
+    // Deliberately aborts the rest of script.js, for the same reason as the guard above:
+    // nothing below works without a map, and the overlay covers the control panel that
+    // would otherwise sit there looking operational.
+    throw error;
+}
 // Default MapLibre navigation controls: zoom in/out + built-in compass (reset
 // north + visualize pitch). The compass is auto-hidden while north-up below.
 map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
@@ -10613,20 +10629,36 @@ async function capturePrintComposite(rect, layout) {
     holder.style.cssText = `position:fixed;left:-100000px;top:0;width:${printW}px;height:${printH}px;pointer-events:none;`;
     document.body.appendChild(holder);
 
-    const pmap = new maplibregl.Map({
-        container: holder,
-        style,
-        center: [center.lng, center.lat],
-        zoom,
-        bearing,
-        pitch: 0,
-        interactive: false,
-        attributionControl: false,
-        fadeDuration: 0,
-        // Must be nested: MapLibre groups the WebGL context attributes here, so a top-level
-        // preserveDrawingBuffer is silently ignored and getCanvas() below reads an empty buffer.
-        canvasContextAttributes: { preserveDrawingBuffer: true }
-    });
+    let pmap;
+    try {
+        pmap = new maplibregl.Map({
+            container: holder,
+            style,
+            center: [center.lng, center.lat],
+            zoom,
+            bearing,
+            pitch: 0,
+            interactive: false,
+            attributionControl: false,
+            fadeDuration: 0,
+            // Must be nested: MapLibre groups the WebGL context attributes here, so a top-level
+            // preserveDrawingBuffer is silently ignored and getCanvas() below reads an empty buffer.
+            canvasContextAttributes: { preserveDrawingBuffer: true },
+            // A2 at 200 DPI wants 4543x3150 px (4520 tall in portrait), past MapLibre's default
+            // 4096 cap, which silently clamped those exports to ~180 DPI. The GL driver still
+            // limits us to MAX_TEXTURE_SIZE — 4096 on many older mobile GPUs — and the ratio
+            // maths below already handles a clamped canvas, so where 8192 is refused this
+            // degrades exactly as it did before.
+            maxCanvasSize: [8192, 8192]
+        });
+    } catch (error) {
+        // Since 6.7.0 the constructor throws GPUInitializationError synchronously when a second
+        // WebGL2 context cannot be created — contexts are scarce on mobile. generatePrintPdf
+        // already catches and reports this, but holder is in the DOM by now and the finally
+        // below has not started yet, so it would leak. Take it out on the way past.
+        if (holder.parentNode) holder.parentNode.removeChild(holder);
+        throw error;
+    }
     if (typeof pmap.setPixelRatio === 'function') { try { pmap.setPixelRatio(1); } catch (e) { /* older build */ } }
 
     try {

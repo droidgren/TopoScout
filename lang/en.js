@@ -110,6 +110,7 @@ const LANG_EN = {
     msg_api_alert: "You must enter a key.",
     err_map_engine_file: "TopoScout can't run from a file:// URL: the map engine loads as an ES module, which browsers refuse to fetch from the local filesystem. Serve the folder over http instead — for example `uvicorn main:app --port 8000`, then open http://localhost:8000/. Installing the app still gives you full offline use.",
     err_map_engine: "The map engine failed to load. Check your connection and reload the page.",
+    err_map_webgl: "TopoScout could not start WebGL2, which it needs to draw the map. Update your browser, or turn on hardware acceleration in its settings.",
     res_rank: "Rank",
     res_start: "Start",
     res_peak: "Peak",
