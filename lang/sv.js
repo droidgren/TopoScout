@@ -108,6 +108,7 @@ const LANG_SV = {
     msg_api_alert: "Du måste ange en nyckel.",
     err_map_engine_file: "TopoScout kan inte köras från en file://-adress: kartmotorn laddas som en ES-modul, och webbläsare vägrar hämta moduler från det lokala filsystemet. Servera mappen över http i stället — till exempel `uvicorn main:app --port 8000`, och öppna sedan http://localhost:8000/. Installerar du appen fungerar den fortfarande helt offline.",
     err_map_engine: "Kartmotorn kunde inte laddas. Kontrollera din anslutning och ladda om sidan.",
+    err_map_webgl: "TopoScout kunde inte starta WebGL2, som behövs för att rita kartan. Uppdatera webbläsaren, eller slå på maskinvaruacceleration i dess inställningar.",
     res_rank: "Plats",
     res_start: "Start",
     res_peak: "Topp",
