@@ -10643,7 +10643,13 @@ async function capturePrintComposite(rect, layout) {
             fadeDuration: 0,
             // Must be nested: MapLibre groups the WebGL context attributes here, so a top-level
             // preserveDrawingBuffer is silently ignored and getCanvas() below reads an empty buffer.
-            canvasContextAttributes: { preserveDrawingBuffer: true }
+            canvasContextAttributes: { preserveDrawingBuffer: true },
+            // A2 at 200 DPI wants 4543x3150 px (4520 tall in portrait), past MapLibre's default
+            // 4096 cap, which silently clamped those exports to ~180 DPI. The GL driver still
+            // limits us to MAX_TEXTURE_SIZE — 4096 on many older mobile GPUs — and the ratio
+            // maths below already handles a clamped canvas, so where 8192 is refused this
+            // degrades exactly as it did before.
+            maxCanvasSize: [8192, 8192]
         });
     } catch (error) {
         // Since 6.7.0 the constructor throws GPUInitializationError synchronously when a second
