@@ -1,4 +1,4 @@
-const CACHE_NAME = '3057';
+const CACHE_NAME = '3058';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
@@ -31,12 +31,11 @@ const TILE_CACHE_MAX = 400;
 const KEEP_CACHES = [CACHE_NAME, TILE_CACHE];
 
 // Hosts that serve map/elevation/overlay tiles. Subdomains (e.g. the {s} in
-// a/b/c.tile.opentopomap.org or a.basemaps.cartocdn.com) are matched by suffix.
+// a/b/c.tile.opentopomap.org) are matched by suffix.
 const TILE_HOSTS = [
     'tiles.mapterhorn.com',
     'tile.openstreetmap.org',
     'tile.opentopomap.org',
-    'basemaps.cartocdn.com',
     'server.arcgisonline.com',
     'cache.kartverket.no',
     'tile.waymarkedtrails.org',

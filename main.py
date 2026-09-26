@@ -223,7 +223,7 @@ _CSP_REMOTE_HOSTS = (
     "https://tiles.mapterhorn.com "
     "https://tile.openstreetmap.org https://*.tile.openstreetmap.org "
     "https://tile.opentopomap.org https://*.tile.opentopomap.org "
-    "https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
+    "https://server.arcgisonline.com "
     "https://cache.kartverket.no https://*.waymarkedtrails.org "
     "https://tile.tracestrack.com https://tile.thunderforest.com https://tile.jawg.io "
     "https://lm.clackspark.workers.dev"

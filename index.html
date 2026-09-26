@@ -52,7 +52,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3057">
+    <link rel="stylesheet" href="style.css?v=3058">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -154,7 +154,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.29.0</span> (Build <span id="app-build">3057</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.29.1</span> (Build <span id="app-build">3058</span>)
             </p>
 
             <details
@@ -162,11 +162,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.29.1:</strong> Fixed the <strong>Carto Voyager and Carto Positron</strong> maps (and water detection), which stopped loading after Carto started requiring an API key. Tiles now go through the app's own tile proxy, which keeps the key private.</li>
                     <li><strong>v2.29.0:</strong> Updated the map engine to <strong>MapLibre GL JS 6.11.2</strong> &mdash; in 3D the view no longer bobs or jumps around pans, pinches and fly-to animations, dragging with the pointer above the horizon no longer moves the map backwards, and relief detail is cleaner on phones at high zoom. Map tiles stay crisp at non-integer display scaling, and pins no longer drift when terrain finishes loading.</li>
                     <li><strong>v2.28.0:</strong> Updated the map engine to <strong>MapLibre GL JS 6.9.0</strong> &mdash; in 3D, contour lines, relief and routes no longer shimmer while you move, the view no longer jumps at the end of a pan or pinch, and relief detail refreshes properly when you zoom. <strong>A2 printouts</strong> now keep their full resolution instead of being quietly reduced.</li>
                     <li><strong>v2.27.3:</strong> Fixed the <strong>hillshade going soft whenever 3D was switched on</strong>. Both read the same elevation source, and turning on terrain made that source serve coarser tiles &mdash; so the relief quietly lost a zoom level of detail. Hillshade now has its own source and keeps full detail in 3D.</li>
                     <li><strong>v2.27.2:</strong> New social preview card &mdash; the mountain is much larger, and a track with its editing handles now sits on real contour lines. The page title and description lead with route planning and GPX editing instead of listing peaks first, as does the page heading read out by screen readers.</li>
-                    <li><strong>v2.27.1:</strong> Updated the map engine to <strong>MapLibre GL JS 6.6.0</strong> &mdash; the point under the pointer is now read straight from the terrain data at full resolution, so elevation readings in 3D/tilt mode are more accurate and pointer events no longer stall the GPU. A map opened with a zoom or pitch limit also no longer ignores its saved centre and bearing.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -921,13 +921,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3057"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3058"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3057"></script>
-    <script defer src="lang/sv.js?v=3057"></script>
-    <script defer src="script.js?v=3057"></script>
+    <script defer src="lang/en.js?v=3058"></script>
+    <script defer src="lang/sv.js?v=3058"></script>
+    <script defer src="script.js?v=3058"></script>
 </body>
 
 </html>

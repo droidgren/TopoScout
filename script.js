@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.29.0";
-const BUILD_NUMBER = "3057";
+const APP_VERSION = "2.29.1";
+const BUILD_NUMBER = "3058";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -86,10 +86,14 @@ async function detectBackendAvailability() {
     return backendAvailable;
 }
 
-// Water analysis (CartoDB Light No Labels)
+// Cloudflare worker that proxies keyed tile sources (Lantmäteriet, Mapbox, Carto) so no
+// API key ever reaches the browser.
+const WORKER_URL = "https://lm.clackspark.workers.dev";
+
+// Water analysis (CartoDB Light No Labels, via the worker so it can add the Carto key)
 const WATER_COLOR = { r: 203, g: 210, b: 211 }; // #cbd2d3
 const WATER_TOLERANCE = 25;
-const WATER_CHECK_URL = "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png";
+const WATER_CHECK_URL = `${WORKER_URL}/carto/light_nolabels/{z}/{x}/{y}`;
 
 // Services requiring API keys
 const lockedServices = {
@@ -119,7 +123,6 @@ const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const NORGES_MAP_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const DATA_TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"; // UPDATED TO MAPTERHORN
-const WORKER_URL = "https://lm.clackspark.workers.dev";
 const ELEVATION_TILE_MAX_ZOOM = 15;
 const OVERZOOM_STORAGE_KEY = 'topo_overzoom';
 const OVERZOOM_MAX_ZOOM = 22;
@@ -206,8 +209,8 @@ const MAP_SOURCES = {
     "tracetrack": { url: '', attribution: 'Tracetrack', maxZoom: 20 },
     "thunderforest": { url: '', attribution: 'ThunderForest', maxZoom: 22 },
     "jawg_terrain": { url: '', attribution: '&copy; <a href="https://www.jawg.io/">Jawg</a> &copy; OpenStreetMap contributors', maxZoom: 22 },
-    "carto_voyager": { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
-    "carto_positron": { url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
+    "carto_voyager": { url: `${WORKER_URL}/carto/voyager/{z}/{x}/{y}`, attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
+    "carto_positron": { url: `${WORKER_URL}/carto/light_all/{z}/{x}/{y}`, attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; OpenStreetMap contributors', maxZoom: 20 },
     "lm_map": { url: `${WORKER_URL}/{z}/{x}/{y}`, attribution: '&copy; <a href="https://www.lantmateriet.se/">Lantm\u00e4teriet</a> - CC BY 4.0', maxZoom: 20 },
     "norges_map": { url: NORGES_MAP_URL, attribution: '&copy; <a href="http://www.kartverket.no/">Kartverket</a>', maxZoom: 19 },
     "osm": { url: OSM_URL, attribution: 'OpenStreetMap', maxZoom: 19 },
