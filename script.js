@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.29.1";
-const BUILD_NUMBER = "3058";
+const APP_VERSION = "2.30.0";
+const BUILD_NUMBER = "3063";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -163,6 +163,7 @@ const GPX_EDIT_MIN_HANDLES = 3;
 const GPX_EDIT_UNDO_MAX = 20;
 const GPX_EDIT_UNDO_MAX_POINTS = 400000;   // total points across all stacked snapshots
 const GPX_EDIT_CLICK_TOLERANCE_PX = 18;    // click-to-add-handle hit radius
+const GPX_WPT_SNAP_PX = 24;                // a dragged/added waypoint this close to the track lands on it
 const GPX_EDIT_ORS_RADIUS_M = 50;          // snap radius sent to the routing service
 // How far the dragged handle may be pulled to the routed path. The backend widens the
 // snap radius when nothing is found nearby (sparse alpine/forest mapping), so a routed
@@ -2362,6 +2363,8 @@ function updateLanguage() {
         if (document.getElementById('gpx-download-btn')) document.querySelector('#gpx-download-btn .btn-label').textContent = t.btn_gpx_download;
         // Covers the Edit button label, the panel labels/options and the button states.
         _updateGpxEditUI();
+        // Editable waypoints bake their tooltip in when created.
+        if (gpxEditState && gpxEditState.waypointMode && !gpxEditState.wptDrag) rebuildGpxMarkers();
         // Covers the Create Route button label, its panel labels/options and step text.
         _updateRouteCreateUI();
         // Covers the floating route panel's title and toggle label.
@@ -2407,7 +2410,7 @@ function updateLanguage() {
         _updateRouteInfoPanel();
 
         // POI labels
-        if (document.getElementById('poi-btn')) document.querySelector('#poi-btn .btn-label').textContent = t.btn_add_poi;
+        _updatePoiButtonUI();
         if (document.getElementById('lbl-show-poi')) document.getElementById('lbl-show-poi').textContent = t.lbl_show_poi;
         const poiPlaceLabel = document.getElementById('btn-place-poi-label');
         if (poiPlaceLabel) poiPlaceLabel.textContent = t.btn_place_poi;
@@ -4424,10 +4427,14 @@ window.clearGpxRoute = function () {
 // changes `gpxTrackData.segments` while `currentGpxRawText` still holds the file the user
 // loaded — after an edit those two disagree and the export has to come from the geometry.
 //
-// Lossy by construction: parseGpxText() keeps only lat/lon/ele per point and lat/lon/name
-// per waypoint, so per-point <time>, sensor extensions, <desc>, waypoint <sym>/<type> and
-// the <rte>-vs-<trk> distinction are gone before we get here. saveGpxEdits() warns first.
+// Lossy by construction: parseGpxText() keeps only lat/lon/ele per track point, so per-point
+// <time>, sensor extensions and the <rte>-vs-<trk> distinction are gone before we get here.
+// Waypoints keep lat/lon, <ele>, <name> and the text fields below; their <link>s and
+// <extensions> are dropped. saveGpxEdits() warns first.
 const GPX_XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+// Waypoint text children carried from parse to export. <name> is handled on its own, and
+// buildGpxXml() writes these around it in the order the GPX 1.1 schema requires.
+const GPX_WAYPOINT_TEXT_FIELDS = ['time', 'cmt', 'desc', 'sym', 'type'];
 
 function escapeXml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, c => GPX_XML_ESCAPES[c]);
@@ -4457,9 +4464,17 @@ function buildGpxXml(segments, waypoints, metadata = {}) {
     out.push('  </metadata>');
     for (const wp of (waypoints || [])) {
         const open = '  <wpt lat="' + formatGpxCoord(wp.lat) + '" lon="' + formatGpxCoord(wp.lon) + '"';
-        if (wp.name) {
+        // Schema order inside <wpt>: ele, time, name, cmt, desc, sym, type.
+        const children = [];
+        if (Number.isFinite(wp.ele)) children.push('<ele>' + formatGpxEle(wp.ele) + '</ele>');
+        if (wp.time) children.push('<time>' + escapeXml(wp.time) + '</time>');
+        if (wp.name) children.push('<name>' + escapeXml(wp.name) + '</name>');
+        for (const tag of ['cmt', 'desc', 'sym', 'type']) {
+            if (wp[tag]) children.push('<' + tag + '>' + escapeXml(wp[tag]) + '</' + tag + '>');
+        }
+        if (children.length) {
             out.push(open + '>');
-            out.push('    <name>' + escapeXml(wp.name) + '</name>');
+            for (const c of children) out.push('    ' + c);
             out.push('  </wpt>');
         } else {
             out.push(open + '/>');
@@ -5051,15 +5066,24 @@ function updateGpxTrackLine() {
 }
 
 function rebuildGpxMarkers() {
+    // Removing a marker mid-drag unbinds MapLibre's dragend, which would orphan the drag;
+    // land it first.
+    if (gpxEditState && gpxEditState.wptDrag) _gpxWptFinishDrag();
     clearMarkerCollection(currentMarkers);
     currentMarkers = [];
 
-    const showWaypoints = getGpxShowWaypoints();
+    // In waypoint mode the waypoints are the thing being edited, so they show regardless.
+    const editingWaypoints = !!(gpxEditState && gpxEditState.waypointMode);
+    const showWaypoints = getGpxShowWaypoints() || editingWaypoints;
     const showMinMax = getGpxShowMinMax();
     const t = translations[currentLang];
 
     if (showWaypoints) {
         for (const wp of gpxTrackData.waypoints) {
+            if (editingWaypoints) {
+                currentMarkers.push(_createEditableWaypointMarker(wp));
+                continue;
+            }
             const label = wp.name || '•';
             const el = document.createElement('div');
             el.className = 'gpx-waypoint-label';
@@ -5205,9 +5229,22 @@ function parseGpxText(gpxText) {
         const lat = parseFloat(pt.getAttribute('lat'));
         const lon = parseFloat(pt.getAttribute('lon'));
         if (!isNaN(lat) && !isNaN(lon)) {
-            const nameEl = pt.querySelector('name');
-            const name = nameEl ? nameEl.textContent : '';
-            waypoints.push({ lat, lon, name });
+            // Direct children only: a bare `name` selector also matches a <name> nested in
+            // <extensions> or <link> when the waypoint has none of its own.
+            const child = (tag) => {
+                const el = pt.querySelector(':scope > ' + tag);
+                return el ? el.textContent.trim() : '';
+            };
+            const wp = { lat, lon, name: child('name') };
+            // Carried through so that saving after a waypoint edit does not strip them —
+            // <sym>/<type> are what give aid stations their icons on GPS watches.
+            const ele = parseFloat(child('ele'));
+            if (Number.isFinite(ele)) wp.ele = ele;
+            for (const tag of GPX_WAYPOINT_TEXT_FIELDS) {
+                const value = child(tag);
+                if (value) wp[tag] = value;
+            }
+            waypoints.push(wp);
             totalPoints++;
         }
     });
@@ -5930,7 +5967,10 @@ document.getElementById('gpxTrackWidth').addEventListener('input', function () {
 });
 document.getElementById('gpxShowKmLabels').addEventListener('change', function () { rebuildGpxLayer(); });
 document.getElementById('gpxColorBySlope').addEventListener('change', function () { rebuildGpxLayer(); });
-document.getElementById('gpxShowWaypoints').addEventListener('change', function () { rebuildGpxLayer(); });
+document.getElementById('gpxShowWaypoints').addEventListener('change', function () {
+    rebuildGpxLayer();
+    refreshElevationProfileWaypoints();
+});
 document.getElementById('gpxShowMinMax').addEventListener('change', function () { rebuildGpxLayer(); });
 document.getElementById('gpxShowElevProfile').addEventListener('change', function () {
     if (this.checked) { showElevationProfile(); } else { hideElevationProfile(); }
@@ -5962,10 +6002,12 @@ function scheduleElevationProfileRedraw() {
     });
 }
 
-function buildElevationProfileData(allSegments) {
+// `segStarts`, when given, receives the index in the result where each segment begins.
+function buildElevationProfileData(allSegments, segStarts) {
     const points = [];
     let cumDist = 0;
     for (const seg of allSegments) {
+        if (segStarts) segStarts.push(points.length);
         for (let i = 0; i < seg.length; i++) {
             if (i > 0) {
                 cumDist += haversineDistance(seg[i - 1].lat, seg[i - 1].lon, seg[i].lat, seg[i].lon);
@@ -5979,6 +6021,159 @@ function buildElevationProfileData(allSegments) {
         }
     }
     return points;
+}
+
+// --- Waypoints on the profile ---
+// A waypoint is drawn at its distance along the route, so only waypoints the route actually
+// passes are shown; further out than this it belongs to the map alone.
+const WAYPOINT_PROFILE_MAX_OFFSET_M = 250;
+// Passes that come within this much of the closest one count as equally close.
+const WAYPOINT_PROFILE_PASS_TIE_M = 20;
+const PROFILE_CHUNK_EDGES = 64;
+let elevationProfileChunks = [];         // bounding boxes over runs of profile edges
+let elevationProfileWaypoints = [];      // [{wp, name, dist, ele, lat, lon}], sorted by dist
+let elevationProfileWaypointsVersion = 0; // bumped on every change; keys the label-layout cache
+
+function normalizeWaypointName(name) {
+    return String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+}
+
+function isProfileWaypointsVisible() {
+    return getGpxShowWaypoints() || !!(gpxEditState && gpxEditState.waypointMode);
+}
+
+// Bounding boxes over runs of up to PROFILE_CHUNK_EDGES profile edges, so projecting a
+// waypoint can skip whole stretches of track nowhere near it: hundreds of cue-sheet waypoints
+// on a 27k-point ultra would otherwise cost a tenth of a second per full pass. A chunk never
+// spans a segment join (`first` marks a segment's first chunk); `segStarts` are the indices
+// buildElevationProfileData() reported.
+function buildElevationProfileChunks(data, segStarts) {
+    const chunks = [];
+    const starts = segStarts.length ? segStarts : [0];
+    for (let s = 0; s < starts.length; s++) {
+        const end = s + 1 < starts.length ? starts[s + 1] : data.length;   // points [start, end)
+        for (let from = starts[s]; from < end - 1; from += PROFILE_CHUNK_EDGES) {
+            const to = Math.min(from + PROFILE_CHUNK_EDGES, end - 1);      // edges [from, to)
+            let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+            for (let i = from; i <= to; i++) {
+                const p = data[i];
+                if (p.lat < minLat) minLat = p.lat;
+                if (p.lat > maxLat) maxLat = p.lat;
+                if (p.lon < minLon) minLon = p.lon;
+                if (p.lon > maxLon) maxLon = p.lon;
+            }
+            chunks.push({ from, to, first: from === starts[s], minLat, maxLat, minLon, maxLon });
+        }
+    }
+    return chunks;
+}
+
+// Where the route passes `wp` -> { dist, ele, lat, lon } on the profile, or null when it never
+// comes within WAYPOINT_PROFILE_MAX_OFFSET_M. Each GPX segment is scanned on its own: the
+// profile concatenates them, and one polyline through the joins would invent links between
+// segments for waypoints to land on.
+//
+// A route can pass one spot more than once — a loop's start and finish, both legs of an
+// out-and-back. Every pass is found, and among those about as close as the best, the first
+// one beyond `minDist` wins. Callers pass the previous waypoint's distance (-1 for the first),
+// so "Start" … "Finish" listed at one spot land at the two ends of the profile, and a return
+// visit listed right after the outbound one lands on the return leg.
+function projectWaypointOntoProfile(wp, minDist) {
+    const data = elevationProfileData;
+    if (!data || data.length < 2 || !wp) return null;
+    const maxD2 = WAYPOINT_PROFILE_MAX_OFFSET_M * WAYPOINT_PROFILE_MAX_OFFSET_M;
+    const kLon = 111320 * Math.cos(wp.lat * Math.PI / 180);
+    // Slack in degrees for the bounding-box test, with margin for the flat-earth estimate.
+    const latTol = 1.2 * WAYPOINT_PROFILE_MAX_OFFSET_M / 111320;
+    const lonTol = 1.2 * WAYPOINT_PROFILE_MAX_OFFSET_M / Math.max(kLon, 1);
+    const seg = { t: 0, d2: 0 };
+    const passes = [];
+    let cur = null; // closest point of the pass in progress
+    const endPass = () => { if (cur) { passes.push(cur); cur = null; } };
+    for (const c of elevationProfileChunks) {
+        if (c.first) endPass();     // no pass runs across a segment join
+        if (wp.lat < c.minLat - latTol || wp.lat > c.maxLat + latTol ||
+            wp.lon < c.minLon - lonTol || wp.lon > c.maxLon + lonTol) {
+            endPass();              // this whole stretch is out of range
+            continue;
+        }
+        for (let i = c.from; i < c.to; i++) {
+            _segmentDist2(data[i], data[i + 1], wp.lat, wp.lon, kLon, seg);
+            if (seg.d2 <= maxD2) {
+                if (!cur || seg.d2 < cur.d2) cur = { i, t: seg.t, d2: seg.d2 };
+            } else {
+                endPass();
+            }
+        }
+    }
+    endPass();
+    if (!passes.length) return null;
+
+    const at = (p) => {
+        const a = data[p.i], b = data[p.i + 1], t = p.t;
+        return {
+            dist: a.dist + t * (b.dist - a.dist),
+            ele: a.ele + t * (b.ele - a.ele),
+            lat: a.lat + t * (b.lat - a.lat),
+            lon: a.lon + t * (b.lon - a.lon)
+        };
+    };
+    let best = passes[0];
+    for (const p of passes) if (p.d2 < best.d2) best = p;
+    const tieM = Math.sqrt(best.d2) + WAYPOINT_PROFILE_PASS_TIE_M;
+    for (const p of passes) {           // passes are in route order
+        if (Math.sqrt(p.d2) > tieM) continue;
+        const hit = at(p);
+        if (hit.dist > minDist) return hit;
+    }
+    return at(best);
+}
+
+function _profileWaypointEntry(wp, hit) {
+    return Object.assign({ wp, name: normalizeWaypointName(wp.name) }, hit);
+}
+
+function computeElevationProfileWaypoints() {
+    const list = [];
+    const wps = gpxTrackData && gpxTrackData.waypoints;
+    if (elevationProfileData && wps) {
+        let prevDist = -1;
+        for (const wp of wps) {
+            const hit = projectWaypointOntoProfile(wp, prevDist);
+            if (!hit) continue;
+            prevDist = hit.dist;
+            list.push(_profileWaypointEntry(wp, hit));
+        }
+        list.sort((a, b) => a.dist - b.dist);
+    }
+    elevationProfileWaypoints = list;
+    elevationProfileWaypointsVersion++;
+}
+
+// Re-projects just `wp` — the waypoint being dragged — rather than every waypoint per frame.
+function _updateElevationProfileWaypoint(wp) {
+    const wps = (gpxTrackData && gpxTrackData.waypoints) || [];
+    const byWp = new Map(elevationProfileWaypoints.map(e => [e.wp, e]));
+    let prevDist = -1;
+    for (let j = wps.indexOf(wp) - 1; j >= 0; j--) {
+        const prev = byWp.get(wps[j]);
+        if (prev) { prevDist = prev.dist; break; }
+    }
+    const list = elevationProfileWaypoints.filter(e => e.wp !== wp);
+    const hit = projectWaypointOntoProfile(wp, prevDist);
+    if (hit) list.push(_profileWaypointEntry(wp, hit));
+    list.sort((a, b) => a.dist - b.dist);
+    elevationProfileWaypoints = list;
+    elevationProfileWaypointsVersion++;
+}
+
+// Waypoints changed but the track did not: re-project and redraw, keeping the profile's zoom
+// (showElevationProfile() would reset it). `onlyWp` limits the work to one waypoint.
+function refreshElevationProfileWaypoints(onlyWp) {
+    if (!elevationProfileData) return;
+    if (onlyWp) _updateElevationProfileWaypoint(onlyWp);
+    else computeElevationProfileWaypoints();
+    if (!elevationProfileMinimized) drawElevationProfile();
 }
 
 // How much of the viewport bottom is covered by docked chrome — the elevation profile plus,
@@ -6031,8 +6226,11 @@ function adjustMapControlsForElevation() {
 function showElevationProfile() {
     if (!getGpxShowElevProfile()) { hideElevationProfile(); return; }
     if (!gpxTrackData || !gpxTrackData.segments || gpxTrackData.segments.length === 0) return;
-    elevationProfileData = buildElevationProfileData(gpxTrackData.segments);
+    const segStarts = [];
+    elevationProfileData = buildElevationProfileData(gpxTrackData.segments, segStarts);
     if (elevationProfileData.length < 2) return;
+    elevationProfileChunks = buildElevationProfileChunks(elevationProfileData, segStarts);
+    computeElevationProfileWaypoints();
 
     elevationViewStart = 0;
     elevationViewEnd = elevationProfileData[elevationProfileData.length - 1].dist;
@@ -6058,6 +6256,8 @@ function hideElevationProfile() {
     const container = document.getElementById('elevation-profile');
     if (container) container.style.display = 'none';
     elevationProfileData = null;
+    elevationProfileChunks = [];
+    elevationProfileWaypoints = [];
     elevationViewStart = null;
     elevationViewEnd = null;
     removeElevationMarker();
@@ -6230,8 +6430,252 @@ function drawElevationProfile() {
     ctx.lineWidth = 1;
     ctx.strokeRect(PAD_LEFT, PAD_TOP, plotW, plotH);
 
+    drawElevationProfileWaypoints(ctx, { W, PAD_LEFT, PAD_TOP, plotW, plotH, vStart, vEnd, eleMin, eleMax, xScale, yScale });
+
     // Store drawing params for hit-testing
     canvas._epParams = { PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM, plotW, plotH, totalDist, eleMin, eleMax, W, H, vStart, vEnd, vRange };
+}
+
+// Waypoint markers on the profile: a dot at the waypoint's point on the terrain, a thin line
+// from it up to the top of the chart or down to its floor — whichever side leaves the name
+// more room — and the name written vertically along the line in a small, light font, no box.
+// Names always read bottom to top, so on an upward line the name starts at the point and on
+// a downward one it ends there. A name longer than its room is shortened, never below
+// EP_WPT_MIN_CHARS letters; the full name shows in the header when the cursor lands on it.
+const EP_WPT_COLOR = '#2E7D32';        // the map's .gpx-waypoint-label green
+const EP_WPT_TEXT_COLOR = '#1B5E20';
+const EP_WPT_FONT_PX = 8;
+const EP_WPT_LABEL_BAND = 9;           // the width a vertical name takes up
+const EP_WPT_LABEL_OFFSET = 2;         // gap between a line and its name
+const EP_WPT_TEXT_GAP = 5;             // gap between the point and the start or end of its name
+const EP_WPT_MIN_CHARS = 3;
+const EP_WPT_DENSE_PX = 12;            // fewer px per waypoint than this: ticks only, no names
+let _epWptLayoutCache = { key: null, layout: null };
+
+// Light on high-density screens; at 1x a light face this small thins out to hairlines.
+function epWaypointFont() {
+    const weight = (window.devicePixelRatio || 1) >= 2 ? 300 : 400;
+    return weight + ' ' + EP_WPT_FONT_PX + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+}
+
+// The text for `name` in `avail` px: the whole name if it fits, else the longest prefix that
+// does plus "…", cut back to a word boundary when that keeps enough letters. null when not
+// even EP_WPT_MIN_CHARS letters fit.
+function fitProfileLabel(ctx, name, avail) {
+    if (avail <= 0) return null;
+    if (ctx.measureText(name).width <= avail) return name;
+    const chars = Array.from(name);
+    const cut = (n) => chars.slice(0, n).join('').trimEnd() + '…';
+    let lo = 0, hi = chars.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (ctx.measureText(cut(mid)).width <= avail) lo = mid;
+        else hi = mid - 1;
+    }
+    if (lo < EP_WPT_MIN_CHARS) return null;
+    let prefix = chars.slice(0, lo).join('');
+    if (chars[lo] !== ' ') {
+        // The cut falls inside a word: "Dom pri iz" reads better as "Dom pri".
+        const space = prefix.lastIndexOf(' ');
+        if (space > 0 && Array.from(prefix.slice(0, space)).length >= EP_WPT_MIN_CHARS) {
+            prefix = prefix.slice(0, space);
+        }
+    }
+    return prefix.trimEnd() + '…';
+}
+
+// Highest and lowest terrain between two distances along the profile, ends interpolated.
+function _profileEleRange(d0, d1) {
+    const data = elevationProfileData;
+    const n = data.length;
+    const firstAtOrAfter = (d) => {
+        let lo = 0, hi = n;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (data[mid].dist < d) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    };
+    const eleAt = (d) => {
+        const i = firstAtOrAfter(d);
+        if (i <= 0) return data[0].ele;
+        if (i >= n) return data[n - 1].ele;
+        const a = data[i - 1], b = data[i], span = b.dist - a.dist;
+        return span > 0 ? a.ele + (b.ele - a.ele) * (d - a.dist) / span : b.ele;
+    };
+    const e0 = eleAt(d0), e1 = eleAt(d1);
+    let min = Math.min(e0, e1), max = Math.max(e0, e1);
+    for (let i = firstAtOrAfter(d0); i < n && data[i].dist <= d1; i++) {
+        if (data[i].ele < min) min = data[i].ele;
+        if (data[i].ele > max) max = data[i].ele;
+    }
+    return { min, max };
+}
+
+// Canvas-relative boxes of the header controls laid over the top of the canvas, which would
+// hide a name running up under them. Over the expanded chart that is just the collapse toggle
+// (the title shows only on the collapsed bar); the scrub readout is left out on purpose — it
+// comes and goes with the cursor, and the names must not re-flow under the user's finger.
+function _readHeaderChips(canvas) {
+    const base = canvas.getBoundingClientRect();
+    const boxes = [];
+    for (const id of ['elevation-profile-title', 'elevation-profile-toggle']) {
+        const el = document.getElementById(id);
+        if (!el || el.offsetParent === null) continue;   // not shown
+        const r = el.getBoundingClientRect();
+        boxes.push({ x0: r.left - base.left, x1: r.right - base.left, bottom: r.bottom - base.top });
+    }
+    return boxes;
+}
+
+// Positions for the visible waypoints: [{...entry, x, y, dir, text, rect}], `dir` being the
+// way the line runs from the point ('up' or 'down') and `rect` the strip the name takes up.
+// Each line runs towards the side with more room for its name. Then, left to right, a name
+// takes the side of its line where the terrain stays clearest of it, as long as it overlaps
+// no other name and crosses no other waypoint's line or dot, and its own line cuts through
+// no name already placed. When neither side works it tries the other direction, and with
+// no room at all the name is left out — touching the line still reveals it.
+// Memoized: the profile is redrawn on every pointer move, the layout only changes with the
+// view, the waypoints or the header chips.
+function layoutElevationProfileWaypoints(ctx, g) {
+    const font = epWaypointFont();
+    const chipsKey = g.chips.map(b => [b.x0, b.x1, b.bottom].map(Math.round).join(',')).join(';');
+    const key = [g.W, g.plotW, g.plotH, g.vStart, g.vEnd, g.eleMin, g.eleMax, chipsKey, font,
+        elevationProfileWaypointsVersion].join('|');
+    if (_epWptLayoutCache.key === key) return _epWptLayoutCache.layout;
+
+    const floor = g.PAD_TOP + g.plotH;
+    const B = EP_WPT_LABEL_BAND, OFF = EP_WPT_LABEL_OFFSET, GAP = EP_WPT_TEXT_GAP;
+    // How high a name may run at columns x0..x1: under a header chip it stops short of it.
+    const ceilingAt = (x0, x1) => {
+        let c = g.PAD_TOP + 1;
+        for (const b of g.chips) if (b.x1 >= x0 - 2 && b.x0 <= x1 + 2) c = Math.max(c, b.bottom + 2);
+        return c;
+    };
+    const roomFor = (it, dir) => dir === 'up'
+        ? (it.y - GAP) - ceilingAt(it.x - OFF - B, it.x + OFF + B)
+        : (floor - 2) - (it.y + GAP);
+
+    const items = [];
+    for (const e of elevationProfileWaypoints) {
+        if (e.dist < g.vStart || e.dist > g.vEnd) continue;
+        const it = Object.assign({}, e, { x: g.xScale(e.dist), y: g.yScale(e.ele), dir: 'up', text: '', rect: null });
+        it.dir = roomFor(it, 'up') >= roomFor(it, 'down') ? 'up' : 'down';
+        items.push(it);
+    }
+    const dense = items.length > g.plotW / EP_WPT_DENSE_PX;
+    if (!dense) {
+        ctx.font = font;
+        const toDist = (x) => g.vStart + (x - g.PAD_LEFT) / g.plotW * (g.vEnd - g.vStart);
+        const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        // Whether rect `r` crosses the line (dot included) of waypoint `it` running `dir`.
+        const crossesLine = (r, it, dir) => {
+            if (it.x < r.x - 0.5 || it.x > r.x + r.w + 0.5) return false;
+            const top = dir === 'up' ? g.PAD_TOP : it.y - 4;
+            const bottom = dir === 'up' ? it.y + 4 : floor;
+            return top <= r.y + r.h && bottom >= r.y;
+        };
+        const candidate = (it, dir, side) => {
+            const x0 = side > 0 ? it.x + OFF : it.x - OFF - B;
+            if (x0 < g.PAD_LEFT || x0 + B > g.W - 1) return null;
+            const start = dir === 'up' ? it.y - GAP : it.y + GAP;
+            const room = dir === 'up' ? start - ceilingAt(x0, x0 + B) : floor - 2 - start;
+            const text = fitProfileLabel(ctx, it.name, room);
+            if (!text) return null;
+            const len = ctx.measureText(text).width;
+            // How far the terrain beside the line reaches into the name's strip.
+            const ele = _profileEleRange(toDist(x0), toDist(x0 + B));
+            const intrusion = dir === 'up'
+                ? Math.max(0, Math.min(len, start - g.yScale(ele.max)))
+                : Math.max(0, Math.min(len, g.yScale(ele.min) - start));
+            return { dir, text, intrusion, rect: { x: x0, y: dir === 'up' ? start - len : start, w: B, h: len } };
+        };
+        const placed = [];
+        for (const it of items) {
+            if (!it.name) continue;
+            let chosen = null;
+            for (const dir of [it.dir, it.dir === 'up' ? 'down' : 'up']) {
+                // Sorting is stable, so the right side wins a tie.
+                const options = [candidate(it, dir, 1), candidate(it, dir, -1)].filter(Boolean)
+                    .sort((a, b) => a.intrusion - b.intrusion);
+                chosen = options.find(c =>
+                    !placed.some(r => overlaps(c.rect, r)) &&
+                    !items.some(o => o !== it && crossesLine(c.rect, o, o.dir)) &&
+                    !placed.some(r => crossesLine(r, it, dir))) || null;
+                if (chosen) break;
+            }
+            if (!chosen) continue;
+            it.dir = chosen.dir;
+            it.text = chosen.text;
+            it.rect = chosen.rect;
+            placed.push(chosen.rect);
+        }
+    }
+    const layout = { items, dense };
+    _epWptLayoutCache = { key, layout };
+    return layout;
+}
+
+function drawElevationProfileWaypoints(ctx, g) {
+    const canvas = ctx.canvas;
+    if (!elevationProfileWaypoints.length || !isProfileWaypointsVisible()) {
+        canvas._epWaypoints = [];   // hidden waypoints must not catch the cursor either
+        return;
+    }
+    const floor = g.PAD_TOP + g.plotH;
+    g.chips = _readHeaderChips(canvas);
+    const { items, dense } = layoutElevationProfileWaypoints(ctx, g);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(46, 125, 50, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const it of items) {
+        const x = Math.round(it.x) + 0.5;   // on the pixel grid, so the 1px line stays crisp
+        if (dense) {
+            ctx.moveTo(x, floor);
+            ctx.lineTo(x, floor - 5);
+        } else {
+            ctx.moveTo(x, it.y);
+            ctx.lineTo(x, it.dir === 'up' ? g.PAD_TOP : floor);
+        }
+    }
+    ctx.stroke();
+
+    if (!dense) {
+        ctx.font = epWaypointFont();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillStyle = EP_WPT_TEXT_COLOR;
+        for (const it of items) {
+            const r = it.rect;
+            if (!r) continue;
+            ctx.save();
+            // Bottom to top, from the strip's lower end: an upward name starts at the point, a
+            // downward one ends there.
+            ctx.translate(r.x + r.w / 2, r.y + r.h);
+            ctx.rotate(-Math.PI / 2);
+            ctx.strokeText(it.text, 0, 0);   // a halo, not a box: legible over the blue fill
+            ctx.fillText(it.text, 0, 0);
+            ctx.restore();
+        }
+        // Dots last, over any name that runs past one.
+        for (const it of items) {
+            ctx.beginPath();
+            ctx.arc(it.x, it.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = EP_WPT_COLOR;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+    canvas._epWaypoints = items;
 }
 
 function getElevationPointAtX(canvasX) {
@@ -6262,9 +6706,12 @@ function getElevationPointAtX(canvasX) {
     };
 }
 
-function updateElevationProfileInfo(point) {
+// `waypoint` (a profile layout item) appends the full name the flag may be abbreviating.
+// It goes last so an ellipsis on a narrow screen eats into the name, never the numbers.
+function updateElevationProfileInfo(point, waypoint) {
     const infoEl = document.getElementById('elevation-profile-info');
     if (!infoEl) return;
+    const name = point && waypoint ? waypoint.name : '';
     if (!point) {
         infoEl.textContent = '';
         return;
@@ -6274,7 +6721,7 @@ function updateElevationProfileInfo(point) {
     const unitLabel = unit === 'mi' ? 'mi' : 'km';
     const distVal = point.dist / unitMeters;
     const distStr = distVal >= 1 ? distVal.toFixed(1) + ' ' + unitLabel : formatDistance(point.dist);
-    infoEl.textContent = distStr + '  •  ' + formatElevation(point.ele);
+    infoEl.textContent = distStr + '  •  ' + formatElevation(point.ele) + (name ? '  •  ' + name : '');
 }
 
 function drawElevationCursor(canvasX, point) {
@@ -6361,42 +6808,61 @@ function removeElevationMarker() {
         return p.PAD_LEFT + frac * p.plotW;
     }
 
+    // The waypoint under the pointer, if any. A fresh press (touchstart / mousedown) on a
+    // waypoint's name jumps the cursor onto it, as does a touchstart within `snapLinePx` of
+    // its line, which is too thin to hit with a finger. Otherwise the cursor stays under the
+    // pointer and a name or line it passes over is only named in the readout — the names run
+    // through the middle of the chart, and snapping there would make every scrub sticky.
+    function resolveWaypointAt(canvasX, canvasY, freshPress, snapLinePx) {
+        let nearest = null, nearestDx = Infinity;
+        for (const it of (canvas._epWaypoints || [])) {
+            const r = it.rect;
+            if (r && canvasX >= r.x - 2 && canvasX <= r.x + r.w + 2 &&
+                canvasY >= r.y - 2 && canvasY <= r.y + r.h + 2) {
+                return { waypoint: it, snap: freshPress };
+            }
+            const dx = Math.abs(canvasX - it.x);
+            if (dx < nearestDx) { nearestDx = dx; nearest = it; }
+        }
+        if (nearest && nearestDx <= Math.max(3, snapLinePx)) {
+            return { waypoint: nearest, snap: nearestDx <= snapLinePx };
+        }
+        return { waypoint: null, snap: false };
+    }
+
+    function showCursorAt(canvasX, canvasY, freshPress, snapLinePx, syncMap) {
+        const { waypoint, snap } = resolveWaypointAt(canvasX, canvasY, freshPress, snapLinePx);
+        let point;
+        if (snap) {
+            canvasX = waypoint.x;
+            point = { dist: waypoint.dist, ele: waypoint.ele, lat: waypoint.lat, lon: waypoint.lon };
+        } else {
+            point = getElevationPointAtX(canvasX);
+        }
+        if (!point) return;
+        drawElevationCursor(canvasX, point);
+        updateElevationProfileInfo(point, waypoint);
+        showElevationMarker(point.lat, point.lon);
+        if (syncMap && getElevMapSync()) {
+            map._map.panTo([point.lon, point.lat], { animate: false });
+        }
+    }
+
     function showAtFrac(frac, syncMap) {
         if (!elevationProfileData || !canvas._epParams) return;
         frac = Math.max(0, Math.min(1, frac));
         cursorFrac = frac;
-        const canvasX = distToCanvasX(frac);
-        const point = getElevationPointAtX(canvasX);
-        if (point) {
-            drawElevationCursor(canvasX, point);
-            updateElevationProfileInfo(point);
-            showElevationMarker(point.lat, point.lon);
-            if (syncMap && getElevMapSync()) {
-                map._map.panTo([point.lon, point.lat], { animate: false });
-            }
-        }
+        showCursorAt(distToCanvasX(frac), -1, false, 0, syncMap);
     }
 
     function handlePointer(e, syncMap) {
         const rect = canvas.getBoundingClientRect();
-        let clientX;
-        if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-        } else {
-            clientX = e.clientX;
-        }
-        const canvasX = clientX - rect.left;
+        const src = e.touches && e.touches.length > 0 ? e.touches[0] : e;
+        const canvasX = src.clientX - rect.left;
         const p = canvas._epParams;
         if (p) cursorFrac = Math.max(0, Math.min(1, (canvasX - p.PAD_LEFT) / p.plotW));
-        const point = getElevationPointAtX(canvasX);
-        if (point) {
-            drawElevationCursor(canvasX, point);
-            updateElevationProfileInfo(point);
-            showElevationMarker(point.lat, point.lon);
-            if (syncMap && getElevMapSync()) {
-                map._map.panTo([point.lon, point.lat], { animate: false });
-            }
-        }
+        const fresh = e.type === 'touchstart' || e.type === 'mousedown';
+        showCursorAt(canvasX, src.clientY - rect.top, fresh, e.type === 'touchstart' ? 10 : 0, syncMap);
     }
 
     canvas.addEventListener('mousedown', (e) => { dragging = true; handlePointer(e, true); });
@@ -6431,13 +6897,7 @@ function removeElevationMarker() {
     canvas.addEventListener('mousemove', (e) => {
         if (!dragging) {
             const rect = canvas.getBoundingClientRect();
-            const canvasX = e.clientX - rect.left;
-            const point = getElevationPointAtX(canvasX);
-            if (point) {
-                drawElevationCursor(canvasX, point);
-                updateElevationProfileInfo(point);
-                showElevationMarker(point.lat, point.lon);
-            }
+            showCursorAt(e.clientX - rect.left, e.clientY - rect.top, false, 0, false);
         }
     });
 
@@ -6534,12 +6994,7 @@ function removeElevationMarker() {
         drawElevationProfile();
 
         // Re-trigger hover effect at current mouse position after redrawing
-        const point = getElevationPointAtX(canvasX);
-        if (point) {
-            drawElevationCursor(canvasX, point);
-            updateElevationProfileInfo(point);
-            showElevationMarker(point.lat, point.lon);
-        }
+        showCursorAt(canvasX, e.clientY - rect.top, false, 0, false);
     }, { passive: false });
 
     // Expand on click if minimized
@@ -8447,7 +8902,13 @@ function enterGpxEditMode(options = {}) {
         undoPointCount: 0,
         dragging: null,
         busy: false,
-        prevColorBySlope: getGpxColorBySlope()
+        prevColorBySlope: getGpxColorBySlope(),
+        // Waypoints are edited in place in gpxTrackData.waypoints; this copy is what Cancel
+        // puts back.
+        originalWaypoints: cloneWaypoints(gpxTrackData.waypoints),
+        waypointMode: false,   // the POI button's sub-mode: waypoints editable, handles inert
+        wptDrag: null,         // { wp, marker, snap, rafId } while a waypoint is being dragged
+        wptClickGuardUntil: 0  // swallows the click a touch drag can leave behind
     };
     // The working copy becomes the rendered geometry.
     gpxTrackData.segments[segIndex] = gpxEditState.points;
@@ -8603,32 +9064,43 @@ function metersPerPixel() {
     return haversineDistance(a.lat, a.lng, b.lat, b.lng) / 100;
 }
 
-// Nearest point on the edited polyline to (lat, lon) -> { i, t, distM }, where the hit
-// lies at fraction t along the segment from points[i] to points[i+1].
+// Squared ground distance (m²) from (lat, lon) to the segment a→b, and the fraction t along
+// it of the closest point. Written into `out` so hot loops allocate nothing.
 //
-// Local equirectangular projection at the click latitude: accurate well past the ~18 px
-// tolerance this feeds, and much cheaper than a haversine per candidate segment.
-function _gpxEditNearestOnTrack(lat, lon) {
-    const pts = gpxEditState ? gpxEditState.points : null;
-    if (!pts || pts.length < 2) return null;
+// Local equirectangular projection at the query latitude: accurate well past the pixel
+// tolerances and the waypoint-offset limit this feeds, and much cheaper than a haversine per
+// candidate segment.
+function _segmentDist2(a, b, lat, lon, kLon, out) {
+    const ax = (a.lon - lon) * kLon, ay = (a.lat - lat) * 111320;
+    const bx = (b.lon - lon) * kLon, by = (b.lat - lat) * 111320;
+    const dx = bx - ax, dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    let tt = l2 === 0 ? 0 : -(ax * dx + ay * dy) / l2;
+    tt = tt < 0 ? 0 : (tt > 1 ? 1 : tt);
+    const px = ax + tt * dx, py = ay + tt * dy;
+    out.t = tt;
+    out.d2 = px * px + py * py;
+    return out;
+}
 
-    const kLat = 111320;
+// Nearest point on pts[from..to) to (lat, lon) -> { i, t, distM }, where the hit lies at
+// fraction t along the segment from pts[i] to pts[i+1]. Any [{lat, lon}] works: the edited
+// track, one GPX segment, or a slice of the elevation profile.
+function nearestOnPolyline(pts, lat, lon, from = 0, to = pts ? pts.length : 0) {
+    if (!pts || to - from < 2) return null;
     const kLon = 111320 * Math.cos(lat * Math.PI / 180);
+    const seg = { t: 0, d2: 0 };
     let best = null;
-
-    for (let i = 0; i < pts.length - 1; i++) {
-        const ax = (pts[i].lon - lon) * kLon, ay = (pts[i].lat - lat) * kLat;
-        const bx = (pts[i + 1].lon - lon) * kLon, by = (pts[i + 1].lat - lat) * kLat;
-        const dx = bx - ax, dy = by - ay;
-        const l2 = dx * dx + dy * dy;
-        let tt = l2 === 0 ? 0 : -(ax * dx + ay * dy) / l2;
-        tt = tt < 0 ? 0 : (tt > 1 ? 1 : tt);
-        const px = ax + tt * dx, py = ay + tt * dy;
-        const d2 = px * px + py * py;
-        if (best === null || d2 < best.d2) best = { i, t: tt, d2 };
+    for (let i = from; i < to - 1; i++) {
+        _segmentDist2(pts[i], pts[i + 1], lat, lon, kLon, seg);
+        if (best === null || seg.d2 < best.d2) best = { i, t: seg.t, d2: seg.d2 };
     }
-    if (!best) return null;
-    return { i: best.i, t: best.t, distM: Math.sqrt(best.d2) };
+    return best && { i: best.i, t: best.t, distM: Math.sqrt(best.d2) };
+}
+
+// Nearest point on the edited polyline to (lat, lon) -> { i, t, distM }.
+function _gpxEditNearestOnTrack(lat, lon) {
+    return nearestOnPolyline(gpxEditState ? gpxEditState.points : null, lat, lon);
 }
 window._gpxEditNearestOnTrack = _gpxEditNearestOnTrack;
 
@@ -9005,23 +9477,33 @@ async function _gpxEditOnDragEnd(id) {
 // for another, so an inverse would have to store the removed slice verbatim anyway — the
 // same bytes with far more invariant surface to get wrong. Markers are never snapshotted;
 // they are rebuilt from the indices, which rules out stale-marker bugs entirely.
-function _gpxEditSnapshot() {
+//
+// Waypoint edits snapshot without the track (`points: null`): they cannot change it, and a
+// copy of a 100k-point track per rename would exhaust GPX_EDIT_UNDO_MAX_POINTS in a few steps.
+function _gpxEditSnapshot(options = {}) {
     const st = gpxEditState;
+    const waypointsOnly = !!options.waypointsOnly;
     return {
-        points: st.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
-        handleIdx: st.handles.map(h => h.idx)
+        points: waypointsOnly ? null : st.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele })),
+        handleIdx: waypointsOnly ? null : st.handles.map(h => h.idx),
+        waypoints: cloneWaypoints(gpxTrackData.waypoints)
     };
 }
 
-function _gpxEditPushUndo() {
+function _gpxEditSnapshotPoints(snap) {
+    return snap && snap.points ? snap.points.length : 0;
+}
+
+// `snap` lets a caller push state it captured before the mutation began — a waypoint drag
+// snapshots at dragstart and pushes only once it knows the waypoint actually moved.
+function _gpxEditPushUndo(snap = _gpxEditSnapshot()) {
     const st = gpxEditState;
-    const snap = _gpxEditSnapshot();
     st.undo.push(snap);
-    st.undoPointCount += snap.points.length;
+    st.undoPointCount += _gpxEditSnapshotPoints(snap);
     st.redo = [];
     while (st.undo.length > GPX_EDIT_UNDO_MAX ||
         (st.undo.length > 1 && st.undoPointCount > GPX_EDIT_UNDO_MAX_POINTS)) {
-        st.undoPointCount -= st.undo.shift().points.length;
+        st.undoPointCount -= _gpxEditSnapshotPoints(st.undo.shift());
     }
 }
 
@@ -9029,40 +9511,50 @@ function _gpxEditPushUndo() {
 function _gpxEditPopUndoNoop() {
     const st = gpxEditState;
     const snap = st.undo.pop();
-    if (snap) st.undoPointCount -= snap.points.length;
+    if (snap) st.undoPointCount -= _gpxEditSnapshotPoints(snap);
 }
 
 function _gpxEditApplySnapshot(snap) {
     const st = gpxEditState;
-    st.points = snap.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele }));
-    gpxTrackData.segments[st.segIndex] = st.points;
+    gpxTrackData.waypoints = cloneWaypoints(snap.waypoints);
+    if (snap.points) {
+        st.points = snap.points.map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele }));
+        gpxTrackData.segments[st.segIndex] = st.points;
 
-    for (const h of st.handles) if (h.marker) h.marker.remove();
-    st.handles = [];
-    for (const idx of snap.handleIdx) _gpxEditAddHandleAtIndex(idx);
+        for (const h of st.handles) if (h.marker) h.marker.remove();
+        st.handles = [];
+        for (const idx of snap.handleIdx) _gpxEditAddHandleAtIndex(idx);
 
-    _gpxEditAssertInvariants();
-    _gpxEditRefreshRender();
+        _gpxEditAssertInvariants();
+        rebuildGpxMarkers();
+        _gpxEditRefreshRender();
+    } else {
+        // Only waypoints changed: the handles stay, and so does the profile's zoom.
+        rebuildGpxMarkers();
+        refreshElevationProfileWaypoints();
+    }
     _updateGpxEditUI();
 }
 
+// Both pop first, then record the current state as the same kind of snapshot as the one
+// being applied, so a waypoint-only step stays waypoint-only in both directions.
 window.gpxEditUndo = function () {
     const st = gpxEditState;
     if (!st || st.busy || !st.undo.length) return;
-    const current = _gpxEditSnapshot();
-    st.redo.push(current);
     const snap = st.undo.pop();
-    st.undoPointCount -= snap.points.length;
+    st.undoPointCount -= _gpxEditSnapshotPoints(snap);
+    st.redo.push(_gpxEditSnapshot({ waypointsOnly: !snap.points }));
     _gpxEditApplySnapshot(snap);
 };
 
 window.gpxEditRedo = function () {
     const st = gpxEditState;
     if (!st || st.busy || !st.redo.length) return;
-    const current = _gpxEditSnapshot();
+    const snap = st.redo.pop();
+    const current = _gpxEditSnapshot({ waypointsOnly: !snap.points });
     st.undo.push(current);
-    st.undoPointCount += current.points.length;
-    _gpxEditApplySnapshot(st.redo.pop());
+    st.undoPointCount += _gpxEditSnapshotPoints(current);
+    _gpxEditApplySnapshot(snap);
 };
 
 // --- Panel controls -----------------------------------------------------------------
@@ -9166,6 +9658,7 @@ window.cancelGpxEditMode = function () {
     }
 
     gpxTrackData.segments[st.segIndex] = st.original;
+    gpxTrackData.waypoints = st.originalWaypoints;
     Object.assign(gpxTrackData, computeTrackStats(gpxTrackData.segments));
 
     _gpxEditTeardown();
@@ -9187,6 +9680,7 @@ function _gpxEditTeardown() {
     const st = gpxEditState;
     if (st) {
         if (st.dragging && st.dragging.rafId !== null) cancelAnimationFrame(st.dragging.rafId);
+        if (st.wptDrag && st.wptDrag.rafId !== null) cancelAnimationFrame(st.wptDrag.rafId);
         for (const h of st.handles) if (h.marker) h.marker.remove();
         if (st.prevColorBySlope) {
             const slopeBox = document.getElementById('gpxColorBySlope');
@@ -9207,7 +9701,7 @@ function _gpxEditTeardown() {
     const panel = document.getElementById('gpx-edit-panel');
     if (panel) panel.style.display = 'none';
     const mapEl = document.getElementById('map');
-    if (mapEl) mapEl.classList.remove('gpx-edit-active');
+    if (mapEl) mapEl.classList.remove('gpx-edit-active', 'gpx-wpt-mode');
     _updateGpxEditUI();
     // gpxEditMode is false by now, so this drops the panel back to read-only.
     _updateRouteInfoPanel();
@@ -9239,8 +9733,9 @@ function _updateGpxEditUI() {
 
     const editLabel = document.querySelector('#gpx-edit-btn .btn-label');
     if (editLabel) editLabel.textContent = t.btn_gpx_edit || 'Edit track';
+    const wptMode = !!(st && st.waypointMode);
     const hint = document.getElementById('gpx-edit-hint');
-    if (hint) hint.textContent = t.gpx_edit_hint || '';
+    if (hint) hint.textContent = (wptMode ? t.gpx_wpt_hint : t.gpx_edit_hint) || '';
     const profileLabel = document.getElementById('lbl-gpx-edit-profile');
     if (profileLabel) profileLabel.textContent = t.lbl_gpx_edit_profile || 'Routing profile:';
     const snapLabel = document.getElementById('lbl-gpx-edit-snap');
@@ -9287,11 +9782,32 @@ function _updateGpxEditUI() {
 
     const count = document.getElementById('gpx-edit-count');
     if (count) {
-        count.textContent = st
-            ? (t.gpx_edit_count || '{n} handles').replace('{n}', st.handles.length)
-            : '';
+        count.textContent = !st ? ''
+            : wptMode ? (t.gpx_wpt_count || '{n} waypoints').replace('{n}', gpxTrackData.waypoints.length)
+                : (t.gpx_edit_count || '{n} handles').replace('{n}', st.handles.length);
     }
+    _updatePoiButtonUI();
 }
+
+// While a track is being edited the Add POI button edits the track's waypoints instead —
+// placing a POI is refused during editing anyway, so the button loses nothing.
+function _updatePoiButtonUI() {
+    const t = translations[currentLang];
+    const btn = document.getElementById('poi-btn');
+    if (!btn) return;
+    const label = btn.querySelector('.btn-label');
+    if (label) {
+        label.textContent = gpxEditState
+            ? (t.btn_edit_waypoints || 'Edit waypoints')
+            : (t.btn_add_poi || 'Add POI');
+    }
+    btn.classList.toggle('active', !!(gpxEditState && gpxEditState.waypointMode));
+}
+
+window.handlePoiButton = function () {
+    if (gpxEditMode) toggleGpxWaypointMode();
+    else openPoiLoader();
+};
 
 // Logs rather than throws: a broken invariant should surface in the console during
 // development without taking the app down for a user mid-edit.
@@ -9315,6 +9831,294 @@ function _gpxEditAssertInvariants() {
     } catch (e) {
         /* never let a diagnostic break editing */
     }
+}
+
+// --- Waypoint editing ---------------------------------------------------------------
+//
+// The editor's waypoint mode, entered through the POI button. Waypoints become draggable
+// callouts that cling to the track, a tap renames one, a tap on the map adds one, and
+// right-click / long-press removes one. Handles go inert meanwhile: waypoints sit on the
+// track, often on top of a handle, and the two must not compete for the same press.
+//
+// Edits land in place in gpxTrackData.waypoints and go through the editor's undo stack as
+// waypoint-only snapshots. Listeners hold the waypoint object itself, never an index — undo
+// swaps the array for clones and removals shift indices, so a stale marker must find
+// nothing rather than the wrong waypoint.
+
+const GPX_WPT_NAME_MAX = 120;   // same cap as a POI name
+
+function cloneWaypoints(list) {
+    return (list || []).map(w => ({ ...w }));
+}
+
+window.toggleGpxWaypointMode = function () {
+    if (gpxEditState) setGpxWaypointMode(!gpxEditState.waypointMode);
+};
+
+function setGpxWaypointMode(on) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy || st.dragging || st.wptDrag || st.waypointMode === on) return;
+    st.waypointMode = on;
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.classList.toggle('gpx-wpt-mode', on);
+    // As for the other map tools: on a phone the panel would cover the map being edited.
+    if (on && window.innerWidth <= 600 && !isControlsMinimized) setControlsMinimized(true);
+    rebuildGpxMarkers();
+    // The profile shows waypoints in this mode even with "Show Waypoints" off.
+    refreshElevationProfileWaypoints();
+    _updateGpxEditUI();
+    statusDiv.textContent = on
+        ? (t.status_gpx_wpt_mode || 'Waypoint mode — drag a waypoint to move it, tap it to rename, tap the map to add one.')
+        : (t.status_gpx_edit_active || 'Edit mode — drag handles, click the track to add one.');
+}
+
+// (lat, lon) pulled onto the track when it lies within GPX_WPT_SNAP_PX of it, with the
+// track's elevation there. Placement stays free further out — a waypoint may sit off the
+// route on purpose (a hut, a water source), it just will not appear on the profile.
+function _gpxWptSnap(lat, lon) {
+    const limitM = GPX_WPT_SNAP_PX * metersPerPixel();
+    let best = null;
+    for (const seg of gpxTrackData.segments) {
+        const hit = nearestOnPolyline(seg, lat, lon);
+        if (hit && hit.distM <= limitM && (!best || hit.distM < best.hit.distM)) best = { seg, hit };
+    }
+    if (!best) return { lat, lon, ele: null, snapped: false };
+    const a = best.seg[best.hit.i], b = best.seg[best.hit.i + 1], t = best.hit.t;
+    return {
+        lat: a.lat + t * (b.lat - a.lat),
+        lon: a.lon + t * (b.lon - a.lon),
+        ele: (a.ele === null || b.ele === null) ? null : Math.round(a.ele + t * (b.ele - a.ele)),
+        snapped: true
+    };
+}
+
+// Moves `wp` to a _gpxWptSnap() result. <ele> follows the track when it lands on it; off the
+// track the old value would be wrong, and GPX allows it to be absent.
+function _gpxWptPlace(wp, spot) {
+    wp.lat = spot.lat;
+    wp.lon = spot.lon;
+    if (spot.ele !== null) wp.ele = spot.ele;
+    else delete wp.ele;
+}
+
+function _gpxWptCleanName(input) {
+    return Array.from(normalizeWaypointName(input)).slice(0, GPX_WPT_NAME_MAX).join('');
+}
+
+function _gpxWptAfterChange() {
+    rebuildGpxMarkers();
+    refreshElevationProfileWaypoints();
+    _updateGpxEditUI();
+}
+
+function _createEditableWaypointMarker(wp) {
+    const t = translations[currentLang];
+    const el = document.createElement('div');
+    el.className = 'gpx-waypoint-label gpx-waypoint-editable';
+    // textContent, not innerHTML: waypoint names come from user-supplied GPX.
+    el.textContent = wp.name || '•';
+    el.title = t.gpx_wpt_title || 'Drag to move · tap to rename · right-click to remove';
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const marker = new maplibregl.Marker({
+        element: el,
+        anchor: 'bottom',
+        offset: [0, -7],   // lifts the callout by its tail (style.css), so the tip marks the spot
+        draggable: true,
+        // A fingertip wobbles more than a mouse; under this a press is still a tap, i.e. a
+        // rename, rather than a drag that could snap the waypoint somewhere else.
+        clickTolerance: coarse ? 10 : 4
+    }).setLngLat([wp.lon, wp.lat]).addTo(map._map);
+
+    marker.on('dragstart', () => _gpxWptDragStart(wp, marker));
+    marker.on('drag', () => _gpxWptDrag(wp, marker));
+    marker.on('dragend', () => _gpxWptDragEnd(wp, marker));
+
+    el.addEventListener('click', () => {
+        const st = gpxEditState;
+        // A touch drag can leave a click behind on the callout it just moved.
+        if (st && performance.now() < st.wptClickGuardUntil) return;
+        _gpxWptRename(wp);
+    });
+    el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        _gpxWptRemove(wp);
+    });
+    // Touch equivalent of right-click, as on the handles, but tolerant of the same few
+    // pixels of wobble the marker's clickTolerance lets through.
+    let pressTimer = null, pressX = 0, pressY = 0;
+    const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    el.addEventListener('touchstart', (e) => {
+        clearPress();
+        if (e.touches.length !== 1) return;
+        pressX = e.touches[0].clientX;
+        pressY = e.touches[0].clientY;
+        pressTimer = setTimeout(() => { pressTimer = null; _gpxWptRemove(wp); }, 600);
+    }, { passive: true });
+    el.addEventListener('touchmove', (e) => {
+        const touch = e.touches[0];
+        if (!touch || Math.hypot(touch.clientX - pressX, touch.clientY - pressY) > 10) clearPress();
+    }, { passive: true });
+    el.addEventListener('touchend', clearPress);
+    el.addEventListener('touchcancel', () => {
+        clearPress();
+        // MapLibre ends a drag only on touchend, so a cancelled touch would leave this one
+        // running until the next tap anywhere on the map. Land it, and replace the marker
+        // whose drag state is stuck.
+        const st = gpxEditState;
+        if (st && st.wptDrag && st.wptDrag.wp === wp) {
+            _gpxWptFinishDrag();
+            rebuildGpxMarkers();
+        }
+    });
+    return marker;
+}
+
+function _gpxWptDragStart(wp, marker) {
+    const st = gpxEditState;
+    // `busy` also covers a second finger dragging another waypoint; that drag is not
+    // adopted, and its dragend puts the callout back.
+    if (!st || !st.waypointMode || st.busy) return;
+    st.wptDrag = {
+        wp,
+        marker,
+        before: { ...wp },
+        // Taken now but pushed only if the waypoint really moves, so a no-op drag cannot
+        // wipe the redo stack. From the data: the marker has already moved by dragstart.
+        snap: _gpxEditSnapshot({ waypointsOnly: true }),
+        spot: null,
+        rafId: null
+    };
+    // Freezes undo/redo/save/cancel and the other waypoint actions until the drop.
+    st.busy = true;
+    marker.getElement().classList.add('dragging');
+    _updateGpxEditUI();
+}
+
+function _gpxWptDrag(wp, marker) {
+    const st = gpxEditState;
+    const drag = st && st.wptDrag;
+    if (!drag || drag.wp !== wp) return;
+    const at = marker.getLngLat();
+    drag.spot = _gpxWptSnap(at.lat, at.lng);
+    // Synchronous, so the callout visibly clings to the track. MapLibre recomputes the
+    // position from the pointer on the next move, so this cannot drift.
+    if (drag.spot.snapped) marker.setLngLat([drag.spot.lon, drag.spot.lat]);
+    if (drag.rafId !== null) return;
+    drag.rafId = requestAnimationFrame(() => {
+        drag.rafId = null;
+        if (gpxEditState !== st || st.wptDrag !== drag || !drag.spot) return;
+        _gpxWptPlace(wp, drag.spot);
+        refreshElevationProfileWaypoints(wp);   // the profile's pole follows the drag
+    });
+}
+
+function _gpxWptDragEnd(wp, marker) {
+    const st = gpxEditState;
+    if (!st || !st.wptDrag || st.wptDrag.wp !== wp) {
+        // A drag the editor did not adopt: put the callout back where the data has it.
+        if (gpxTrackData && gpxTrackData.waypoints.includes(wp)) marker.setLngLat([wp.lon, wp.lat]);
+        return;
+    }
+    _gpxWptFinishDrag();
+}
+
+// Lands the current waypoint drag — from dragend, or from whatever cuts it short: a
+// cancelled touch, or the markers being rebuilt underneath it.
+function _gpxWptFinishDrag() {
+    const st = gpxEditState;
+    const drag = st && st.wptDrag;
+    if (!drag) return;
+    const t = translations[currentLang];
+    st.wptDrag = null;
+    try {
+        if (drag.rafId !== null) cancelAnimationFrame(drag.rafId);
+        const el = drag.marker.getElement();
+        if (el) el.classList.remove('dragging');
+        if (gpxTrackData.waypoints.includes(drag.wp)) {
+            const at = drag.marker.getLngLat();
+            const spot = _gpxWptSnap(at.lat, at.lng);
+            drag.marker.setLngLat([spot.lon, spot.lat]);
+            _gpxWptPlace(drag.wp, spot);
+            if (drag.wp.lat !== drag.before.lat || drag.wp.lon !== drag.before.lon) {
+                _gpxEditPushUndo(drag.snap);
+                statusDiv.textContent = (t.status_gpx_wpt_moved || 'Waypoint "{name}" moved.')
+                    .replace('{name}', drag.wp.name || '•');
+            } else {
+                // Back where it started: restore it exactly, <ele> included.
+                for (const key of Object.keys(drag.wp)) delete drag.wp[key];
+                Object.assign(drag.wp, drag.before);
+            }
+        }
+    } finally {
+        // Without the finally an error here would leave the editor frozen and Save disabled.
+        st.busy = false;
+        st.wptClickGuardUntil = performance.now() + 400;
+    }
+    // A full pass: the drag may have moved this waypoint past its neighbours.
+    refreshElevationProfileWaypoints();
+    _updateGpxEditUI();
+}
+
+function _gpxWptRename(wp) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || !st.waypointMode || st.busy || !gpxTrackData.waypoints.includes(wp)) return;
+    const input = window.prompt(t.prompt_rename_waypoint || 'Waypoint name:', wp.name || '');
+    if (input === null) return;
+    const name = _gpxWptCleanName(input);
+    // An emptied name is not a removal — that has its own gesture — so it changes nothing.
+    if (!name || name === wp.name) return;
+    _gpxEditPushUndo(_gpxEditSnapshot({ waypointsOnly: true }));
+    wp.name = name;
+    _gpxWptAfterChange();
+    statusDiv.textContent = (t.status_gpx_wpt_renamed || 'Waypoint renamed to "{name}".').replace('{name}', name);
+}
+
+function _gpxWptRemove(wp) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || !st.waypointMode || st.busy) return;
+    const i = gpxTrackData.waypoints.indexOf(wp);
+    // Already gone: on Android the native contextmenu and the long-press timer both fire.
+    if (i === -1) return;
+    _gpxEditPushUndo(_gpxEditSnapshot({ waypointsOnly: true }));
+    gpxTrackData.waypoints.splice(i, 1);
+    // The callout is gone, so a tap the long-press leaves behind would hit the map — and
+    // ask to add a waypoint where one was just removed.
+    st.wptClickGuardUntil = performance.now() + 400;
+    _gpxWptAfterChange();
+    statusDiv.textContent = (t.status_gpx_wpt_removed || 'Waypoint "{name}" removed — Undo brings it back.')
+        .replace('{name}', wp.name || '•');
+}
+
+function handleGpxWaypointMapClick(e) {
+    const st = gpxEditState;
+    const t = translations[currentLang];
+    if (!st || st.busy || !e.lngLat) return;
+    // A double-click arrives as two clicks (one prompt, not two), and the click a touch drag
+    // can leave behind is not a request for a new waypoint.
+    if (e.originalEvent && e.originalEvent.detail > 1) return;
+    if (performance.now() < st.wptClickGuardUntil) return;
+
+    const input = window.prompt(t.prompt_new_waypoint || 'Name for the new waypoint:', '');
+    const name = input === null ? '' : _gpxWptCleanName(input);
+    if (!name) return;
+    const wp = { lat: 0, lon: 0, name };
+    _gpxWptPlace(wp, _gpxWptSnap(e.lngLat.lat, e.lngLat.lng));
+
+    // Filed in route order, so the saved GPX lists waypoints the way the route meets them.
+    let at = gpxTrackData.waypoints.length;
+    const hit = projectWaypointOntoProfile(wp, -1);
+    if (hit) {
+        const next = elevationProfileWaypoints.find(en => en.dist > hit.dist);
+        const k = next ? gpxTrackData.waypoints.indexOf(next.wp) : -1;
+        if (k !== -1) at = k;
+    }
+    _gpxEditPushUndo(_gpxEditSnapshot({ waypointsOnly: true }));
+    gpxTrackData.waypoints.splice(at, 0, wp);
+    _gpxWptAfterChange();
+    statusDiv.textContent = (t.status_gpx_wpt_added || 'Waypoint "{name}" added.').replace('{name}', name);
 }
 
 // ==========================================
@@ -10118,6 +10922,10 @@ map.on('click', (e) => {
         if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest && e.originalEvent.target.closest('.maplibregl-marker')) {
             return;
         }
+        if (gpxEditState && gpxEditState.waypointMode) {
+            handleGpxWaypointMapClick(e);
+            return;
+        }
         if (e.lngLat) handleGpxEditMapClick(e.lngLat.lat, e.lngLat.lng);
         return;
     }
@@ -10165,6 +10973,11 @@ if (controls) {
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (gpxEditMode) {
+        // One step at a time: out of waypoint mode first, and only then out of the editor.
+        if (gpxEditState && gpxEditState.waypointMode) {
+            setGpxWaypointMode(false);
+            return;
+        }
         cancelGpxEditMode();   // prompts when there are unsaved edits
         return;
     }

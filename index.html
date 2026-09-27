@@ -52,7 +52,7 @@
     <!-- ?v= MUST equal CACHE_NAME in service-worker.js: the service worker precaches and
          matches these URLs search-sensitively, so a normal refresh fetches the new build and
          offline still hits. Bump ?v= (all five tags), CACHE_NAME and BUILD_NUMBER every release. -->
-    <link rel="stylesheet" href="style.css?v=3058">
+    <link rel="stylesheet" href="style.css?v=3063">
 
     <!-- Google Identity Services (optional: enables cross-device GPX upload history) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -154,7 +154,7 @@
             <p><strong><a href="https://github.com/droidgren/TopoScout">GitHub Project</a></strong> / <strong><a href="http://droidgren.github.io/" target="_blank">droidgren.github.io</a></strong></p>
 
             <p style="font-size: 12px; color: #666; margin-top: 5px; margin-bottom: 0;">
-                <span id="lbl-version">Version</span>: <span id="app-version">2.29.1</span> (Build <span id="app-build">3058</span>)
+                <span id="lbl-version">Version</span>: <span id="app-version">2.30.0</span> (Build <span id="app-build">3063</span>)
             </p>
 
             <details
@@ -162,11 +162,11 @@
                 <summary style="font-weight: 700; color: #333; cursor: pointer; outline: none;"
                     id="info-changelog-title">Changelog</summary>
                 <ul style="padding-left: 20px; margin: 8px 0 0 0; line-height: 1.5;">
+                    <li><strong>v2.30.0:</strong> <strong>Waypoints on the elevation profile</strong>, named vertically. In <strong>Edit track</strong>, Add POI becomes <strong>Edit waypoints</strong>: move, rename, add or remove them.</li>
                     <li><strong>v2.29.1:</strong> Fixed the <strong>Carto Voyager and Carto Positron</strong> maps (and water detection), which stopped loading after Carto started requiring an API key. Tiles now go through the app's own tile proxy, which keeps the key private.</li>
                     <li><strong>v2.29.0:</strong> Updated the map engine to <strong>MapLibre GL JS 6.11.2</strong> &mdash; in 3D the view no longer bobs or jumps around pans, pinches and fly-to animations, dragging with the pointer above the horizon no longer moves the map backwards, and relief detail is cleaner on phones at high zoom. Map tiles stay crisp at non-integer display scaling, and pins no longer drift when terrain finishes loading.</li>
                     <li><strong>v2.28.0:</strong> Updated the map engine to <strong>MapLibre GL JS 6.9.0</strong> &mdash; in 3D, contour lines, relief and routes no longer shimmer while you move, the view no longer jumps at the end of a pan or pinch, and relief detail refreshes properly when you zoom. <strong>A2 printouts</strong> now keep their full resolution instead of being quietly reduced.</li>
                     <li><strong>v2.27.3:</strong> Fixed the <strong>hillshade going soft whenever 3D was switched on</strong>. Both read the same elevation source, and turning on terrain made that source serve coarser tiles &mdash; so the relief quietly lost a zoom level of detail. Hillshade now has its own source and keeps full detail in 3D.</li>
-                    <li><strong>v2.27.2:</strong> New social preview card &mdash; the mountain is much larger, and a track with its editing handles now sits on real contour lines. The page title and description lead with route planning and GPX editing instead of listing peaks first, as does the page heading read out by screen readers.</li>
                 </ul>
                 <p style="margin: 8px 0 0 0;"><a href="https://github.com/droidgren/TopoScout#changelog"
                         target="_blank" rel="noopener noreferrer">Full changelog →</a></p>
@@ -604,7 +604,7 @@
                     <div class="gpx-action-row routes-poi-row">
                         <button id="gpx-btn" class="gpx-btn" onclick="openGpxLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="13" cy="6" r="2"/><polyline points="5 16 5 12 13 12 13 8"/><line x1="17" y1="15" x2="23" y2="15"/><line x1="20" y1="12" x2="20" y2="18"/></svg><span id="btn-gpx-label" class="btn-label">Load GPX Route</span></button>
                         <button id="route-create-btn" class="route-create-btn" onclick="toggleRouteCreateMode()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span class="btn-label">Create Route</span></button>
-                        <button id="poi-btn" class="poi-btn" onclick="openPoiLoader()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg><span id="btn-poi-label" class="btn-label">Add POI</span></button>
+                        <button id="poi-btn" class="poi-btn" onclick="handlePoiButton()"><svg class="icon-svg btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.686-6-10a6 6 0 0 1 12 0c0 4.314-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg><span id="btn-poi-label" class="btn-label">Add POI</span></button>
                     </div>
                     <div id="route-create-panel" class="gpx-edit-panel" style="display:none;">
                         <p id="route-create-hint" class="gpx-edit-hint"></p>
@@ -921,13 +921,13 @@
 
     <!-- MapLibre v6 is ESM-only; this module shim publishes it as the `maplibregl` global the
          classic scripts below use. Module scripts and defer scripts run in document order. -->
-    <script type="module" src="maplibre-boot.mjs?v=3058"></script>
+    <script type="module" src="maplibre-boot.mjs?v=3063"></script>
     <script defer src="vendor/maplibre-contour.min.js"></script>
     <!-- jsPDF, vendored locally (not build-versioned) so Print map works offline. -->
     <script defer src="vendor/jspdf.umd.min.js"></script>
-    <script defer src="lang/en.js?v=3058"></script>
-    <script defer src="lang/sv.js?v=3058"></script>
-    <script defer src="script.js?v=3058"></script>
+    <script defer src="lang/en.js?v=3063"></script>
+    <script defer src="lang/sv.js?v=3063"></script>
+    <script defer src="script.js?v=3063"></script>
 </body>
 
 </html>

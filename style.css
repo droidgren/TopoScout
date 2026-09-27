@@ -877,6 +877,12 @@ button {
     background-color: #256f46;
 }
 
+/* While editing a track this is the Edit waypoints toggle; lit while that mode is on. */
+.poi-btn.active {
+    background-color: #256f46;
+    outline: 2px solid #a5d6a7;
+}
+
 /* Three labelled buttons no longer fit one row on a narrow panel; flex-basis 30% lets them
    wrap to a second row instead of clipping their labels, as the Clear/Edit/Download row
    above already does. */
@@ -1030,6 +1036,36 @@ button {
     line-height: normal;
     text-align: center;
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Waypoint mode (Edit track → Edit waypoints): the label turns into a draggable callout whose
+   tail tip is the waypoint's exact position (anchor bottom plus a 7px offset in JS). Never
+   set position or transform here: .maplibregl-marker is position:absolute and MapLibre
+   drives transform inline — overriding either throws the marker across the map. */
+.gpx-waypoint-editable {
+    cursor: grab;
+    touch-action: none;           /* or mobile Chrome pans the map instead of dragging */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;  /* a long-press removes the waypoint; no iOS callout */
+    z-index: 2;                   /* above the km / elevation labels added after it */
+}
+
+.gpx-waypoint-editable::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 2px);        /* past the 2px border, so the tip lands on the point */
+    margin-left: -6px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #2E7D32;
+}
+
+.gpx-waypoint-editable.dragging {
+    cursor: grabbing;
+    background: #E8F5E9;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
 .gpx-start-end-label {
@@ -2039,6 +2075,21 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     transform: scale(1.25);
 }
 
+/* Waypoint mode: handles stay visible for orientation but take no input — waypoints sit on
+   the track, often right on a handle. !important because MapLibre writes both inline:
+   opacity on every update, pointer-events:auto whenever a drag on the marker ends. */
+#map.gpx-wpt-mode .gpx-edit-handle {
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+}
+
+/* Nor may the km / elevation labels shield a waypoint beneath them (a summit waypoint
+   shares its spot with the ▲ max-elevation label). */
+#map.gpx-wpt-mode .gpx-km-label,
+#map.gpx-wpt-mode .gpx-elev-label {
+    pointer-events: none;
+}
+
 /* ── Create route ───────────────────────────────────────────────────────────── */
 /* The same purple as Edit track: both make geometry out of the routing service, and the
    colour is what says the two belong together. Sized like its row-mates (12px/14px), not
@@ -2384,6 +2435,12 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
         height: 20px;
         border-width: 4px;
     }
+
+    /* Expanded, the strip lies over the chart: start the readout after the elevation axis
+       labels, as the desktop strip always does (left: 52px), so it never covers them. */
+    .elevation-profile:not(.minimized) .elevation-profile-overlay {
+        padding-left: 52px;
+    }
 }
 
 .elevation-profile-overlay > * {
@@ -2400,11 +2457,21 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     padding: 1px 5px;
 }
 
+/* The title only names the collapsed bar. Over the expanded chart it said nothing the chart
+   does not, and on phones its chip covered the top elevation label. */
+.elevation-profile:not(.minimized) .elevation-profile-label {
+    display: none;
+}
+
 .elevation-profile-info {
     font-size: 11px;
     color: #333;
     font-weight: 600;
-    flex: 1;
+    /* Hugs its text (shrinking with an ellipsis when it must) and sits centred in the strip,
+       rather than a white band across the whole chart. */
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0 auto;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -2412,7 +2479,6 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     padding: 0 8px;
     background: rgba(255, 255, 255, 0.75);
     border-radius: 3px;
-    margin: 0 4px;
 }
 
 .elevation-profile-info:empty {
@@ -2429,6 +2495,9 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     padding: 1px 6px;
     line-height: 1;
     transition: transform 0.3s ease;
+    /* Keeps the chevron on the right even when it is the strip's only visible child —
+       expanded, with the title hidden and no readout, space-between would park it left. */
+    margin-left: auto;
 }
 
 .elevation-profile-toggle:hover {
