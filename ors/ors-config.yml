@@ -1,14 +1,15 @@
 # openrouteservice configuration for the TopoScout GPX track editor.
 #
 # Copy to /share/www/openrouteservice/config/ors-config.yml and point source_file below at
-# the .pbf you actually downloaded. Only the four profiles offered by the editor's dropdown
-# are enabled — each extra profile costs build time, RAM and disk in direct proportion, so
-# the four here roughly double the build time and graph disk of the original two.
+# osm-prep's output for the .pbf you actually downloaded. Only the four profiles offered by
+# the editor's dropdown are enabled — each extra profile costs build time, RAM and disk in
+# direct proportion, so the four here roughly double the build time and graph disk of the
+# original two.
 #
-# This is the ORS v8/v9 layout (ors.engine.profile_default.build.*, ors.engine.profiles.
+# This is the ORS v8+ layout (ors.engine.profile_default.build.*, ors.engine.profiles.
 # <name>.enabled). If the pinned image rejects a key, diff against the image's own
 # reference config rather than guessing:
-#   docker run --rm --entrypoint cat openrouteservice/openrouteservice:v9.3.0 \
+#   docker run --rm --entrypoint cat openrouteservice/openrouteservice:v10.0.1 \
 #       /home/ors/ors-config.yml
 server:
   port: 8082
@@ -39,7 +40,11 @@ ors:
       build:
         # Regional extract. Anything outside it is served by the public openrouteservice
         # fallback in main.py, so this only needs to cover where you run most often.
-        source_file: /home/ors/files/sweden-latest.osm.pbf
+        # This is osm-prep's output (openrouteservice.yaml), not the raw download: the foot
+        # profiles skip highway=bridleway unless it is tagged foot=yes, and no key here
+        # changes that, so the prep step adds the tag. Pointing at the raw .pbf still
+        # builds, it just loses the bridleways again.
+        source_file: /home/ors/files/sweden-latest-bridleways.osm.pbf
         elevation: true
         elevation_smoothing: true
     profiles:

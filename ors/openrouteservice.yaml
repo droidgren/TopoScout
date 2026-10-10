@@ -1,9 +1,10 @@
 # On-prem openrouteservice for the GPX track editor's snap-to-route.
 #
 # Not exposed to the internet and not reachable from the browser: only the gpx-editor
-# container talks to it, over the shared external immich_default network, through the
+# container talks to it, over the shared external proxy network, through the
 # /api/route/{profile} proxy in main.py.
 #
+#   docker compose -f ors/openrouteservice.yaml run --rm osm-prep   # after each new .pbf
 #   docker compose -f ors/openrouteservice.yaml up -d
 #
 # See README.md ("Self-Hosted Routing") for the full install, sizing and graph-build steps.
@@ -11,9 +12,10 @@ services:
   ors-app:
     # Pin the tag. The config schema has changed across majors, so :latest will eventually
     # reject ors-config.yml on an unattended pull.
-    image: openrouteservice/openrouteservice:v9.3.0
+    image: openrouteservice/openrouteservice:v10.0.1
+    pull_policy: always
     container_name: openrouteservice
-    restart: unless-stopped
+    restart: always
     # The image runs as uid/gid 1000; the bind-mounted dirs must be chown'd to match or
     # ORS cannot write graphs or the elevation cache.
     user: "1000:1000"
@@ -24,6 +26,7 @@ services:
     environment:
       # "True" for the FIRST start (and after replacing the .pbf extract), then back to
       # "False" — otherwise every restart rebuilds the graphs from scratch (hours).
+      # Run osm-prep (below) before the rebuild: ORS reads its bridleway-enabled output.
       REBUILD_GRAPHS: "False"
       CONTAINER_LOG_LEVEL: "INFO"
       # JVM heap. Graph building is the memory-hungry phase; size XMX from the .pbf (see
@@ -55,11 +58,36 @@ services:
       # reasonable time. Raise it if you move to a larger extract.
       start_period: 2h
     networks:
-      immich_default:
+      proxy:
         # Explicit alias so gpx-editor resolves http://ors-app:8082 regardless of the
         # compose project name this file is brought up under.
         aliases:
           - ors-app
+  # One-shot: copies the extract with foot=yes added to bridleways, so foot-hiking and
+  # foot-walking can route over them (ORS has no config switch for it — see the script).
+  # Behind a profile so `up -d` never starts it; run it by hand, then rebuild the graphs:
+  #   docker compose -f ors/openrouteservice.yaml run --rm osm-prep
+  # Skips the work when the output is already newer than the input. allow_bridleways.py
+  # must sit next to this file. Change both file names here if you use another extract,
+  # and keep the output name in step with source_file in ors-config.yml.
+  osm-prep:
+    image: python:3.12-slim
+    profiles: ["prep"]
+    user: "1000:1000"
+    network_mode: bridge
+    environment:
+      HOME: /tmp
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    working_dir: /home/ors/files
+    volumes:
+      - ./allow_bridleways.py:/prep/allow_bridleways.py:ro
+      - /share/www/openrouteservice/files:/home/ors/files
+    command:
+      - sh
+      - -c
+      - >-
+        pip install --quiet --user osmium==4.3.1 &&
+        python /prep/allow_bridleways.py sweden-latest.osm.pbf sweden-latest-bridleways.osm.pbf
 networks:
-  immich_default:
+  proxy:
     external: true
