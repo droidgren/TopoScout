@@ -71,7 +71,8 @@ services:
   # must sit next to this file. Change both file names here if you use another extract,
   # and keep the output name in step with source_file in ors-config.yml.
   osm-prep:
-    image: python:3.12-slim
+    # Not -slim: the pyosmium wheel links the system libexpat, which slim does not ship.
+    image: python:3.12
     profiles: ["prep"]
     user: "1000:1000"
     network_mode: bridge
@@ -86,7 +87,7 @@ services:
       - sh
       - -c
       - >-
-        pip install --quiet --user osmium==4.3.1 &&
+        pip install --quiet --user --no-warn-script-location osmium==4.3.1 &&
         python /prep/allow_bridleways.py sweden-latest.osm.pbf sweden-latest-bridleways.osm.pbf
 networks:
   proxy:
