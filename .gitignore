@@ -1,11 +1,9 @@
 prompt/
 .claude/*
 __pycache__/
-ARCHITECTURE.md
 *.pyc
 .venv/
 gpx-files/
-CLAUDE.md
 elevation_finder.yaml
 toposcout.yaml
 node_modules/
