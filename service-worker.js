@@ -1,4 +1,4 @@
-const CACHE_NAME = '3065';
+const CACHE_NAME = '3066';
 
 // Version-stamped shell assets: their URLs carry ?v=<build> in index.html. Precache them
 // under the SAME ?v= (derived from CACHE_NAME) so the cached key matches what the page
@@ -10,9 +10,10 @@ const STATIC = [
     './index.html',
     './manifest.json',
     './icon.svg',
-    // MapLibre v6 is ESM: the main bundle and the worker BOTH import the shared chunk, and the
-    // worker (a client of this service worker) fetches it through the handler below. All three
-    // must be precached or the map goes blank offline.
+    // MapLibre v6 is ESM: the main bundle and the worker (a client of this service worker,
+    // fetched through the handler below) must both be precached or the map goes blank offline.
+    // Since 6.13 the worker is self-contained and the shared chunk is an empty deprecated stub;
+    // it stays precached until MapLibre v7 drops it.
     './vendor/maplibre-gl.mjs',
     './vendor/maplibre-gl-shared.mjs',
     './vendor/maplibre-gl-worker.mjs',

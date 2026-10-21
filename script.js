@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.31.0";
-const BUILD_NUMBER = "3065";
+const APP_VERSION = "2.32.0";
+const BUILD_NUMBER = "3066";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
