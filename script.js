@@ -1,8 +1,8 @@
 // ==========================================
 // 1. CONFIGURATION & CONSTANTS
 // ==========================================
-const APP_VERSION = "2.32.0";
-const BUILD_NUMBER = "3066";
+const APP_VERSION = "2.33.0";
+const BUILD_NUMBER = "3067";
 const ANALYSIS_SECTION_IDS = ['section-points', 'section-climbs', 'section-slope'];
 const ALL_SECTION_IDS = ['section-routes', 'section-points', 'section-climbs', 'section-slope'];
 const APP_REFRESH_PARAM = 'app-refresh';
@@ -2406,6 +2406,11 @@ function updateLanguage() {
         if (gpxSignoutBtn) gpxSignoutBtn.textContent = t.btn_sign_out || '';
         const uploadedGpxTitle = document.getElementById('uploaded-gpx-title');
         if (uploadedGpxTitle) uploadedGpxTitle.textContent = isBackendEnabled() ? (t.uploaded_gpx_title || '') : (t.uploaded_gpx_title_local || '');
+        const uploadedGpxFilter = document.getElementById('uploaded-gpx-filter');
+        if (uploadedGpxFilter && t.uploaded_gpx_filter_ph) {
+            uploadedGpxFilter.placeholder = t.uploaded_gpx_filter_ph;
+            uploadedGpxFilter.setAttribute('aria-label', t.uploaded_gpx_filter_ph);
+        }
         renderUploadedFiles();
         _updateRouteInfoPanel();
 
@@ -3941,6 +3946,8 @@ function showGpxModal() {
     }
 
     modal.style.display = 'flex';
+    const filterEl = document.getElementById('uploaded-gpx-filter');
+    if (filterEl) filterEl.value = '';
     updateGpxModalAuthUI();
     if (isBackendEnabled()) {
         refreshUploadedFiles();
@@ -3955,6 +3962,9 @@ function closeGpxModal() {
     const modal = document.getElementById('gpx-modal');
     if (modal) modal.style.display = 'none';
 }
+
+const uploadedGpxFilterInput = document.getElementById('uploaded-gpx-filter');
+if (uploadedGpxFilterInput) uploadedGpxFilterInput.addEventListener('input', renderUploadedFiles);
 
 window.showGpxModal = showGpxModal;
 window.closeGpxModal = closeGpxModal;
@@ -5340,10 +5350,12 @@ function normalizeUploadedFileEntry(fileEntry) {
 function renderUploadedFiles() {
     const listEl = document.getElementById('uploaded-gpx-list');
     const emptyEl = document.getElementById('uploaded-gpx-empty');
+    const filterEl = document.getElementById('uploaded-gpx-filter');
     if (!listEl || !emptyEl) return;
 
     const t = translations[currentLang];
     listEl.innerHTML = '';
+    if (filterEl) filterEl.style.display = 'none';
     if (!isBackendEnabled() || uploadedGpxListState === 'disabled') {
         emptyEl.style.display = '';
         emptyEl.textContent = t.uploaded_gpx_unavailable || 'Backend upload and sharing are disabled in this build.';
@@ -5368,8 +5380,20 @@ function renderUploadedFiles() {
         return;
     }
 
+    // The quick filter only appears once there is a list to narrow.
+    if (filterEl) filterEl.style.display = '';
+    const query = filterEl ? filterEl.value.trim().toLowerCase() : '';
+    const visibleFiles = query
+        ? uploadedGpxFiles.filter(fileEntry => String(fileEntry.filename || '').toLowerCase().includes(query))
+        : uploadedGpxFiles;
+    if (!visibleFiles.length) {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t.uploaded_gpx_no_match || 'No routes match the filter.';
+        return;
+    }
+
     emptyEl.style.display = 'none';
-    uploadedGpxFiles.forEach(fileEntry => {
+    visibleFiles.forEach(fileEntry => {
         const row = document.createElement('div');
         row.className = 'uploaded-gpx-item';
 
@@ -9621,7 +9645,10 @@ window.saveGpxEdits = function () {
     statusDiv.textContent = t.status_gpx_edit_saved ||
         'Track edits saved. Download GPX now exports the edited track.';
 
-    if (!storedId) return;
+    if (!storedId) {
+        offerStoreCurrentGpx();
+        return;
+    }
 
     // Deliberately not awaited: the editor has already closed and the map already shows the
     // edited track, so the upload is reported in the status line when it settles.
@@ -9647,6 +9674,37 @@ window.saveGpxEdits = function () {
             'Track edits saved, but the stored copy could not be updated.';
     });
 };
+
+// After saving a route that is not in the backend storage yet, offer to put it there.
+// Asks for a name first (cancel at either step stores nothing), then uploads the GPX text
+// that is on screen now.
+async function offerStoreCurrentGpx() {
+    const t = translations[currentLang];
+    if (!isBackendEnabled() || uploadedGpxListState === 'disabled' || !currentGpxRawText) return;
+    if (!window.confirm(t.confirm_store_saved_gpx || 'Save this route to your GPX storage too?')) return;
+
+    const fallbackName = (t.default_route_name || 'Route') + ' ' + new Date().toISOString().slice(0, 10);
+    const suggested = sanitizeGpxFilename(currentGpxFilename || currentGpxRawFilename || fallbackName);
+    const input = window.prompt(t.prompt_store_gpx_name || 'Name for the stored route:', suggested);
+    if (input === null) return;
+    const filename = sanitizeGpxFilename(input) + '.gpx';
+
+    const text = currentGpxRawText;
+    try {
+        const result = await uploadGpxFile(new File([text], filename, { type: 'application/gpx+xml' }));
+        if (!result) throw new Error('Upload unavailable');
+        // Only adopt the stored record if it still describes the route on screen.
+        if (currentGpxRawText === text) {
+            setActiveGpxSource(result);
+            currentGpxRawFilename = result.filename || filename;
+        }
+        await refreshUploadedFiles();
+        statusDiv.textContent = (t.status_gpx_stored_new || 'Route saved as "{name}" in your routes.')
+            .replace('{name}', result.filename || filename);
+    } catch (err) {
+        statusDiv.textContent = t.status_gpx_store_failed || 'Could not save the route to your GPX storage.';
+    }
+}
 
 window.cancelGpxEditMode = function () {
     const st = gpxEditState;
@@ -9760,11 +9818,11 @@ function _updateGpxEditUI() {
         save.textContent = t.btn_gpx_edit_save || 'Save';
         save.disabled = !st || st.busy;
     }
-    [['gpx-edit-undo-btn', 'btn_gpx_edit_undo'],
-    ['gpx-edit-redo-btn', 'btn_gpx_edit_redo'],
-    ['gpx-edit-cancel-btn', 'btn_gpx_edit_cancel']].forEach(([id, key]) => {
+    [['gpx-edit-undo-btn', 'btn_gpx_edit_undo', ' (Ctrl+Z)'],
+    ['gpx-edit-redo-btn', 'btn_gpx_edit_redo', ' (Ctrl+Y)'],
+    ['gpx-edit-cancel-btn', 'btn_gpx_edit_cancel', '']].forEach(([id, key, shortcut]) => {
         const el = document.getElementById(id);
-        if (el && t[key]) { el.title = t[key]; el.setAttribute('aria-label', t[key]); }
+        if (el && t[key]) { el.title = t[key] + shortcut; el.setAttribute('aria-label', t[key]); }
     });
 
     const undoBtn = document.getElementById('gpx-edit-undo-btn');
@@ -10989,6 +11047,20 @@ document.addEventListener('keydown', (e) => {
         cancelPoiPlacement();
         if (statusDiv) statusDiv.textContent = translations[currentLang].status_ready || 'Ready.';
     }
+});
+
+// Ctrl+Z / Ctrl+Y (Cmd on macOS, Shift+Ctrl+Z also redoes) drive the track editor's undo
+// stack. Left alone while typing in a field or with a modal open, so text undo still works.
+document.addEventListener('keydown', (e) => {
+    if (!gpxEditMode || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key !== 'z' && key !== 'y') return;
+    const target = e.target;
+    if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (Array.from(document.querySelectorAll('.modal-overlay')).some(m => m.style.display === 'flex')) return;
+    e.preventDefault();
+    if (key === 'y' || e.shiftKey) gpxEditRedo();
+    else gpxEditUndo();
 });
 
 // Initialize

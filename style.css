@@ -2263,6 +2263,16 @@ body.north-up .maplibregl-ctrl-zoom-out { border-radius: 0 0 4px 4px; }
     letter-spacing: 0.03em;
 }
 
+.uploaded-gpx-filter {
+    box-sizing: border-box;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #CFD8DC;
+    border-radius: 6px;
+}
+
 .uploaded-gpx-empty {
     font-size: 12px;
     color: #607D8B;
